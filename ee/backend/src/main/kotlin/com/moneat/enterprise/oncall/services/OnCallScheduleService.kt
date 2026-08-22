@@ -136,6 +136,25 @@ class OnCallScheduleService {
             scheduleResponse(scheduleRow)
         }
 
+    fun getCurrentOnCallForOrganization(
+        scheduleId: Int,
+        organizationId: Int,
+    ): OnCallParticipant? =
+        transaction {
+            val scheduleExists =
+                OnCallSchedules
+                    .selectAll()
+                    .where {
+                        (OnCallSchedules.id eq scheduleId) and
+                            (OnCallSchedules.organizationId eq organizationId)
+                    }
+                    .limit(1)
+                    .any()
+            if (!scheduleExists) return@transaction null
+
+            computeOnCallAt(scheduleId, Clock.System.now())
+        }
+
     private fun scheduleResponse(
         scheduleRow: ResultRow,
         orgResourceId: String = organizationResourceId(scheduleRow[OnCallSchedules.organizationId]),
@@ -237,7 +256,6 @@ class OnCallScheduleService {
             slackInstallationId = slackInstallationResourceId,
             createdAt = scheduleRow[OnCallSchedules.createdAt].toString(),
             updatedAt = scheduleRow[OnCallSchedules.updatedAt].toString(),
-        )
         ).also {
             it.organizationId = scheduleRow[OnCallSchedules.organizationId]
         }
