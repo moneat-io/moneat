@@ -38,6 +38,27 @@ import type {
   UpdateBusinessHoursRequest,
   RegisterDeviceRequest,
   OnCallAlertListFilters,
+  DeclareIncidentInput,
+  IncidentSourceLink,
+  LinkIncidentSourceInput,
+  IncidentRoleAssignment,
+  IncidentParticipant,
+  SetIncidentParticipantInput,
+  HandoverIncidentRoleInput,
+  IncidentTimelineEntry,
+  IncidentTimelineFilterInput,
+  IncidentTimelineRevision,
+  IncidentTimelineExport,
+  EditIncidentTimelineInput,
+  IncidentTypeDefinition,
+  CreateIncidentTypeInput,
+  IncidentCustomFieldDefinition,
+  CreateIncidentCustomFieldInput,
+  IncidentFormDefinition,
+  CreateIncidentFormInput,
+  IncidentFormStage,
+  IncidentRoleDefinition,
+  CreateIncidentRoleInput,
 } from '../types'
 
 function appendAlertStatusFilters(
@@ -215,17 +236,20 @@ export function onCallMethods(core: ApiClientCore) {
         method: 'DELETE',
       }),
 
-    declareIncidentFromAlert: (
-      alertId: string,
-      data: { title: string; description: string; severity: string }
-    ) =>
-      core.request<{ id: string }>(
+    declareIncidentFromAlert: (alertId: string, data: DeclareIncidentInput) =>
+      core.request<OnCallIncident>(
         `${base}/on-call/alerts/${encodeURIComponent(alertId)}/declare-incident`,
         {
           method: 'POST',
           body: JSON.stringify(data),
         }
       ),
+
+    declareOnCallIncident: (data: DeclareIncidentInput) =>
+      core.request<OnCallIncident>(`${base}/on-call/incidents`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     getOnCallIncidents: (
       filters: { status?: string; severity?: string } = {}
@@ -247,9 +271,156 @@ export function onCallMethods(core: ApiClientCore) {
         body: JSON.stringify({ note }),
       }),
 
-    getOnCallIncidentTimeline: (id: string) =>
-      core.request<OnCallTimelineEvent[]>(
-        `${base}/on-call/incidents/${encodeURIComponent(id)}/timeline`
+    // Canonical, evidence-preserving incident timeline. Supersedes the legacy
+    // merged timeline shape at the same path; entries carry provenance,
+    // visibility, original/observed time, annotations, and soft-delete state.
+    getOnCallIncidentTimeline: (
+      id: string,
+      filters: IncidentTimelineFilterInput = {}
+    ) => {
+      const params = new URLSearchParams()
+      filters.eventType?.forEach((value) => params.append('eventType', value))
+      filters.provenance?.forEach((value) => params.append('provenance', value))
+      filters.visibility?.forEach((value) => params.append('visibility', value))
+      if (filters.includeDeleted) params.append('includeDeleted', 'true')
+      return core.request<IncidentTimelineEntry[]>(
+        urlWithQuery(
+          `${base}/on-call/incidents/${encodeURIComponent(id)}/timeline`,
+          params.toString()
+        )
+      )
+    },
+
+    exportOnCallIncidentTimeline: (id: string) =>
+      core.request<IncidentTimelineExport>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/timeline/export`
+      ),
+
+    getIncidentTimelineRevisions: (id: string, eventId: string) =>
+      core.request<IncidentTimelineRevision[]>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/timeline/${encodeURIComponent(eventId)}/revisions`
+      ),
+
+    editIncidentTimelineEvent: (
+      id: string,
+      eventId: string,
+      data: EditIncidentTimelineInput
+    ) =>
+      core.request<IncidentTimelineEntry>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/timeline/${encodeURIComponent(eventId)}`,
+        { method: 'PATCH', body: JSON.stringify(data) }
+      ),
+
+    annotateIncidentTimelineEvent: (
+      id: string,
+      eventId: string,
+      data: { annotation?: string; reason?: string }
+    ) =>
+      core.request<IncidentTimelineEntry>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/timeline/${encodeURIComponent(eventId)}/annotation`,
+        { method: 'POST', body: JSON.stringify(data) }
+      ),
+
+    reorderIncidentTimeline: (id: string, eventIds: string[], reason?: string) =>
+      core.request<IncidentTimelineEntry[]>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/timeline/reorder`,
+        { method: 'POST', body: JSON.stringify({ eventIds, reason }) }
+      ),
+
+    deleteIncidentTimelineEvent: (id: string, eventId: string, reason?: string) =>
+      core.request<MessageResponse>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/timeline/${encodeURIComponent(eventId)}`,
+        { method: 'DELETE', body: JSON.stringify({ reason }) }
+      ),
+
+    restoreIncidentTimelineEvent: (id: string, eventId: string, reason?: string) =>
+      core.request<MessageResponse>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/timeline/${encodeURIComponent(eventId)}/restore`,
+        { method: 'POST', body: JSON.stringify({ reason }) }
+      ),
+
+    // ──── Source references ────
+
+    getIncidentSources: (id: string) =>
+      core.request<IncidentSourceLink[]>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/sources`
+      ),
+
+    linkIncidentSource: (id: string, data: LinkIncidentSourceInput) =>
+      core.request<IncidentSourceLink[]>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/sources`,
+        { method: 'POST', body: JSON.stringify(data) }
+      ),
+
+    unlinkIncidentSource: (id: string, sourceId: string) =>
+      core.request<MessageResponse>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/sources/${encodeURIComponent(sourceId)}`,
+        { method: 'DELETE' }
+      ),
+
+    // ──── Responders: roles ────
+
+    getIncidentRoleAssignments: (id: string) =>
+      core.request<IncidentRoleAssignment[]>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/roles`
+      ),
+
+    assignIncidentRole: (
+      id: string,
+      roleId: string,
+      userId: string,
+      expectedVersion?: number
+    ) =>
+      core.request<IncidentRoleAssignment[]>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/roles/${encodeURIComponent(roleId)}/assign`,
+        { method: 'POST', body: JSON.stringify({ userId, expectedVersion }) }
+      ),
+
+    claimIncidentRole: (id: string, roleId: string, expectedVersion?: number) =>
+      core.request<IncidentRoleAssignment[]>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/roles/${encodeURIComponent(roleId)}/claim`,
+        { method: 'POST', body: JSON.stringify({ expectedVersion }) }
+      ),
+
+    unassignIncidentRole: (id: string, roleId: string) =>
+      core.request<MessageResponse>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/roles/${encodeURIComponent(roleId)}`,
+        { method: 'DELETE' }
+      ),
+
+    handoverIncidentRole: (
+      id: string,
+      roleId: string,
+      data: HandoverIncidentRoleInput
+    ) =>
+      core.request<IncidentRoleAssignment[]>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/roles/${encodeURIComponent(roleId)}/handover`,
+        { method: 'POST', body: JSON.stringify(data) }
+      ),
+
+    // ──── Responders: participants & observers ────
+
+    getIncidentParticipants: (id: string) =>
+      core.request<IncidentParticipant[]>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/participants`
+      ),
+
+    joinIncident: (id: string, data: SetIncidentParticipantInput = {}) =>
+      core.request<IncidentParticipant[]>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/participants`,
+        { method: 'POST', body: JSON.stringify(data) }
+      ),
+
+    observeIncident: (id: string, data: SetIncidentParticipantInput = {}) =>
+      core.request<IncidentParticipant[]>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/observers`,
+        { method: 'POST', body: JSON.stringify(data) }
+      ),
+
+    leaveIncident: (id: string, userId: string) =>
+      core.request<MessageResponse>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/participants/${encodeURIComponent(userId)}`,
+        { method: 'DELETE' }
       ),
 
     addOnCallIncidentNote: (id: string, note: string) =>
@@ -259,6 +430,58 @@ export function onCallMethods(core: ApiClientCore) {
           method: 'POST',
           body: JSON.stringify({ note }),
         }
+      ),
+
+    // ──── Incident configuration (versioned definitions) ────
+
+    getIncidentTypes: () =>
+      core.request<IncidentTypeDefinition[]>(
+        `${base}/on-call/incident-configuration/types`
+      ),
+
+    createIncidentType: (data: CreateIncidentTypeInput) =>
+      core.request<IncidentTypeDefinition>(
+        `${base}/on-call/incident-configuration/types`,
+        { method: 'POST', body: JSON.stringify(data) }
+      ),
+
+    getIncidentCustomFields: () =>
+      core.request<IncidentCustomFieldDefinition[]>(
+        `${base}/on-call/incident-configuration/fields`
+      ),
+
+    createIncidentCustomField: (data: CreateIncidentCustomFieldInput) =>
+      core.request<IncidentCustomFieldDefinition>(
+        `${base}/on-call/incident-configuration/fields`,
+        { method: 'POST', body: JSON.stringify(data) }
+      ),
+
+    getIncidentForms: (stage?: IncidentFormStage) => {
+      const params = new URLSearchParams()
+      if (stage) params.append('stage', stage)
+      return core.request<IncidentFormDefinition[]>(
+        urlWithQuery(
+          `${base}/on-call/incident-configuration/forms`,
+          params.toString()
+        )
+      )
+    },
+
+    createIncidentForm: (data: CreateIncidentFormInput) =>
+      core.request<IncidentFormDefinition>(
+        `${base}/on-call/incident-configuration/forms`,
+        { method: 'POST', body: JSON.stringify(data) }
+      ),
+
+    getIncidentRoles: () =>
+      core.request<IncidentRoleDefinition[]>(
+        `${base}/on-call/incident-configuration/roles`
+      ),
+
+    createIncidentRole: (data: CreateIncidentRoleInput) =>
+      core.request<IncidentRoleDefinition>(
+        `${base}/on-call/incident-configuration/roles`,
+        { method: 'POST', body: JSON.stringify(data) }
       ),
 
     updatePhoneNumber: (phoneNumber: string) =>

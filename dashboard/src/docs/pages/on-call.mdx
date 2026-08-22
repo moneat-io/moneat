@@ -94,7 +94,93 @@ Every on-call alert has an audit timeline showing when it was raised, who was no
 
 ## Declared Incidents
 
-When an on-call alert reflects a problem that needs coordinated response, you can declare a native incident from it. A declared incident adds a severity, a shared timeline, and its own lifecycle on top of the on-call alerts it links, and it appears in the Incidents view. See the Terminology section above for how the two differ.
+When a problem needs coordinated response, you declare a native incident. A declared incident adds a severity, responder roles, source links, and a shared, evidence-preserving timeline on top of any on-call alerts it links, and it appears in the Incidents view. See the Terminology section above for how incidents and alerts differ.
+
+### Declaring an incident
+
+There are two ways to open an incident, and both use the same declaration form so your process stays consistent:
+
+- **Standalone** — from **On-Call → Incidents**, choose **Declare incident**. Use this when you are opening an incident directly rather than from a page.
+- **From an alert** — on an on-call alert, choose **Declare Incident**. The form is prefilled from the alert, and the alert is linked to the new incident automatically.
+
+Every declaration captures a **title**, an optional **summary** and **description**, a **severity** (SEV-0 through SEV-4), and an **initial status** — **Triage** while you confirm whether it is a real incident, or **Active** once it is confirmed and being worked.
+
+### Modes
+
+The **mode** records what kind of incident this is:
+
+| Mode | Use it for |
+|------|-----------|
+| **Live** | A real, ongoing incident that needs a response now. |
+| **Retrospective** | Recording an incident after the fact, so the history is captured even though the response has ended. |
+| **Test** | A drill or game-day exercise. Test incidents are clearly marked so they are never mistaken for real ones. |
+
+### Visibility
+
+Visibility classifies an incident's intended audience:
+
+- **Organization** — classified for an organization-wide audience.
+- **Private** — classified as sensitive, intended for responders.
+- **Public** — classified as shareable beyond your organization.
+
+Visibility records intent today; enforced private-incident access and a public
+share surface are planned rather than active, so treat it as a classification.
+
+### Incident types and forms
+
+Under **On-Call → Configuration** you can tailor what each incident captures:
+
+- **Types** group incidents (for example, *Security* or *Customer-facing outage*) and select which declaration form appears.
+- **Custom fields** are reusable inputs — single- and multi-select, text, number, link, and user, team, service, or catalog-resource references.
+- **Forms** compose those fields for a stage (Declaration, Acceptance, Update, Resolution, Escalation). For each field you control its **position**, whether it is **visible** or **required**, a **default value**, **help text**, and optional **conditions** that show a field only when another field has a specific value.
+- **Roles** define your responder roles (see below).
+
+When you pick a type while declaring, its configured fields render inline and are validated before the incident is created.
+
+:::info[Versioned definitions]
+Types, fields, forms, and roles are saved as **versioned snapshots**. Editing a definition creates a new version and supersedes the previous one, and each incident keeps the exact version that was in effect when it was declared — so past incidents never change retroactively.
+:::
+
+### Responder roles, participants, and observers
+
+On an incident's **Responders** panel you can see who is doing what and manage membership:
+
+- **Roles** (such as Incident Commander or Communications Lead) can be **claimed** by yourself, **assigned** to a teammate, **unassigned**, or **handed over** to someone else with a handover note.
+- **Participants** are actively working the incident; **observers** are following along. You can **join**, **observe**, **leave**, or remove others.
+
+Role assignments and membership changes use optimistic concurrency, so simultaneous edits are detected rather than silently overwriting each other.
+
+:::info[Private responder instructions]
+A role can carry **private instructions** for whoever holds it. They are authored under Configuration (and visible there to anyone who can open that page) and delivered privately to the assignee — they are omitted from the general incident detail and timeline.
+:::
+
+### Source references
+
+Link the supporting evidence for an incident on its **Sources** panel — a runbook or dashboard **link**, a **Slack message**, or another **message** reference. Each linked source shows its type and opens in a new tab, and you can unlink it at any time. (On-call alerts are attached through the alert linking flow rather than as manual sources.)
+
+### The incident timeline
+
+The incident timeline is the canonical, evidence-preserving record of what happened. Each event shows:
+
+- its **provenance** (where it came from — the dashboard, Slack, an integration, an import, a workflow, or the system),
+- its **visibility** (organization, participants, private, or public),
+- when it **originally occurred** and when it was **observed**, and
+- any **annotation**, whether it was **edited**, and whether it has been **removed**.
+
+The common read path stays calm and scannable. Advanced controls are available per event:
+
+- **Annotate** — add context without changing the original event.
+- **Edit** — correct the event type, visibility, time, or details.
+- **Reorder** — adjust the order of events when the recorded sequence needs fixing.
+- **Remove / Restore** — soft-delete an event and bring it back later. Removed events are hidden by default; turn on **Show removed** to see them.
+- **Revision history** — every annotation, edit, reorder, removal, and restore is retained, so the original evidence is never lost.
+- **Export JSON** — download the full timeline, including removed events, for the record.
+
+You can filter the timeline by **event type**, **provenance**, and **visibility**.
+
+### Resolving an incident
+
+An active incident can be resolved from its detail page, with an optional resolution note. Adding notes and resolving both record events on the timeline.
 
 ## Notification Channels
 

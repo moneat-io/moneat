@@ -9,13 +9,17 @@ import com.moneat.enterprise.incidents.SeededMember
 import com.moneat.enterprise.incidents.models.NativeIncidentCommands
 import com.moneat.enterprise.incidents.models.NativeIncidentMode
 import com.moneat.enterprise.incidents.models.NativeIncidentOutboxEvents
+import com.moneat.enterprise.incidents.models.NativeIncidentSourceLinks
 import com.moneat.enterprise.incidents.models.NativeIncidentStatus
 import com.moneat.enterprise.incidents.models.NativeIncidentVisibility
+import com.moneat.enterprise.incidents.models.IncidentSourceType
 import com.moneat.enterprise.oncall.models.OnCallAlerts
 import com.moneat.enterprise.oncall.models.OnCallIncidentAlerts
 import com.moneat.enterprise.oncall.models.OnCallIncidentTimeline
 import com.moneat.enterprise.oncall.models.OnCallIncidents
 import com.moneat.enterprise.oncall.services.OnCallIncidentService
+import com.moneat.enterprise.incidents.responders.CreateIncidentRole
+import com.moneat.enterprise.incidents.responders.IncidentResponderService
 import com.moneat.shared.models.Users
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -215,6 +219,38 @@ class IncidentCommandServiceTest {
     }
 
     @Test
+    fun `links several alerts as idempotent incident sources`() {
+        val firstAlertId = seedAlert("first-source-alert")
+        val secondAlertId = seedAlert("second-source-alert")
+        val incident = service.execute(declareCommand("declare-source-alerts", actor()))
+
+        fun link(commandKey: String, alertId: Int) =
+            service.execute(
+                LinkIncidentSourceCommand(
+                    commandKey = commandKey,
+                    actor = actor(),
+                    incidentId = incident.incidentId,
+                    source =
+                        IncidentSourceReference(
+                            sourceType = IncidentSourceType.ON_CALL_ALERT,
+                            sourceKey = "resolved-by-service",
+                            onCallAlertId = alertId,
+                        ),
+                ),
+            )
+
+        val first = link("link-first-source-alert", firstAlertId)
+        val replay = link("replay-first-source-alert", firstAlertId)
+        val second = link("link-second-source-alert", secondAlertId)
+
+        assertEquals(listOf(2, 2, 3), listOf(first.version, replay.version, second.version))
+        transaction {
+            assertEquals(2, OnCallIncidentAlerts.selectAll().count())
+            assertEquals(2, NativeIncidentSourceLinks.selectAll().count())
+        }
+    }
+
+    @Test
     fun `maps a conflicting alert link to the command conflict contract`() {
         val alertId = seedAlert("duplicate-link")
         service.execute(declareCommand("first-alert-owner", actor()).copy(onCallAlertId = alertId))
@@ -263,13 +299,29 @@ class IncidentCommandServiceTest {
     @Test
     fun `supporting commands use the same policy version and outbox pipeline`() {
         val incident = service.execute(declareCommand("supporting-declare", actor()))
+        val responderService = IncidentResponderService()
+        val roleDefinition =
+            responderService.createRole(
+                member.organizationId,
+                member.userId,
+                CreateIncidentRole(
+                    stableKey = "incident-commander-test",
+                    name = "Incident Commander",
+                    description = null,
+                    responsibilities = listOf("Coordinate the response"),
+                    privateInstructions = null,
+                    required = true,
+                    default = false,
+                ),
+            )
+        val roleDefinitionId = responderService.resolveRoleId(member.organizationId, roleDefinition.id)
 
         val role = service.execute(
             AssignIncidentRoleCommand(
                 commandKey = "supporting-role",
                 actor = actor(),
                 incidentId = incident.incidentId,
-                role = "incident_commander",
+                roleDefinitionId = roleDefinitionId,
                 assigneeUserId = member.userId,
                 expectedVersion = 1,
             ),

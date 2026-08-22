@@ -107,6 +107,7 @@ import { Route as PerformanceTransactionIdRouteImport } from './routes/performan
 import { Route as OnCallTeamsRouteImport } from './routes/on-call.teams'
 import { Route as OnCallSchedulesRouteImport } from './routes/on-call.schedules'
 import { Route as OnCallIncidentsRouteImport } from './routes/on-call.incidents'
+import { Route as OnCallIncidentConfigurationRouteImport } from './routes/on-call.incident-configuration'
 import { Route as OnCallEscalationPoliciesRouteImport } from './routes/on-call.escalation-policies'
 import { Route as OnCallAlertsRouteImport } from './routes/on-call.alerts'
 import { Route as MonitoringServiceMapRouteImport } from './routes/monitoring.service-map'
@@ -657,6 +658,12 @@ const OnCallIncidentsRoute = OnCallIncidentsRouteImport.update({
   path: '/incidents',
   getParentRoute: () => OnCallRoute,
 } as any)
+const OnCallIncidentConfigurationRoute =
+  OnCallIncidentConfigurationRouteImport.update({
+    id: '/incident-configuration',
+    path: '/incident-configuration',
+    getParentRoute: () => OnCallRoute,
+  } as any)
 const OnCallEscalationPoliciesRoute =
   OnCallEscalationPoliciesRouteImport.update({
     id: '/escalation-policies',
@@ -1053,6 +1060,7 @@ export interface FileRoutesByFullPath {
   '/monitoring/service-map': typeof MonitoringServiceMapRoute
   '/on-call/alerts': typeof OnCallAlertsRouteWithChildren
   '/on-call/escalation-policies': typeof OnCallEscalationPoliciesRoute
+  '/on-call/incident-configuration': typeof OnCallIncidentConfigurationRoute
   '/on-call/incidents': typeof OnCallIncidentsRouteWithChildren
   '/on-call/schedules': typeof OnCallSchedulesRoute
   '/on-call/teams': typeof OnCallTeamsRoute
@@ -1196,6 +1204,7 @@ export interface FileRoutesByTo {
   '/monitoring/service-map': typeof MonitoringServiceMapRoute
   '/on-call/alerts': typeof OnCallAlertsRouteWithChildren
   '/on-call/escalation-policies': typeof OnCallEscalationPoliciesRoute
+  '/on-call/incident-configuration': typeof OnCallIncidentConfigurationRoute
   '/on-call/incidents': typeof OnCallIncidentsRouteWithChildren
   '/on-call/schedules': typeof OnCallSchedulesRoute
   '/on-call/teams': typeof OnCallTeamsRoute
@@ -1352,6 +1361,7 @@ export interface FileRoutesById {
   '/monitoring/service-map': typeof MonitoringServiceMapRoute
   '/on-call/alerts': typeof OnCallAlertsRouteWithChildren
   '/on-call/escalation-policies': typeof OnCallEscalationPoliciesRoute
+  '/on-call/incident-configuration': typeof OnCallIncidentConfigurationRoute
   '/on-call/incidents': typeof OnCallIncidentsRouteWithChildren
   '/on-call/schedules': typeof OnCallSchedulesRoute
   '/on-call/teams': typeof OnCallTeamsRoute
@@ -1511,6 +1521,7 @@ export interface FileRouteTypes {
     | '/monitoring/service-map'
     | '/on-call/alerts'
     | '/on-call/escalation-policies'
+    | '/on-call/incident-configuration'
     | '/on-call/incidents'
     | '/on-call/schedules'
     | '/on-call/teams'
@@ -1654,6 +1665,7 @@ export interface FileRouteTypes {
     | '/monitoring/service-map'
     | '/on-call/alerts'
     | '/on-call/escalation-policies'
+    | '/on-call/incident-configuration'
     | '/on-call/incidents'
     | '/on-call/schedules'
     | '/on-call/teams'
@@ -1809,6 +1821,7 @@ export interface FileRouteTypes {
     | '/monitoring/service-map'
     | '/on-call/alerts'
     | '/on-call/escalation-policies'
+    | '/on-call/incident-configuration'
     | '/on-call/incidents'
     | '/on-call/schedules'
     | '/on-call/teams'
@@ -2634,6 +2647,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnCallIncidentsRouteImport
       parentRoute: typeof OnCallRoute
     }
+    '/on-call/incident-configuration': {
+      id: '/on-call/incident-configuration'
+      path: '/incident-configuration'
+      fullPath: '/on-call/incident-configuration'
+      preLoaderRoute: typeof OnCallIncidentConfigurationRouteImport
+      parentRoute: typeof OnCallRoute
+    }
     '/on-call/escalation-policies': {
       id: '/on-call/escalation-policies'
       path: '/escalation-policies'
@@ -3264,6 +3284,7 @@ const OnCallIncidentsRouteWithChildren = OnCallIncidentsRoute._addFileChildren(
 interface OnCallRouteChildren {
   OnCallAlertsRoute: typeof OnCallAlertsRouteWithChildren
   OnCallEscalationPoliciesRoute: typeof OnCallEscalationPoliciesRoute
+  OnCallIncidentConfigurationRoute: typeof OnCallIncidentConfigurationRoute
   OnCallIncidentsRoute: typeof OnCallIncidentsRouteWithChildren
   OnCallSchedulesRoute: typeof OnCallSchedulesRoute
   OnCallTeamsRoute: typeof OnCallTeamsRoute
@@ -3273,6 +3294,7 @@ interface OnCallRouteChildren {
 const OnCallRouteChildren: OnCallRouteChildren = {
   OnCallAlertsRoute: OnCallAlertsRouteWithChildren,
   OnCallEscalationPoliciesRoute: OnCallEscalationPoliciesRoute,
+  OnCallIncidentConfigurationRoute: OnCallIncidentConfigurationRoute,
   OnCallIncidentsRoute: OnCallIncidentsRouteWithChildren,
   OnCallSchedulesRoute: OnCallSchedulesRoute,
   OnCallTeamsRoute: OnCallTeamsRoute,

@@ -54,7 +54,7 @@ const EVENT_CONFIG: Record<string, { icon: typeof Circle; label: string; color: 
   REASSIGNED: {
     icon: UserPlus,
     label: 'Reassigned',
-    color: 'text-chart-5',
+    color: 'text-info-fg',
   },
   NOTE_ADDED: {
     icon: MessageSquare,
@@ -69,7 +69,7 @@ const EVENT_CONFIG: Record<string, { icon: typeof Circle; label: string; color: 
   NOTIFICATION_SENT: {
     icon: Send,
     label: 'Notification Sent',
-    color: 'text-chart-6',
+    color: 'text-muted-foreground',
   },
   VIEWED: {
     icon: Eye,

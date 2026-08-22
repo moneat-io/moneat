@@ -44,6 +44,11 @@ const {
     getOnCallIncidentTimeline: vi.fn(),
     resolveOnCallIncident: vi.fn(),
     addOnCallIncidentNote: vi.fn(),
+    getIncidentRoleAssignments: vi.fn(),
+    getIncidentParticipants: vi.fn(),
+    getIncidentRoles: vi.fn(),
+    getIncidentSources: vi.fn(),
+    getOrgMembers: vi.fn(),
     getOverview: vi.fn(),
   },
   mockEnterpriseFeatures: {
@@ -232,20 +237,29 @@ const declaredIncident = {
 const declaredIncidentTimeline = [
   {
     id: resourceId(121),
-    incidentId: DECLARED_INCIDENT_RESOURCE_ID,
+    eventKey: 'declared',
     eventType: 'DECLARED',
-    source: 'incident',
-    actorName: 'Ada Lovelace',
+    actorUserId: USER_RESOURCE_ID,
     details: {},
+    provenance: 'REST',
+    visibility: 'ORGANIZATION',
+    originalOccurredAt: '2026-06-05T12:03:00.000Z',
+    observedAt: '2026-06-05T12:03:00.000Z',
+    displayOrder: 1000000,
     createdAt: '2026-06-05T12:03:00.000Z',
   },
   {
     id: resourceId(122),
-    incidentId: DECLARED_INCIDENT_RESOURCE_ID,
-    eventType: 'ALERT_LINKED',
-    source: 'alert',
-    alertTitle: 'Payments outage',
-    details: {alertTitle: 'Payments outage'},
+    eventKey: 'note',
+    eventType: 'NOTE_ADDED',
+    actorUserId: USER_RESOURCE_ID,
+    details: {note: 'Rolling out mitigation'},
+    provenance: 'REST',
+    visibility: 'ORGANIZATION',
+    originalOccurredAt: '2026-06-05T12:04:00.000Z',
+    observedAt: '2026-06-05T12:04:00.000Z',
+    displayOrder: 2000000,
+    annotation: 'Confirmed customer impact',
     createdAt: '2026-06-05T12:04:00.000Z',
   },
 ]
@@ -471,7 +485,12 @@ describe('overview alert and incident dashboard', () => {
     mockApi.getOnCallIncident.mockResolvedValue(declaredIncident)
     mockApi.getOnCallIncidentTimeline.mockResolvedValue(declaredIncidentTimeline)
     mockApi.resolveOnCallIncident.mockResolvedValue({...declaredIncident, status: 'RESOLVED'})
-    mockApi.addOnCallIncidentNote.mockResolvedValue(declaredIncidentTimeline[0])
+    mockApi.addOnCallIncidentNote.mockResolvedValue({message: 'Note added'})
+    mockApi.getIncidentRoleAssignments.mockResolvedValue([])
+    mockApi.getIncidentParticipants.mockResolvedValue([])
+    mockApi.getIncidentRoles.mockResolvedValue([])
+    mockApi.getIncidentSources.mockResolvedValue([])
+    mockApi.getOrgMembers.mockResolvedValue({members: [], pendingInvitations: []})
     mockApi.getOverview.mockResolvedValue(overviewTestData)
   })
 
@@ -751,7 +770,12 @@ describe('overview alert and incident dashboard', () => {
     expect((await screen.findAllByText('SEV-1')).length).toBeGreaterThan(0)
     expect(await screen.findByText('Linked alerts')).toBeInTheDocument()
     expect(await screen.findByText(`Alert #${ALERT_RESOURCE_ID} · TRIGGERED`)).toBeInTheDocument()
-    expect(await screen.findByText('from Payments outage')).toBeInTheDocument()
+    // Canonical timeline: event labels, note, and annotation replace the legacy merged view.
+    expect(await screen.findByText('Incident declared')).toBeInTheDocument()
+    expect(await screen.findByText('Note added')).toBeInTheDocument()
+    expect(await screen.findByText('"Rolling out mitigation"')).toBeInTheDocument()
+    expect(await screen.findByText('Responders')).toBeInTheDocument()
+    expect(await screen.findByText('Sources')).toBeInTheDocument()
     expect(await screen.findByText('Resolve incident')).toBeInTheDocument()
 
     fireEvent.change(screen.getByPlaceholderText('Enter your note...'), {target: {value: 'Incident update'}})
@@ -874,49 +898,42 @@ describe('overview alert and incident dashboard', () => {
       resolvedByName: 'Grace Hopper',
       resolvedAt: '2026-06-05T13:00:00.000Z',
     })
-    mockApi.getOnCallIncidentTimeline.mockResolvedValueOnce([
+    mockApi.getOnCallIncidentTimeline.mockResolvedValue([
       {
         id: resourceId(151),
-        incidentId: RESOLVED_DECLARED_INCIDENT_RESOURCE_ID,
-        eventType: 'NOTIFICATION_SENT',
-        actorUserName: 'Moneat',
-        actorName: 'Moneat',
-        details: {channel: 'sms'},
+        eventKey: 'resolved',
+        eventType: 'RESOLVED',
+        actorUserId: OTHER_USER_RESOURCE_ID,
+        details: {},
+        provenance: 'REST',
+        visibility: 'ORGANIZATION',
+        originalOccurredAt: '2026-06-05T12:10:00.000Z',
+        observedAt: '2026-06-05T12:10:00.000Z',
+        displayOrder: 1000000,
+        editedAt: '2026-06-05T12:12:00.000Z',
         createdAt: '2026-06-05T12:10:00.000Z',
       },
       {
-        id: resourceId(152),
-        incidentId: RESOLVED_DECLARED_INCIDENT_RESOURCE_ID,
-        eventType: 'REASSIGNED',
-        actorName: 'Ada Lovelace',
-        details: {toUserName: 'Grace Hopper'},
-        createdAt: '2026-06-05T12:11:00.000Z',
-      },
-      {
         id: resourceId(153),
-        incidentId: RESOLVED_DECLARED_INCIDENT_RESOURCE_ID,
+        eventKey: 'note',
         eventType: 'NOTE_ADDED',
-        actorName: 'Grace Hopper',
+        actorUserId: OTHER_USER_RESOURCE_ID,
         details: {note: 'Deployment rolled back'},
+        provenance: 'IMPORT',
+        visibility: 'PRIVATE',
+        originalOccurredAt: '2026-06-05T12:12:00.000Z',
+        observedAt: '2026-06-05T12:12:30.000Z',
+        displayOrder: 2000000,
         createdAt: '2026-06-05T12:12:00.000Z',
-      },
-      {
-        id: resourceId(154),
-        incidentId: RESOLVED_DECLARED_INCIDENT_RESOURCE_ID,
-        eventType: 'CUSTOM_EVENT',
-        source: 'alert',
-        alertTitle: 'Deploy alert',
-        details: {},
-        createdAt: '2026-06-05T12:13:00.000Z',
       },
     ])
     renderRoute(IncidentDetailRoute)
     expect(await screen.findByText('Resolved deploy incident')).toBeInTheDocument()
     expect((await screen.findAllByText('SEV3')).length).toBeGreaterThan(0)
-    expect(await screen.findByText('Resolved By')).toBeInTheDocument()
-    expect(await screen.findByText('to Moneat via sms')).toBeInTheDocument()
-    expect(await screen.findByText('to Grace Hopper')).toBeInTheDocument()
+    expect(await screen.findByText('Resolved by')).toBeInTheDocument()
+    expect(await screen.findByText('Grace Hopper')).toBeInTheDocument()
+    expect((await screen.findAllByText('Resolved')).length).toBeGreaterThan(0)
     expect(await screen.findByText('"Deployment rolled back"')).toBeInTheDocument()
-    expect(await screen.findByText('from Deploy alert')).toBeInTheDocument()
+    expect((await screen.findAllByText('Imported')).length).toBeGreaterThan(0)
   })
 })
