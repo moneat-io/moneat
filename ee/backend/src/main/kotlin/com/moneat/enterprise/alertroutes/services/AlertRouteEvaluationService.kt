@@ -64,15 +64,26 @@ class AlertRouteEvaluationService(
     private val ownershipResolver: AlertRouteOwnershipResolver = DatabaseAlertRouteOwnershipResolver(),
     private val evaluator: AlertRouteEvaluator = AlertRouteEvaluator(DatabaseAlertRouteTeamEscalationResolver()),
 ) {
+    data class LiveEvaluation(
+        val context: AlertRouteContext,
+        val result: AlertRouteEvaluationResult,
+    )
+
     /** Evaluate the routes of the event's organization against a live alert. */
     fun evaluate(
         event: AlertLifecycleEvent,
         episode: AlertRouteEpisodeIdentity = AlertRouteEpisodeIdentity.UNKNOWN,
-    ): AlertRouteEvaluationResult {
+    ): AlertRouteEvaluationResult = evaluateLive(event, episode).result
+
+    fun evaluateLive(
+        event: AlertLifecycleEvent,
+        episode: AlertRouteEpisodeIdentity = AlertRouteEpisodeIdentity.UNKNOWN,
+    ): LiveEvaluation {
         policy.requireReadAllowed(event.organizationId)
         val approved = AlertRouteMetadataPolicy.approve(event.metadata)
         val ownership = ownershipResolver.resolve(event.organizationId, approved.values)
-        return evaluateContext(AlertRouteContextFactory.fromLifecycleEvent(event, episode, ownership))
+        val context = AlertRouteContextFactory.fromLifecycleEvent(event, episode, ownership)
+        return LiveEvaluation(context, evaluateContext(context))
     }
 
     /** Explain match and non-match for a supplied alert sample. */

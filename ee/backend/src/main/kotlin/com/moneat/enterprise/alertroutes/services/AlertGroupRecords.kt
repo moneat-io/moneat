@@ -75,6 +75,14 @@ data class AlertGroupPagingCompletion(
     val succeeded: Boolean,
 )
 
+data class AlertGroupPagingClaim(
+    val organizationId: Int,
+    val groupId: Uuid,
+    val episodeId: Uuid,
+    val commandKey: String,
+    val now: Instant = kotlin.time.Clock.System.now(),
+)
+
 data class AlertGroupEscalationRecord(
     val organizationId: Int,
     val groupId: Uuid,
@@ -82,4 +90,6 @@ data class AlertGroupEscalationRecord(
     val escalationKey: String,
     val onCallAlertId: Uuid?,
     val state: AlertGroupEscalationState,
+    /** Timestamp observed on the persisted record; write operations assign their own transition time. */
+    val updatedAt: Instant? = null,
 )

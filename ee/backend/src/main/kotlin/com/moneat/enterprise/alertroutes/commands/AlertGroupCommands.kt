@@ -4,6 +4,7 @@
 
 package com.moneat.enterprise.alertroutes.commands
 
+import com.moneat.enterprise.incidents.models.NativeIncidentStatus
 import kotlin.uuid.Uuid
 
 data class AlertGroupActor(val organizationId: Int, val userId: Int, val origin: String)
@@ -61,6 +62,9 @@ data class CreateAlertGroupTriageCommand(
     override val expectedVersion: Int,
     val title: String? = null,
     val summary: String? = null,
+    val initialStatus: NativeIncidentStatus = NativeIncidentStatus.TRIAGE,
+    val severity: String? = null,
+    val incidentType: String? = null,
 ) : AlertGroupCommand {
     override val type = AlertGroupCommandType.CREATE_TRIAGE
 }

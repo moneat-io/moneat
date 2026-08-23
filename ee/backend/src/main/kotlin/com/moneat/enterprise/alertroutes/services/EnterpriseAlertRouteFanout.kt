@@ -7,16 +7,14 @@ package com.moneat.enterprise.alertroutes.services
 import com.moneat.alerts.services.AlertFanoutContext
 import com.moneat.alerts.services.AlertRouteFanout
 import com.moneat.enterprise.FeatureRegistry
-import com.moneat.enterprise.alertroutes.context.AlertRouteEpisodeIdentity
 
 /** Enterprise route-evaluation arm. Action execution is added by the downstream execution task. */
 class EnterpriseAlertRouteFanout(
-    private val evaluationService: AlertRouteEvaluationService = AlertRouteEvaluationService(),
+    private val executionService: AlertRouteExecutionService = AlertRouteExecutionService(),
     private val enabled: (Int) -> Boolean = FeatureRegistry::isNativeIncidentResponseEnabled,
 ) : AlertRouteFanout {
     override suspend fun process(context: AlertFanoutContext) {
         if (!enabled(context.event.organizationId)) return
-        val episode = context.episode?.let(AlertRouteEpisodeIdentity::from) ?: AlertRouteEpisodeIdentity.UNKNOWN
-        evaluationService.evaluate(context.event, episode)
+        executionService.execute(context)
     }
 }
