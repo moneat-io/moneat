@@ -32,7 +32,10 @@ object AlertGroupReader {
         val rows = EnterpriseAlertGroups
             .selectAll()
             .where { EnterpriseAlertGroups.organizationId eq organizationId }
-            .orderBy(EnterpriseAlertGroups.updatedAt to SortOrder.DESC)
+            .orderBy(
+                EnterpriseAlertGroups.updatedAt to SortOrder.DESC,
+                EnterpriseAlertGroups.id to SortOrder.DESC,
+            )
             .limit(limit)
             .offset(offset)
             .toList()
