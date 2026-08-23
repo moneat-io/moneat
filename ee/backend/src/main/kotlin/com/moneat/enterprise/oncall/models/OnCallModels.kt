@@ -4,6 +4,7 @@
 
 package com.moneat.enterprise.oncall.models
 
+import com.moneat.enterprise.incidents.models.NativeIncidentStatus
 import com.moneat.enterprise.incidents.models.NativeIncidentTypes
 import com.moneat.shared.models.EscalationPolicies
 import com.moneat.shared.models.OnCallSchedules
@@ -23,7 +24,13 @@ import org.jetbrains.exposed.v1.core.Column
 import org.jetbrains.exposed.v1.core.ColumnType
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.Table
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.isNotNull
+import org.jetbrains.exposed.v1.core.isNull
+import org.jetbrains.exposed.v1.core.neq
+import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.datetime.timestamp
 import org.jetbrains.exposed.v1.javatime.time
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
@@ -283,7 +290,9 @@ object OnCallIncidents : IntIdTable("on_call_incidents") {
     val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
     val title = varchar("title", 255)
     val description = text("description").nullable()
-    val severity = varchar("severity", 10)
+
+    /** Triage incidents stay unclassified until acceptance, so severity is optional there. */
+    val severity = varchar("severity", 10).nullable()
     val status = varchar("status", 20).default("ACTIVE")
     val mode = varchar("mode", 24).default("LIVE")
     val visibility = varchar("visibility", 24).default("ORGANIZATION")
@@ -302,8 +311,27 @@ object OnCallIncidents : IntIdTable("on_call_incidents") {
     val closedAt = timestamp("closed_at").nullable()
     val cancelledAt = timestamp("cancelled_at").nullable()
     val declinedAt = timestamp("declined_at").nullable()
+    val mergedAt = timestamp("merged_at").nullable()
+    val mergedIntoIncidentId =
+        integer("merged_into_incident_id").references(id, onDelete = ReferenceOption.RESTRICT).nullable()
     val createdAt = timestamp("created_at")
     val updatedAt = timestamp("updated_at")
+
+    init {
+        // Severity is only required once the incident has been accepted out of triage.
+        check("chk_native_incident_triage_severity") {
+            severity.isNotNull() or acceptedAt.isNull()
+        }
+        check("chk_native_incident_merged_state") {
+            ((status eq NativeIncidentStatus.MERGED.wire) and
+                mergedAt.isNotNull() and mergedIntoIncidentId.isNotNull()) or
+                ((status neq NativeIncidentStatus.MERGED.wire) and
+                    mergedAt.isNull() and mergedIntoIncidentId.isNull())
+        }
+        check("chk_native_incident_merge_target") {
+            mergedIntoIncidentId.isNull() or (mergedIntoIncidentId neq id)
+        }
+    }
 }
 
 @Serializable
@@ -312,7 +340,7 @@ data class OnCallIncident(
     @SerialName("organizationId") val organizationResourceId: String,
     val title: String,
     val description: String? = null,
-    val severity: String,
+    val severity: String? = null,
     val status: String,
     val mode: String = "LIVE",
     val visibility: String = "ORGANIZATION",
@@ -331,6 +359,8 @@ data class OnCallIncident(
     val closedAt: String? = null,
     val cancelledAt: String? = null,
     val declinedAt: String? = null,
+    val mergedAt: String? = null,
+    @SerialName("mergedIntoIncidentId") val mergedIntoIncidentResourceId: String? = null,
     val alertCount: Int = 0,
     val alerts: List<OnCallAlert> = emptyList(),
     val createdAt: String,

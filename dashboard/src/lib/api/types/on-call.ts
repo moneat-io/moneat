@@ -159,6 +159,7 @@ export type OnCallIncidentStatus =
   | 'CLOSED'
   | 'CANCELLED'
   | 'DECLINED'
+  | 'MERGED'
 
 export type OnCallIncidentMode = 'LIVE' | 'RETROSPECTIVE' | 'TEST'
 
@@ -170,7 +171,8 @@ export interface OnCallIncident {
   title: string
   description?: string
   summary?: string
-  severity: string
+  // Triage incidents stay unclassified until they are accepted.
+  severity?: string
   status: OnCallIncidentStatus
   mode?: OnCallIncidentMode
   visibility?: OnCallIncidentVisibility
@@ -188,6 +190,8 @@ export interface OnCallIncident {
   closedAt?: string
   cancelledAt?: string
   declinedAt?: string
+  mergedAt?: string
+  mergedIntoIncidentId?: string
   alertCount: number
   alerts?: Array<{ id: string; title: string; status: string; priority?: string }>
   createdAt: string

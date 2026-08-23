@@ -6,11 +6,15 @@ package com.moneat.enterprise.incidents.commands
 
 import com.moneat.alerts.models.IncidentSeverity
 import com.moneat.alerts.models.AlertEpisodes
+import com.moneat.enterprise.incidents.config.IncidentConfigurationService
+import com.moneat.enterprise.incidents.config.ResolvedIncidentForm
 import com.moneat.enterprise.incidents.events.IncidentOutboxWriter
 import com.moneat.enterprise.incidents.events.PendingNativeIncidentDomainEvent
 import com.moneat.enterprise.incidents.models.NativeIncidentCommands
 import com.moneat.enterprise.incidents.models.NativeIncidentAlertEpisodeLinks
 import com.moneat.enterprise.incidents.models.NativeIncidentFormSubmissions
+import com.moneat.enterprise.incidents.models.NativeIncidentTypes
+import com.moneat.enterprise.incidents.models.IncidentFormStage
 import com.moneat.enterprise.incidents.models.IncidentParticipationType
 import com.moneat.enterprise.incidents.models.IncidentRoleEndReason
 import com.moneat.enterprise.incidents.models.NativeIncidentHandovers
@@ -33,6 +37,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.statements.UpdateBuilder
 import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
@@ -51,6 +56,7 @@ class IncidentCommandService(
     private val policy: IncidentCommandPolicy = IncidentCommandPolicy(),
     private val outboxWriter: IncidentOutboxWriter = IncidentOutboxWriter(),
     private val timelineWriter: IncidentTimelineWriter = IncidentTimelineWriter(),
+    private val configurationService: IncidentConfigurationService = IncidentConfigurationService(),
 ) {
     fun execute(command: IncidentCommand): IncidentCommandResult {
         policy.requireAllowed(command)
@@ -95,7 +101,8 @@ class IncidentCommandService(
     private fun applyCommand(command: IncidentCommand): IncidentMutation =
         when (command) {
             is DeclareIncidentCommand -> declare(command)
-            is AcceptIncidentCommand -> transition(command, NativeIncidentStatus.ACTIVE, null)
+            is AcceptIncidentCommand -> accept(command)
+            is DeclineIncidentCommand -> transition(command, NativeIncidentStatus.DECLINED, command.reason)
             is MergeIncidentCommand -> merge(command)
             is UpdateIncidentCommand -> update(command)
             is TransitionIncidentCommand -> transition(command, command.targetStatus, command.note)
@@ -170,12 +177,12 @@ class IncidentCommandService(
         val title = command.title.trim()
         require(title.isNotEmpty()) { "Incident title is required" }
         require(title.length <= MAX_TITLE_LENGTH) { "Incident title is too long" }
-        val severity =
-            requireNotNull(IncidentSeverity.fromString(command.severity)) {
-                "Invalid incident severity: ${command.severity}"
-            }.wire
         require(command.initialStatus in DECLARABLE_STATUSES) {
             "Incidents can only be declared in TRIAGE or ACTIVE status"
+        }
+        val severity = command.severity?.let(::requireSeverity)
+        require(severity != null || command.initialStatus == NativeIncidentStatus.TRIAGE) {
+            "Incident severity is required to declare an active incident"
         }
         command.onCallAlertId?.let { requireAlert(command.actor.organizationId, it) }
         val now = Clock.System.now()
@@ -205,6 +212,8 @@ class IncidentCommandService(
                 it[closedAt] = null
                 it[cancelledAt] = null
                 it[declinedAt] = null
+                it[mergedAt] = null
+                it[mergedIntoIncidentId] = null
                 it[createdAt] = now
                 it[updatedAt] = now
             }.value
@@ -255,9 +264,7 @@ class IncidentCommandService(
 
     private fun update(command: UpdateIncidentCommand): IncidentMutation {
         val current = requireIncident(command)
-        val severity = command.severity?.let {
-            requireNotNull(IncidentSeverity.fromString(it)) { "Invalid incident severity: $it" }.wire
-        }
+        val severity = command.severity?.let(::requireSeverity)
         command.title?.let {
             require(it.isNotBlank()) { "Incident title is required" }
             require(it.trim().length <= MAX_TITLE_LENGTH) { "Incident title is too long" }
@@ -298,10 +305,18 @@ class IncidentCommandService(
         val current = requireIncident(command)
         val currentStatus = statusOf(current)
         if (currentStatus == target) return loadMutation(command.incidentId, changed = false)
-        if (target !in allowedTransitions.getValue(currentStatus)) {
-            throw IncidentCommandConflictException(
-                "Cannot transition incident from ${currentStatus.wire} to ${target.wire}",
-            )
+        requireTransitionAllowed(currentStatus, target)
+        if (target in ACCEPTED_STATUSES) {
+            if (currentStatus == NativeIncidentStatus.TRIAGE) {
+                requireAcceptanceSatisfied(
+                    organizationId = command.actor.organizationId,
+                    incidentTypeResourceId = incidentTypeResourceId(command.actor.organizationId, current),
+                    formValues = emptyMap(),
+                    severity = current[OnCallIncidents.severity],
+                )
+            } else {
+                require(current[OnCallIncidents.severity] != null) { SEVERITY_REQUIRED_MESSAGE }
+            }
         }
         val now = Clock.System.now()
         val nextVersion = current[OnCallIncidents.version] + 1
@@ -310,24 +325,7 @@ class IncidentCommandService(
                 it[status] = target.wire
                 it[version] = nextVersion
                 it[updatedAt] = now
-                when (target) {
-                    NativeIncidentStatus.TRIAGE -> {
-                        it[triagedAt] = now
-                        clearTerminalState(it)
-                    }
-                    NativeIncidentStatus.ACTIVE -> {
-                        it[acceptedAt] = now
-                        clearTerminalState(it)
-                    }
-                    NativeIncidentStatus.RESOLVED -> {
-                        it[resolvedBy] = command.actor.userId
-                        it[resolvedAt] = now
-                    }
-                    NativeIncidentStatus.POST_INCIDENT -> it[postIncidentAt] = now
-                    NativeIncidentStatus.CLOSED -> it[closedAt] = now
-                    NativeIncidentStatus.CANCELLED -> it[cancelledAt] = now
-                    NativeIncidentStatus.DECLINED -> it[declinedAt] = now
-                }
+                applyStatusTimestamps(it, target, command.actor.userId, now)
             }
         requireVersionUpdate(updated, command.incidentId)
         insertTimelineEvent(
@@ -341,6 +339,140 @@ class IncidentCommandService(
             ),
         )
         return loadMutation(command.incidentId)
+    }
+
+    /**
+     * Accepting classifies a triage incident and moves it into the active response in one
+     * versioned mutation, so severity, incident type, and the acceptance form land together.
+     */
+    private fun accept(command: AcceptIncidentCommand): IncidentMutation {
+        val current = requireIncident(command)
+        val currentStatus = statusOf(current)
+        if (currentStatus == NativeIncidentStatus.ACTIVE) return loadMutation(command.incidentId, changed = false)
+        requireTransitionAllowed(currentStatus, NativeIncidentStatus.ACTIVE)
+        val severity = command.severity?.let(::requireSeverity) ?: current[OnCallIncidents.severity]
+        val organizationId = command.actor.organizationId
+        val typeResourceId =
+            command.incidentTypeResourceId.cleaned() ?: incidentTypeResourceId(organizationId, current)
+        val acceptance =
+            requireAcceptanceSatisfied(organizationId, typeResourceId, command.formValues, severity)
+        val now = Clock.System.now()
+        val nextVersion = current[OnCallIncidents.version] + 1
+        val updated =
+            OnCallIncidents.update({ versionPredicate(command, current) }) {
+                it[status] = NativeIncidentStatus.ACTIVE.wire
+                it[OnCallIncidents.severity] = severity
+                it[incidentTypeDefinitionId] =
+                    acceptance.incidentTypeDefinitionId ?: current[OnCallIncidents.incidentTypeDefinitionId]
+                it[OnCallIncidents.incidentType] =
+                    acceptance.incidentTypeName ?: current[OnCallIncidents.incidentType]
+                it[acceptedAt] = now
+                it[version] = nextVersion
+                it[updatedAt] = now
+                clearTerminalState(it)
+            }
+        requireVersionUpdate(updated, command.incidentId)
+        recordAcceptanceSubmission(command, acceptance, now)
+        insertTimelineEvent(
+            command,
+            CommandTimelineEvent(
+                command.incidentId,
+                command.commandKey,
+                NativeIncidentStatus.ACTIVE.timelineEventType(),
+                transitionDetails(command.actor.origin, null, currentStatus) +
+                    ("severity" to JsonPrimitive(severity)),
+                now,
+            ),
+        )
+        return loadMutation(command.incidentId)
+    }
+
+    private fun recordAcceptanceSubmission(
+        command: AcceptIncidentCommand,
+        acceptance: ResolvedIncidentForm,
+        now: kotlin.time.Instant,
+    ) {
+        if (acceptance.formDefinitionId == null && acceptance.values.isEmpty()) return
+        NativeIncidentFormSubmissions.insert {
+            it[resourceId] = Uuid.random()
+            it[organizationId] = command.actor.organizationId
+            it[incidentId] = command.incidentId
+            it[formId] = acceptance.formDefinitionId
+            it[stage] = IncidentFormStage.ACCEPTANCE.wire
+            it[definitionSnapshot] = acceptance.definitionSnapshot
+            it[valuesSnapshot] = acceptance.values
+            it[submittedBy] = command.actor.userId
+            it[submittedAt] = now
+        }
+    }
+
+    /**
+     * A triage incident only leaves triage once it carries a severity and satisfies the
+     * organization's configured acceptance form.
+     */
+    private fun requireAcceptanceSatisfied(
+        organizationId: Int,
+        incidentTypeResourceId: String?,
+        formValues: Map<String, JsonElement>,
+        severity: String?,
+    ): ResolvedIncidentForm {
+        require(severity != null) { SEVERITY_REQUIRED_MESSAGE }
+        return configurationService.resolveForm(
+            organizationId = organizationId,
+            incidentTypeResourceId = incidentTypeResourceId,
+            stage = IncidentFormStage.ACCEPTANCE,
+            submittedValues = formValues,
+        )
+    }
+
+    private fun incidentTypeResourceId(organizationId: Int, current: ResultRow): String? {
+        val definitionId = current[OnCallIncidents.incidentTypeDefinitionId] ?: return null
+        return NativeIncidentTypes
+            .selectAll()
+            .where {
+                (NativeIncidentTypes.id eq definitionId) and
+                    (NativeIncidentTypes.organizationId eq organizationId)
+            }.singleOrNull()
+            ?.get(NativeIncidentTypes.resourceId)
+            ?.toString()
+    }
+
+    private fun requireSeverity(value: String): String =
+        requireNotNull(IncidentSeverity.fromString(value)) { "Invalid incident severity: $value" }.wire
+
+    private fun requireTransitionAllowed(current: NativeIncidentStatus, target: NativeIncidentStatus) {
+        if (target in allowedTransitions.getValue(current)) return
+        throw IncidentCommandConflictException(
+            "Cannot transition incident from ${current.wire} to ${target.wire}",
+        )
+    }
+
+    private fun applyStatusTimestamps(
+        statement: UpdateBuilder<*>,
+        target: NativeIncidentStatus,
+        actorUserId: Int,
+        now: kotlin.time.Instant,
+    ) {
+        when (target) {
+            NativeIncidentStatus.TRIAGE -> {
+                statement[OnCallIncidents.triagedAt] = now
+                clearTerminalState(statement)
+            }
+            NativeIncidentStatus.ACTIVE -> {
+                statement[OnCallIncidents.acceptedAt] = now
+                clearTerminalState(statement)
+            }
+            NativeIncidentStatus.RESOLVED -> {
+                statement[OnCallIncidents.resolvedBy] = actorUserId
+                statement[OnCallIncidents.resolvedAt] = now
+            }
+            NativeIncidentStatus.POST_INCIDENT -> statement[OnCallIncidents.postIncidentAt] = now
+            NativeIncidentStatus.CLOSED -> statement[OnCallIncidents.closedAt] = now
+            NativeIncidentStatus.CANCELLED -> statement[OnCallIncidents.cancelledAt] = now
+            NativeIncidentStatus.DECLINED -> statement[OnCallIncidents.declinedAt] = now
+            // MERGED is written only by the merge command, which also records the merge target.
+            NativeIncidentStatus.MERGED -> error("MERGED is only reachable through a merge command")
+        }
     }
 
     private fun assignRole(command: AssignIncidentRoleCommand): IncidentMutation {
@@ -766,27 +898,20 @@ class IncidentCommandService(
         )
     }
 
+    /**
+     * Merging retires the source incident into the target. The source keeps its own timeline and
+     * command history; only its links move, and it lands in the terminal MERGED status that
+     * records where it went.
+     */
     private fun merge(command: MergeIncidentCommand): IncidentMutation {
         require(command.incidentId != command.sourceIncidentId) { "Cannot merge an incident into itself" }
         val target = requireIncident(command)
         val source = requireIncident(command.actor.organizationId, command.sourceIncidentId)
-        val sourceStatus = statusOf(source)
-        if (NativeIncidentStatus.CANCELLED !in allowedTransitions.getValue(sourceStatus)) {
-            throw IncidentCommandConflictException("An incident in ${sourceStatus.wire} status cannot be merged")
-        }
-        val sourceAlerts =
-            OnCallIncidentAlerts
-                .selectAll()
-                .where { OnCallIncidentAlerts.incidentId eq command.sourceIncidentId }
-                .map { it[OnCallIncidentAlerts.alertId] }
-        OnCallIncidentAlerts.update({ OnCallIncidentAlerts.incidentId eq command.sourceIncidentId }) {
-            it[incidentId] = command.incidentId
-        }
-        sourceAlerts.forEach { alertId ->
-            OnCallAlerts.update({ OnCallAlerts.id eq alertId }) {
-                it[declaredIncidentId] = command.incidentId
-            }
-        }
+        alreadyMergedResult(command, source)?.let { return it }
+        requireMergeable(statusOf(target), statusOf(source))
+        transferOnCallAlertLinks(command)
+        transferAlertEpisodeLinks(command)
+        transferSourceLinks(command)
         val now = Clock.System.now()
         val targetVersion = target[OnCallIncidents.version] + 1
         requireVersionUpdate(
@@ -802,11 +927,104 @@ class IncidentCommandService(
                 (OnCallIncidents.organizationId eq command.actor.organizationId) and
                 (OnCallIncidents.version eq source[OnCallIncidents.version])
         }) {
-            it[status] = NativeIncidentStatus.CANCELLED.wire
+            it[status] = NativeIncidentStatus.MERGED.wire
             it[version] = sourceVersion
-            it[cancelledAt] = now
+            it[mergedAt] = now
+            it[mergedIntoIncidentId] = command.incidentId
             it[updatedAt] = now
         }.also { requireVersionUpdate(it, command.sourceIncidentId) }
+        recordMergeEvents(command, source, target, sourceVersion, now)
+        return loadMutation(command.incidentId)
+    }
+
+    /** A repeated merge of the same pair converges instead of failing. */
+    private fun alreadyMergedResult(command: MergeIncidentCommand, source: ResultRow): IncidentMutation? {
+        if (statusOf(source) != NativeIncidentStatus.MERGED) return null
+        if (source[OnCallIncidents.mergedIntoIncidentId] == command.incidentId) {
+            return loadMutation(command.incidentId, changed = false)
+        }
+        throw IncidentCommandConflictException("Incident is already merged into another incident")
+    }
+
+    private fun requireMergeable(targetStatus: NativeIncidentStatus, sourceStatus: NativeIncidentStatus) {
+        if (targetStatus !in MERGE_TARGET_STATUSES) {
+            throw IncidentCommandConflictException(
+                "Incidents cannot be merged into an incident in ${targetStatus.wire} status",
+            )
+        }
+        if (NativeIncidentStatus.MERGED !in allowedTransitions.getValue(sourceStatus)) {
+            throw IncidentCommandConflictException("An incident in ${sourceStatus.wire} status cannot be merged")
+        }
+    }
+
+    private fun transferOnCallAlertLinks(command: MergeIncidentCommand) {
+        val sourceAlerts =
+            OnCallIncidentAlerts
+                .selectAll()
+                .where { OnCallIncidentAlerts.incidentId eq command.sourceIncidentId }
+                .map { it[OnCallIncidentAlerts.alertId] }
+        if (sourceAlerts.isEmpty()) return
+        OnCallIncidentAlerts.update({ OnCallIncidentAlerts.incidentId eq command.sourceIncidentId }) {
+            it[incidentId] = command.incidentId
+        }
+        sourceAlerts.forEach { alertId ->
+            OnCallAlerts.update({ OnCallAlerts.id eq alertId }) {
+                it[declaredIncidentId] = command.incidentId
+            }
+        }
+    }
+
+    private fun transferAlertEpisodeLinks(command: MergeIncidentCommand) {
+        val targetEpisodes =
+            NativeIncidentAlertEpisodeLinks
+                .selectAll()
+                .where { NativeIncidentAlertEpisodeLinks.incidentId eq command.incidentId }
+                .mapTo(mutableSetOf()) { it[NativeIncidentAlertEpisodeLinks.alertEpisodeId] }
+        if (targetEpisodes.isNotEmpty()) {
+            NativeIncidentAlertEpisodeLinks.deleteWhere {
+                (incidentId eq command.sourceIncidentId) and (alertEpisodeId inList targetEpisodes)
+            }
+        }
+        NativeIncidentAlertEpisodeLinks.update({
+            NativeIncidentAlertEpisodeLinks.incidentId eq command.sourceIncidentId
+        }) {
+            it[incidentId] = command.incidentId
+        }
+    }
+
+    private fun transferSourceLinks(command: MergeIncidentCommand) {
+        val targetSources =
+            NativeIncidentSourceLinks
+                .selectAll()
+                .where { NativeIncidentSourceLinks.incidentId eq command.incidentId }
+                .mapTo(mutableSetOf()) {
+                    it[NativeIncidentSourceLinks.sourceType] to it[NativeIncidentSourceLinks.sourceKey]
+                }
+        val duplicateIds =
+            NativeIncidentSourceLinks
+                .selectAll()
+                .where { NativeIncidentSourceLinks.incidentId eq command.sourceIncidentId }
+                .filter {
+                    (it[NativeIncidentSourceLinks.sourceType] to it[NativeIncidentSourceLinks.sourceKey]) in
+                        targetSources
+                }.map { it[NativeIncidentSourceLinks.id].value }
+        if (duplicateIds.isNotEmpty()) {
+            NativeIncidentSourceLinks.deleteWhere { id inList duplicateIds }
+        }
+        NativeIncidentSourceLinks.update({
+            NativeIncidentSourceLinks.incidentId eq command.sourceIncidentId
+        }) {
+            it[incidentId] = command.incidentId
+        }
+    }
+
+    private fun recordMergeEvents(
+        command: MergeIncidentCommand,
+        source: ResultRow,
+        target: ResultRow,
+        sourceVersion: Int,
+        now: kotlin.time.Instant,
+    ) {
         val details = mapOf(
             "origin" to JsonPrimitive(command.actor.origin),
             "sourceIncidentId" to JsonPrimitive(source[OnCallIncidents.resourceId].toString()),
@@ -827,7 +1045,7 @@ class IncidentCommandService(
             CommandTimelineEvent(
                 command.sourceIncidentId,
                 "${command.commandKey}:source",
-                "MERGED_INTO_INCIDENT",
+                NativeIncidentStatus.MERGED.timelineEventType(),
                 details,
                 now,
             ),
@@ -839,14 +1057,19 @@ class IncidentCommandService(
                 eventType = "INCIDENT_MERGED_SOURCE",
                 aggregateVersion = sourceVersion,
                 idempotencyKey = "${command.commandKey}:source",
-                payload = details + ("status" to JsonPrimitive(NativeIncidentStatus.CANCELLED.wire)),
+                payload = details +
+                    mapOf(
+                        "status" to JsonPrimitive(NativeIncidentStatus.MERGED.wire),
+                        "mergedIntoIncidentId" to JsonPrimitive(target[OnCallIncidents.resourceId].toString()),
+                        "mergedAt" to JsonPrimitive(now.toString()),
+                    ),
             ),
         )
-        return loadMutation(command.incidentId)
     }
 
     private fun requireIncident(command: ExistingIncidentCommand): ResultRow {
         val row = requireIncident(command.actor.organizationId, command.incidentId)
+        policy.requireCapabilityAllowed(command, statusOf(row))
         command.expectedVersion?.let { expected ->
             if (row[OnCallIncidents.version] != expected) {
                 throw IncidentCommandConflictException(
@@ -1100,6 +1323,7 @@ class IncidentCommandService(
             NativeIncidentStatus.CLOSED -> "CLOSED"
             NativeIncidentStatus.CANCELLED -> "CANCELLED"
             NativeIncidentStatus.DECLINED -> "DECLINED"
+            NativeIncidentStatus.MERGED -> "MERGED_INTO_INCIDENT"
         }
 
     private fun transitionDetails(
@@ -1132,6 +1356,8 @@ class IncidentCommandService(
         statement[OnCallIncidents.closedAt] = null
         statement[OnCallIncidents.cancelledAt] = null
         statement[OnCallIncidents.declinedAt] = null
+        statement[OnCallIncidents.mergedAt] = null
+        statement[OnCallIncidents.mergedIntoIncidentId] = null
     }
 
     private fun ExposedSQLException.violatesConstraint(constraintName: String): Boolean =
@@ -1155,7 +1381,7 @@ class IncidentCommandService(
         val incidentId: Int,
         val incidentResourceId: String,
         val title: String,
-        val severity: String,
+        val severity: String?,
         val status: NativeIncidentStatus,
         val version: Int,
         val changed: Boolean,
@@ -1176,19 +1402,40 @@ class IncidentCommandService(
         private const val MAX_TITLE_LENGTH = 255
         private const val MAX_TIMELINE_EVENT_TYPE_LENGTH = 80
         private const val MAX_SOURCE_KEY_LENGTH = 500
+        private const val SEVERITY_REQUIRED_MESSAGE =
+            "Incident severity is required before an incident is accepted"
         private val SAFE_EXTERNAL_SOURCE_SCHEMES = setOf("http", "https")
 
         private val DECLARABLE_STATUSES = setOf(NativeIncidentStatus.TRIAGE, NativeIncidentStatus.ACTIVE)
+
+        /** Statuses that represent an accepted incident, so leaving triage for them needs acceptance. */
+        private val ACCEPTED_STATUSES = setOf(
+            NativeIncidentStatus.ACTIVE,
+            NativeIncidentStatus.RESOLVED,
+            NativeIncidentStatus.POST_INCIDENT,
+            NativeIncidentStatus.CLOSED,
+        )
+
+        /** An incident can absorb a merge unless it has itself been closed out or merged away. */
+        private val MERGE_TARGET_STATUSES = setOf(
+            NativeIncidentStatus.TRIAGE,
+            NativeIncidentStatus.ACTIVE,
+            NativeIncidentStatus.RESOLVED,
+            NativeIncidentStatus.POST_INCIDENT,
+            NativeIncidentStatus.CLOSED,
+        )
 
         private val allowedTransitions = mapOf(
             NativeIncidentStatus.TRIAGE to setOf(
                 NativeIncidentStatus.ACTIVE,
                 NativeIncidentStatus.DECLINED,
                 NativeIncidentStatus.CANCELLED,
+                NativeIncidentStatus.MERGED,
             ),
             NativeIncidentStatus.ACTIVE to setOf(
                 NativeIncidentStatus.RESOLVED,
                 NativeIncidentStatus.CANCELLED,
+                NativeIncidentStatus.MERGED,
             ),
             NativeIncidentStatus.RESOLVED to setOf(
                 NativeIncidentStatus.POST_INCIDENT,
@@ -1202,6 +1449,8 @@ class IncidentCommandService(
             NativeIncidentStatus.CLOSED to setOf(NativeIncidentStatus.ACTIVE),
             NativeIncidentStatus.CANCELLED to setOf(NativeIncidentStatus.ACTIVE),
             NativeIncidentStatus.DECLINED to setOf(NativeIncidentStatus.ACTIVE),
+            // MERGED is terminal: a merged incident is never reopened or transitioned again.
+            NativeIncidentStatus.MERGED to emptySet(),
         )
     }
 }

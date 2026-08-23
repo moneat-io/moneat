@@ -371,6 +371,8 @@ class OnCallIncidentService(
             closedAt = row[OnCallIncidents.closedAt]?.toString(),
             cancelledAt = row[OnCallIncidents.cancelledAt]?.toString(),
             declinedAt = row[OnCallIncidents.declinedAt]?.toString(),
+            mergedAt = row[OnCallIncidents.mergedAt]?.toString(),
+            mergedIntoIncidentResourceId = resourceIds.incidentOrNull(row[OnCallIncidents.mergedIntoIncidentId]),
             alertCount = alerts.size,
             alerts = alerts,
             createdAt = row[OnCallIncidents.createdAt].toString(),
@@ -445,7 +447,8 @@ class OnCallIncidentService(
             organizationResourceId = organizationResourceId(organizationId),
             users = userResponseData(userIds),
             incidentResourceIds = incidentResourceIds(
-                alertRows.mapNotNull { row -> row[OnCallAlerts.declaredIncidentId] }
+                alertRows.mapNotNull { row -> row[OnCallAlerts.declaredIncidentId] } +
+                    incidentRows.mapNotNull { row -> row[OnCallIncidents.mergedIntoIncidentId] }
             ),
             policyResourceIds = escalationPolicyResourceIds(
                 alertRows.mapNotNull { row -> row[OnCallAlerts.escalationPolicyId] }

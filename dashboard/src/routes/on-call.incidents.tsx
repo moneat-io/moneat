@@ -59,8 +59,12 @@ type IncidentSeverityFilter = IncidentSeverity | 'all'
 
 const DEFAULT_DECLARED_INCIDENT_STATUS_FILTER: OnCallIncidentStatus = 'ACTIVE'
 
-// Incident severity mapped onto the shared status language.
-function severityTone(severity: string): StatusTone {
+// Incident severity mapped onto the shared status language. Triage incidents may not
+// carry a severity yet, so an absent value reads as unclassified.
+const UNCLASSIFIED_SEVERITY_LABEL = 'Unclassified'
+
+function severityTone(severity: string | undefined): StatusTone {
+  if (!severity) return 'neutral'
   const severityMatch = /^SEV-?(\d)/i.exec(severity)
   const severityLevel = severityMatch?.[1]
   if (severityLevel === '0' || severityLevel === '1') return 'danger'
@@ -69,7 +73,7 @@ function severityTone(severity: string): StatusTone {
   return 'neutral'
 }
 
-function severityBadgeVariant(severity: string): BadgeProps['variant'] {
+function severityBadgeVariant(severity: string | undefined): BadgeProps['variant'] {
   switch (severityTone(severity)) {
     case 'danger':
       return 'danger'
@@ -319,7 +323,7 @@ function DeclaredIncidents() {
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <Badge variant={severityBadgeVariant(incident.severity)} size="sm">
-                          {incident.severity}
+                          {incident.severity ?? UNCLASSIFIED_SEVERITY_LABEL}
                         </Badge>
                         <Badge variant={statusCfg.variant} size="sm" className="gap-1">
                           <StatusIcon className="h-3 w-3" />

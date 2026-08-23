@@ -19,6 +19,7 @@ data class IncidentCommandActor(
 enum class IncidentCommandType(val wire: String) {
     DECLARE("DECLARE"),
     ACCEPT("ACCEPT"),
+    DECLINE("DECLINE"),
     MERGE("MERGE"),
     UPDATE("UPDATE"),
     TRANSITION("TRANSITION"),
@@ -52,7 +53,8 @@ data class DeclareIncidentCommand(
     val title: String,
     val description: String?,
     val summary: String? = null,
-    val severity: String,
+    /** Triage declarations may stay unclassified; ACTIVE declarations must carry a severity. */
+    val severity: String? = null,
     val mode: NativeIncidentMode = NativeIncidentMode.LIVE,
     val visibility: NativeIncidentVisibility = NativeIncidentVisibility.ORGANIZATION,
     val incidentType: String? = null,
@@ -71,13 +73,30 @@ sealed interface ExistingIncidentCommand : IncidentCommand {
     val incidentId: Int
 }
 
+/**
+ * Accepting a triage incident classifies it. Severity is required by the time the incident
+ * becomes ACTIVE, and the organization's ACCEPTANCE form is validated against [formValues].
+ */
 data class AcceptIncidentCommand(
     override val commandKey: String,
     override val actor: IncidentCommandActor,
     override val incidentId: Int,
     override val expectedVersion: Int? = null,
+    val severity: String? = null,
+    val incidentTypeResourceId: String? = null,
+    val formValues: Map<String, JsonElement> = emptyMap(),
 ) : ExistingIncidentCommand {
     override val type = IncidentCommandType.ACCEPT
+}
+
+data class DeclineIncidentCommand(
+    override val commandKey: String,
+    override val actor: IncidentCommandActor,
+    override val incidentId: Int,
+    val reason: String? = null,
+    override val expectedVersion: Int? = null,
+) : ExistingIncidentCommand {
+    override val type = IncidentCommandType.DECLINE
 }
 
 data class MergeIncidentCommand(

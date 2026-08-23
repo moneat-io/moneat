@@ -404,6 +404,113 @@ class IncidentRoutesTest {
         assertEquals(HttpStatusCode.OK, selfRemoval.status)
     }
 
+    @Test
+    fun `triage commands expose accept decline and merge through the shared command contract`() = testApplication {
+        application { installIncidentRoutes() }
+
+        val triaged = declareTriageIncident("accepted")
+        val declined = declareTriageIncident("declined")
+        val mergeSource = declareTriageIncident("merge-source")
+
+        val missingSeverity = postCommand("/v1/on-call/incidents/$triaged/accept", "{}", "accept-missing")
+        assertEquals(HttpStatusCode.BadRequest, missingSeverity.status)
+
+        val accepted = postCommand(
+            "/v1/on-call/incidents/$triaged/accept",
+            """{"severity":"SEV-2","expectedVersion":1}""",
+            "accept-ok",
+        )
+        assertEquals(HttpStatusCode.OK, accepted.status)
+        assertEquals("ACTIVE", accepted.jsonObject().requiredString("status"))
+        assertEquals("SEV-2", accepted.jsonObject().requiredString("severity"))
+
+        val stale = postCommand(
+            "/v1/on-call/incidents/$triaged/accept",
+            """{"severity":"SEV-1","expectedVersion":1}""",
+            "accept-stale",
+        )
+        assertEquals(HttpStatusCode.Conflict, stale.status)
+
+        val declineResponse = postCommand(
+            "/v1/on-call/incidents/$declined/decline",
+            """{"reason":"Not an incident"}""",
+            "decline-ok",
+        )
+        assertEquals(HttpStatusCode.OK, declineResponse.status)
+        assertEquals("DECLINED", declineResponse.jsonObject().requiredString("status"))
+
+        val merged = postCommand(
+            "/v1/on-call/incidents/$triaged/merge",
+            """{"sourceIncidentId":"$mergeSource"}""",
+            "merge-ok",
+        )
+        assertEquals(HttpStatusCode.OK, merged.status)
+        val mergedSource = client.get("/v1/on-call/incidents/$mergeSource") { authorize() }.jsonObject()
+        assertEquals("MERGED", mergedSource.requiredString("status"))
+        assertEquals(triaged, mergedSource.requiredString("mergedIntoIncidentId"))
+    }
+
+    @Test
+    fun `triage command routes reject malformed unknown and out-of-scope targets`() = testApplication {
+        application { installIncidentRoutes() }
+        val incidentId = declareIncident("command-contract")
+
+        val numericTarget = postCommand("/v1/on-call/incidents/42/accept", "{}", "numeric")
+        assertEquals(HttpStatusCode.BadRequest, numericTarget.status)
+
+        val unknownTarget = postCommand(
+            "/v1/on-call/incidents/${Uuid.random()}/decline",
+            "{}",
+            "unknown-incident",
+        )
+        assertEquals(HttpStatusCode.NotFound, unknownTarget.status)
+
+        val malformedSource = postCommand(
+            "/v1/on-call/incidents/$incidentId/merge",
+            """{"sourceIncidentId":"7"}""",
+            "malformed-source",
+        )
+        assertEquals(HttpStatusCode.BadRequest, malformedSource.status)
+
+        val unknownSource = postCommand(
+            "/v1/on-call/incidents/$incidentId/merge",
+            """{"sourceIncidentId":"${Uuid.random()}"}""",
+            "unknown-source",
+        )
+        assertEquals(HttpStatusCode.NotFound, unknownSource.status)
+
+        val selfMerge = postCommand(
+            "/v1/on-call/incidents/$incidentId/merge",
+            """{"sourceIncidentId":"$incidentId"}""",
+            "self-merge",
+        )
+        assertEquals(HttpStatusCode.BadRequest, selfMerge.status)
+    }
+
+    @Test
+    fun `triage command routes replay a repeated idempotency key`() = testApplication {
+        application { installIncidentRoutes() }
+        val incidentId = declareTriageIncident("replayed")
+
+        val first = postCommand(
+            "/v1/on-call/incidents/$incidentId/accept",
+            """{"severity":"SEV-3"}""",
+            "accept-replay",
+        )
+        val replay = postCommand(
+            "/v1/on-call/incidents/$incidentId/accept",
+            """{"severity":"SEV-3"}""",
+            "accept-replay",
+        )
+
+        assertEquals(HttpStatusCode.OK, first.status)
+        assertEquals(HttpStatusCode.OK, replay.status)
+        assertEquals(
+            first.jsonObject().requiredString("version"),
+            replay.jsonObject().requiredString("version"),
+        )
+    }
+
     private fun Application.installIncidentRoutes(
         rolloutEnabled: Boolean = true,
         entitlementEnabled: Boolean = true,
@@ -489,6 +596,29 @@ class IncidentRoutesTest {
         assertEquals(HttpStatusCode.Created, response.status)
         return Json.parseToJsonElement(response.bodyAsText()).jsonObject.requiredString("id")
     }
+
+    private suspend fun io.ktor.server.testing.ApplicationTestBuilder.declareTriageIncident(name: String): String {
+        val response = client.post("/v1/on-call/incidents") {
+            authorize()
+            header(HttpHeaders.ContentType, ContentType.Application.Json)
+            header(IDEMPOTENCY_HEADER, "declare-triage-$name")
+            setBody("""{"title":"$name","initialStatus":"TRIAGE"}""")
+        }
+        assertEquals(HttpStatusCode.Created, response.status)
+        return Json.parseToJsonElement(response.bodyAsText()).jsonObject.requiredString("id")
+    }
+
+    private suspend fun io.ktor.server.testing.ApplicationTestBuilder.postCommand(
+        path: String,
+        body: String,
+        idempotencyKey: String,
+    ): HttpResponse =
+        client.post(path) {
+            authorize()
+            header(HttpHeaders.ContentType, ContentType.Application.Json)
+            header(IDEMPOTENCY_HEADER, idempotencyKey)
+            setBody(body)
+        }
 
     private suspend fun io.ktor.server.testing.ApplicationTestBuilder.linkSource(
         incidentId: String,

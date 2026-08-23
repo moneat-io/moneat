@@ -274,8 +274,12 @@ export function timelineEventStyle(eventType: string): TimelineEventStyle {
   )
 }
 
-/** Incident severity mapped onto the shared status badge language. */
-export function severityBadgeVariant(severity: string): BadgeProps['variant'] {
+/**
+ * Incident severity mapped onto the shared status badge language. Triage incidents may not
+ * carry a severity yet, so an absent value reads as neutral.
+ */
+export function severityBadgeVariant(severity?: string): BadgeProps['variant'] {
+  if (!severity) return 'neutral'
   const severityMatch = /^SEV-?(\d)/i.exec(severity)
   const severityLevel = severityMatch?.[1]
   if (severityLevel === '0' || severityLevel === '1') return 'danger'

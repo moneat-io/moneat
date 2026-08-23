@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import type {LucideIcon} from 'lucide-react'
-import {Archive, Ban, CheckCircle2, ClipboardCheck, Clock, XCircle, Zap} from 'lucide-react'
+import {Archive, Ban, CheckCircle2, ClipboardCheck, Clock, Merge, XCircle, Zap} from 'lucide-react'
 
 import type {BadgeProps} from '@/components/ui/badge'
 import type {StatusTone} from '@/components/ui/status-dot'
@@ -40,6 +40,7 @@ const INCIDENT_STATUS_CONFIG: Record<OnCallIncidentStatus, IncidentStatusConfig>
   CLOSED: {variant: 'neutral', icon: Archive, label: 'Closed', tone: 'neutral'},
   CANCELLED: {variant: 'neutral', icon: Ban, label: 'Cancelled', tone: 'neutral'},
   DECLINED: {variant: 'neutral', icon: XCircle, label: 'Declined', tone: 'neutral'},
+  MERGED: {variant: 'neutral', icon: Merge, label: 'Merged', tone: 'neutral'},
 }
 
 function fallbackLabel(status: string): string {
