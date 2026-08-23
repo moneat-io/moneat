@@ -15,41 +15,63 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {createFileRoute, Link, Outlet, useRouterState} from '@tanstack/react-router'
-import {Bell, Calendar, ListChecks, AlertTriangle, Settings2, Shield, Users2} from 'lucide-react'
+import {Bell, Boxes, Calendar, ListChecks, AlertTriangle, Settings2, Shield, Users2, Waypoints} from 'lucide-react'
+import type {LucideIcon} from 'lucide-react'
 import {cn} from '@/lib/utils'
 import {PageHeader} from '@/components/ui/page-header'
 import {useNativeIncidentRollout} from '@/hooks/useNativeIncidentRollout'
+import {useOnCallAdmin} from '@/hooks/useOnCallAdmin'
 
 export const Route = createFileRoute('/on-call')({
   component: OnCallLayout,
 })
 
-const tabs = [
+interface OnCallTab {
+  id: string
+  label: string
+  href: string
+  icon: LucideIcon
+  /** Hidden unless native incident response is enabled for the organization. */
+  requiresRollout?: boolean
+  /** Hidden for non-admins (mirrors the backend's admin-only route mutations). */
+  adminOnly?: boolean
+}
+
+const tabs: OnCallTab[] = [
   {id: 'overview', label: 'Overview', href: '/on-call', icon: Bell},
   {id: 'teams', label: 'Teams', href: '/on-call/teams', icon: Users2},
   {id: 'schedules', label: 'Schedules', href: '/on-call/schedules', icon: Calendar},
   {id: 'escalation-policies', label: 'Escalation Policies', href: '/on-call/escalation-policies', icon: ListChecks},
   {id: 'alerts', label: 'Alerts', href: '/on-call/alerts', icon: AlertTriangle},
-  {id: 'incidents', label: 'Incidents', href: '/on-call/incidents', icon: Shield},
+  {id: 'alert-groups', label: 'Alert Groups', href: '/on-call/alert-groups', icon: Boxes, requiresRollout: true},
+  {id: 'incidents', label: 'Incidents', href: '/on-call/incidents', icon: Shield, requiresRollout: true},
+  {
+    id: 'alert-routes',
+    label: 'Alert Routes',
+    href: '/on-call/alert-routes',
+    icon: Waypoints,
+    requiresRollout: true,
+    adminOnly: true,
+  },
   {
     id: 'incident-configuration',
     label: 'Configuration',
     href: '/on-call/incident-configuration',
     icon: Settings2,
+    requiresRollout: true,
   },
 ]
-
-// Tabs that expose native incident response and stay hidden unless the rollout
-// is enabled for the organization.
-const NATIVE_INCIDENT_TAB_IDS = new Set(['incidents', 'incident-configuration'])
 
 function OnCallLayout() {
   const router = useRouterState()
   const currentPath = router.location.pathname
   const nativeIncidentRollout = useNativeIncidentRollout()
-  const visibleTabs = tabs.filter((tab) =>
-    NATIVE_INCIDENT_TAB_IDS.has(tab.id) ? nativeIncidentRollout.enabled : true
-  )
+  const {isAdmin} = useOnCallAdmin()
+  const visibleTabs = tabs.filter((tab) => {
+    if (tab.requiresRollout && !nativeIncidentRollout.enabled) return false
+    if (tab.adminOnly && !isAdmin) return false
+    return true
+  })
 
   return (
     <div className="px-6 py-4 space-y-4">
