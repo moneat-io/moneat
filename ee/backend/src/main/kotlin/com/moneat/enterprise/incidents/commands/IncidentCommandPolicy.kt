@@ -40,33 +40,34 @@ object IncidentTriageCapabilityPolicy {
             IncidentCapability.ESCALATION,
         )
 
-    private val COMMAND_CAPABILITIES =
-        mapOf(
-            IncidentCommandType.DECLARE to IncidentCapability.LIFECYCLE,
-            IncidentCommandType.ACCEPT to IncidentCapability.LIFECYCLE,
-            IncidentCommandType.DECLINE to IncidentCapability.LIFECYCLE,
-            IncidentCommandType.MERGE to IncidentCapability.LIFECYCLE,
-            IncidentCommandType.UPDATE to IncidentCapability.LIFECYCLE,
-            IncidentCommandType.TRANSITION to IncidentCapability.LIFECYCLE,
-            IncidentCommandType.RESOLVE to IncidentCapability.LIFECYCLE,
-            IncidentCommandType.CANCEL to IncidentCapability.LIFECYCLE,
-            IncidentCommandType.REOPEN to IncidentCapability.LIFECYCLE,
-            IncidentCommandType.ASSIGN_ROLE to IncidentCapability.ROLES,
-            IncidentCommandType.CLAIM_ROLE to IncidentCapability.ROLES,
-            IncidentCommandType.UNASSIGN_ROLE to IncidentCapability.ROLES,
-            IncidentCommandType.HANDOVER_ROLE to IncidentCapability.ROLES,
-            IncidentCommandType.JOIN to IncidentCapability.PARTICIPATION,
-            IncidentCommandType.OBSERVE to IncidentCapability.PARTICIPATION,
-            IncidentCommandType.LEAVE to IncidentCapability.PARTICIPATION,
-            IncidentCommandType.ADD_TIMELINE_EVENT to IncidentCapability.INVESTIGATION,
-            IncidentCommandType.LINK_ON_CALL_ALERT to IncidentCapability.INVESTIGATION,
-            IncidentCommandType.LINK_SOURCE to IncidentCapability.INVESTIGATION,
-            IncidentCommandType.UNLINK_SOURCE to IncidentCapability.INVESTIGATION,
-            IncidentCommandType.ADD_ACTION to IncidentCapability.ACTIONS,
-        )
-
     fun capabilityOf(commandType: IncidentCommandType): IncidentCapability =
-        COMMAND_CAPABILITIES[commandType] ?: IncidentCapability.LIFECYCLE
+        when (commandType) {
+            IncidentCommandType.DECLARE,
+            IncidentCommandType.ACCEPT,
+            IncidentCommandType.DECLINE,
+            IncidentCommandType.MERGE,
+            IncidentCommandType.UPDATE,
+            IncidentCommandType.TRANSITION,
+            IncidentCommandType.RESOLVE,
+            IncidentCommandType.CANCEL,
+            IncidentCommandType.REOPEN,
+            -> IncidentCapability.LIFECYCLE
+            IncidentCommandType.ASSIGN_ROLE,
+            IncidentCommandType.CLAIM_ROLE,
+            IncidentCommandType.UNASSIGN_ROLE,
+            IncidentCommandType.HANDOVER_ROLE,
+            -> IncidentCapability.ROLES
+            IncidentCommandType.JOIN,
+            IncidentCommandType.OBSERVE,
+            IncidentCommandType.LEAVE,
+            -> IncidentCapability.PARTICIPATION
+            IncidentCommandType.ADD_TIMELINE_EVENT,
+            IncidentCommandType.LINK_ON_CALL_ALERT,
+            IncidentCommandType.LINK_SOURCE,
+            IncidentCommandType.UNLINK_SOURCE,
+            -> IncidentCapability.INVESTIGATION
+            IncidentCommandType.ADD_ACTION -> IncidentCapability.ACTIONS
+        }
 
     fun permits(capability: IncidentCapability): Boolean = capability in TRIAGE_CAPABILITIES
 

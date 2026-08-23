@@ -313,7 +313,7 @@ object OnCallIncidents : IntIdTable("on_call_incidents") {
     val declinedAt = timestamp("declined_at").nullable()
     val mergedAt = timestamp("merged_at").nullable()
     val mergedIntoIncidentId =
-        integer("merged_into_incident_id").references(id, onDelete = ReferenceOption.CASCADE).nullable()
+        integer("merged_into_incident_id").references(id, onDelete = ReferenceOption.RESTRICT).nullable()
     val createdAt = timestamp("created_at")
     val updatedAt = timestamp("updated_at")
 

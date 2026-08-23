@@ -7,7 +7,7 @@ ALTER TABLE on_call_incidents
 ALTER TABLE on_call_incidents
     ADD COLUMN merged_at TIMESTAMP WITH TIME ZONE,
     ADD COLUMN merged_into_incident_id INTEGER
-        REFERENCES on_call_incidents(id) ON DELETE CASCADE;
+        REFERENCES on_call_incidents(id) ON DELETE RESTRICT;
 
 ALTER TABLE on_call_incidents
     DROP CONSTRAINT IF EXISTS chk_native_incident_status;
