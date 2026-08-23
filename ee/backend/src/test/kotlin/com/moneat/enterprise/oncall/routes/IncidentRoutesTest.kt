@@ -93,7 +93,7 @@ class IncidentRoutesTest {
 
         val response = client.get("/v1/on-call/incidents") { authorizeWithoutOrganization() }
 
-        assertEquals(HttpStatusCode.Forbidden, response.status)
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
     }
 
     @Test

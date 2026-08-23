@@ -282,7 +282,7 @@ internal fun Route.installNativeIncidentRolloutGate(
                 val organizationId = call.principal<JWTPrincipal>()?.currentOrgIdOrNull()
                 if (organizationId == null) {
                     OperationalMetrics.recordNativeIncidentRolloutDecision("http", "denied")
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("Organization context is required"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Organization context is required"))
                     return@on
                 }
                 if (!incidentEntitlement.isEnabled(organizationId)) {
