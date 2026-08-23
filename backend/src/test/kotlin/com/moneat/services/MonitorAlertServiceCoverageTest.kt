@@ -18,8 +18,13 @@ package com.moneat.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
-import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.AlertSource
+import com.moneat.alerts.models.AlertStatus
+import com.moneat.alerts.services.AlertFanoutArm
+import com.moneat.alerts.services.AlertFanoutOutcome
+import com.moneat.alerts.services.AlertFanoutPlan
+import com.moneat.alerts.services.AlertFanoutState
+import com.moneat.alerts.services.AlertLifecycleOrchestrator
 import com.moneat.incident.services.IncidentService
 import com.moneat.monitor.models.AlertData
 import com.moneat.monitor.models.CreateSilencePeriodRequest
@@ -37,7 +42,6 @@ import com.moneat.shared.models.OrganizationAlertTemplates
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
-import com.moneat.workflows.services.AlertResolvedWorkflowEvent
 import com.moneat.workflows.services.WorkflowService
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
@@ -76,30 +80,6 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 
-private fun expectedResolvedWorkflowEvent(
-    organizationId: Int,
-    hostId: Int,
-    deduplicationKey: String,
-    hostName: String = "host-alert-workflow",
-): AlertResolvedWorkflowEvent {
-    val hostResourceId = transaction {
-        Hosts
-            .selectAll()
-            .where { Hosts.id eq hostId }
-            .single()[Hosts.resource_id]
-            .toString()
-    }
-    return AlertResolvedWorkflowEvent(
-        organizationId = organizationId,
-        source = AlertSource.HOST_ALERT.name,
-        deduplicationKey = deduplicationKey,
-        title = "$hostName - CPU Usage recovered",
-        description = "The alert for CPU Usage is no longer active.",
-        moneatUrl = "https://moneat.io/monitoring/hosts/$hostResourceId",
-        priority = AlertPriority.P1,
-    )
-}
-
 class MonitorAlertServiceCoverageTest {
 
     companion object {
@@ -108,6 +88,7 @@ class MonitorAlertServiceCoverageTest {
 
     private lateinit var incidentService: IncidentService
     private lateinit var workflowService: WorkflowService
+    private lateinit var alertOrchestrator: AlertLifecycleOrchestrator
     private lateinit var service: MonitorAlertService
 
     private data class HostAlertFixture(
@@ -142,11 +123,13 @@ class MonitorAlertServiceCoverageTest {
 
         incidentService = mockk(relaxed = true)
         workflowService = mockk(relaxed = true)
+        alertOrchestrator = mockk(relaxed = true)
         coEvery { workflowService.publishAlertTriggered(any()) } returns true
         service =
             MonitorAlertService(
                 incidentService = incidentService,
                 workflowService = workflowService,
+                alertOrchestrator = alertOrchestrator,
             )
 
         mockkObject(ClickHouseClient, RedisConfig)
@@ -580,7 +563,7 @@ class MonitorAlertServiceCoverageTest {
             callPrivateSuspend("sendAlertNotification", alert, "host-a", 1, 91.0)
 
             coVerify(exactly = 1) {
-                workflowService.publishAlertTriggered(any())
+                alertOrchestrator.process(any(), AlertFanoutPlan.WORKFLOW_ONLY)
             }
         }
 
@@ -611,14 +594,15 @@ class MonitorAlertServiceCoverageTest {
             )
 
             coVerify(exactly = 1) {
-                workflowService.publishAlertTriggered(
+                alertOrchestrator.process(
                     match {
                         it.title ==
                             "host-a - Disk Usage (/dev/sda at /mnt/volume_nyc3_01) > 75.0" &&
                             it.description.contains("Filesystem: /dev/sda at /mnt/volume_nyc3_01") &&
                             it.metadata["resource_label"]?.toString() ==
                             "\"/dev/sda at /mnt/volume_nyc3_01\""
-                    }
+                    },
+                    AlertFanoutPlan.WORKFLOW_ONLY,
                 )
             }
         }
@@ -648,19 +632,13 @@ class MonitorAlertServiceCoverageTest {
                 }
             assertNull(clearedLastTriggeredAt)
             coVerify(exactly = 1) {
-                workflowService.publishAlertResolved(
-                    expectedResolvedWorkflowEvent(fixture.orgId, fixture.hostId, deduplicationKey),
-                )
-            }
-            coVerify(exactly = 1) {
-                incidentService.autoResolveAlert(
-                    fixture.orgId,
-                    AlertSource.HOST_ALERT,
-                    deduplicationKey,
-                    any(),
-                    any(),
-                    any(),
-                    false,
+                alertOrchestrator.process(
+                    match {
+                        it.status == AlertStatus.RESOLVED &&
+                            it.source == AlertSource.HOST_ALERT &&
+                            it.deduplicationKey == deduplicationKey
+                    },
+                    AlertFanoutPlan.FULL,
                 )
             }
         }
@@ -682,8 +660,11 @@ class MonitorAlertServiceCoverageTest {
             callPrivateSuspend("handleRecoveredAlert", triggeredAlert, "host-alert-workflow", fixture.orgId, alertKey)
 
             coVerify(exactly = 1) {
-                workflowService.publishAlertResolved(
-                    expectedResolvedWorkflowEvent(fixture.orgId, fixture.hostId, deduplicationKey),
+                alertOrchestrator.process(
+                    match {
+                        it.status == AlertStatus.RESOLVED && it.deduplicationKey == deduplicationKey
+                    },
+                    AlertFanoutPlan.FULL,
                 )
             }
             val clearedLastTriggeredAt =
@@ -756,8 +737,11 @@ class MonitorAlertServiceCoverageTest {
             callPrivateSuspend("handleRecoveredAlert", alert, "global-alert-workflow", orgId, alertKey)
 
             coVerify(exactly = 1) {
-                workflowService.publishAlertResolved(
-                    expectedResolvedWorkflowEvent(orgId, hostId, deduplicationKey, "global-alert-workflow"),
+                alertOrchestrator.process(
+                    match {
+                        it.status == AlertStatus.RESOLVED && it.deduplicationKey == deduplicationKey
+                    },
+                    AlertFanoutPlan.WORKFLOW_ONLY,
                 )
             }
             val clearedTemplateState =
@@ -804,21 +788,43 @@ class MonitorAlertServiceCoverageTest {
                 }
             assertNotNull(lastTriggeredAt)
             coVerify(exactly = 1) {
-                workflowService.publishAlertTriggered(
+                alertOrchestrator.process(
                     match {
                         it.source == AlertSource.HOST_ALERT &&
                             it.deduplicationKey == deduplicationKey &&
                             it.organizationId == fixture.orgId
-                    }
+                    },
+                    AlertFanoutPlan.FULL,
                 )
             }
+        }
+
+    @Test
+    fun `triggerAlert uses workflow only fanout without an incident priority`() =
+        runBlocking {
+            val fixture = createHostAlertFixture(alertPriority = null)
+            val alertKey = "alert_state:${fixture.hostId}:id_${fixture.alert.id}"
+            every { RedisConfig.isConnected() } returns true
+            val redis = mockk<RedisCommands<String, String>>()
+            every { RedisConfig.sync() } returns redis
+            every { redis.set(alertKey, "TRIGGERED") } returns "OK"
+            callPrivateSuspend(
+                "triggerAlert",
+                fixture.alert,
+                "host-alert-workflow",
+                fixture.orgId,
+                91.0,
+                alertKey,
+                Clock.System.now(),
+            )
+
             coVerify(exactly = 1) {
-                incidentService.fireAlert(any(), false)
+                alertOrchestrator.process(any(), AlertFanoutPlan.WORKFLOW_ONLY)
             }
         }
 
     @Test
-    fun `triggerAlert suppresses provider fanout when the episode gate declines`() =
+    fun `triggerAlert sends the host episode through full fanout`() =
         runBlocking {
             val fixture = createHostAlertFixture()
             val alertKey = "alert_state:${fixture.hostId}:id_${fixture.alert.id}"
@@ -826,8 +832,6 @@ class MonitorAlertServiceCoverageTest {
             val redis = mockk<RedisCommands<String, String>>()
             every { RedisConfig.sync() } returns redis
             every { redis.set(alertKey, "TRIGGERED") } returns "OK"
-            coEvery { workflowService.publishAlertTriggered(any()) } returns false
-
             callPrivateSuspend(
                 "triggerAlert",
                 fixture.alert,
@@ -838,31 +842,16 @@ class MonitorAlertServiceCoverageTest {
                 Clock.System.now(),
             )
 
-            coVerify(exactly = 0) { incidentService.fireAlert(any(), false) }
-        }
-
-    @Test
-    fun `triggerAlert fails open to provider fanout when workflow publication fails`() =
-        runBlocking {
-            val fixture = createHostAlertFixture()
-            val alertKey = "alert_state:${fixture.hostId}:id_${fixture.alert.id}"
-            every { RedisConfig.isConnected() } returns true
-            val redis = mockk<RedisCommands<String, String>>()
-            every { RedisConfig.sync() } returns redis
-            every { redis.set(alertKey, "TRIGGERED") } returns "OK"
-            coEvery { workflowService.publishAlertTriggered(any()) } throws RuntimeException("redis down")
-
-            callPrivateSuspend(
-                "triggerAlert",
-                fixture.alert,
-                "host-alert-workflow",
-                fixture.orgId,
-                91.0,
-                alertKey,
-                Clock.System.now(),
-            )
-
-            coVerify(exactly = 1) { incidentService.fireAlert(any(), false) }
+            coVerify(exactly = 1) {
+                alertOrchestrator.process(
+                    match {
+                        it.status == AlertStatus.FIRING &&
+                            it.source == AlertSource.HOST_ALERT &&
+                            it.organizationId == fixture.orgId
+                    },
+                    AlertFanoutPlan.FULL,
+                )
+            }
         }
 
     // ──── Key helpers ────
@@ -956,29 +945,20 @@ class MonitorAlertServiceCoverageTest {
                 }
             assertEquals("up", status)
             coVerify(exactly = 1) {
-                incidentService.autoResolveAlert(
-                    orgId,
-                    AlertSource.HOST_DOWN,
-                    "moneat-host-down-$hostId",
-                    any(),
-                    any(),
-                    any(),
-                    true,
+                alertOrchestrator.process(
+                    match {
+                        it.status == AlertStatus.RESOLVED &&
+                            it.source == AlertSource.HOST_DOWN &&
+                            it.deduplicationKey == "moneat-host-down-$hostId"
+                    },
+                    AlertFanoutPlan.FULL,
                 )
             }
 
             callPrivateSuspend("checkHostStatuses")
 
             coVerify(exactly = 1) {
-                incidentService.autoResolveAlert(
-                    orgId,
-                    AlertSource.HOST_DOWN,
-                    "moneat-host-down-$hostId",
-                    any(),
-                    any(),
-                    any(),
-                    true,
-                )
+                alertOrchestrator.process(any(), AlertFanoutPlan.FULL)
             }
         }
 
@@ -1029,14 +1009,13 @@ class MonitorAlertServiceCoverageTest {
                 }
             assertEquals("up", status)
             coVerify(exactly = 1) {
-                incidentService.autoResolveAlert(
-                    orgId,
-                    AlertSource.HOST_DOWN,
-                    "moneat-host-down-$hostId",
-                    any(),
-                    any(),
-                    any(),
-                    true,
+                alertOrchestrator.process(
+                    match {
+                        it.status == AlertStatus.RESOLVED &&
+                            it.source == AlertSource.HOST_DOWN &&
+                            it.deduplicationKey == "moneat-host-down-$hostId"
+                    },
+                    AlertFanoutPlan.FULL,
                 )
             }
         }
@@ -1063,17 +1042,17 @@ class MonitorAlertServiceCoverageTest {
                     } get Hosts.id
                 }
             val deduplicationKey = "moneat-host-down-$hostId"
+            val failedResult = mockk<com.moneat.alerts.services.AlertOrchestrationResult>()
+            every { failedResult.outcomes } returns listOf(
+                AlertFanoutOutcome(AlertFanoutArm.INCIDENT_PROVIDERS, AlertFanoutState.FAILED, "resolve failed"),
+            )
+            val succeededResult = mockk<com.moneat.alerts.services.AlertOrchestrationResult>(relaxed = true)
             coEvery {
-                incidentService.autoResolveAlert(
-                    orgId,
-                    AlertSource.HOST_DOWN,
-                    deduplicationKey,
-                    any(),
-                    any(),
-                    any(),
-                    true,
+                alertOrchestrator.process(
+                    match { it.status == AlertStatus.RESOLVED && it.deduplicationKey == deduplicationKey },
+                    AlertFanoutPlan.FULL,
                 )
-            } throws RuntimeException("resolve failed")
+            } returnsMany listOf(failedResult, succeededResult)
 
             callPrivateSuspend("checkHostStatuses")
 
@@ -1083,18 +1062,6 @@ class MonitorAlertServiceCoverageTest {
                 }
             assertEquals("down", failedStatus)
 
-            coEvery {
-                incidentService.autoResolveAlert(
-                    orgId,
-                    AlertSource.HOST_DOWN,
-                    deduplicationKey,
-                    any(),
-                    any(),
-                    any(),
-                    true,
-                )
-            } returns Unit
-
             callPrivateSuspend("checkHostStatuses")
 
             val recoveredStatus =
@@ -1103,14 +1070,9 @@ class MonitorAlertServiceCoverageTest {
                 }
             assertEquals("up", recoveredStatus)
             coVerify(exactly = 2) {
-                incidentService.autoResolveAlert(
-                    orgId,
-                    AlertSource.HOST_DOWN,
-                    deduplicationKey,
-                    any(),
-                    any(),
-                    any(),
-                    true,
+                alertOrchestrator.process(
+                    match { it.status == AlertStatus.RESOLVED && it.deduplicationKey == deduplicationKey },
+                    AlertFanoutPlan.FULL,
                 )
             }
         }

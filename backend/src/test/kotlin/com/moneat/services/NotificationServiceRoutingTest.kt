@@ -25,6 +25,7 @@ import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.AlertStatus
+import com.moneat.alerts.services.AlertLifecycleOrchestrator
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.NotificationService
 import com.moneat.shared.models.Organizations
@@ -53,6 +54,7 @@ class NotificationServiceRoutingTest {
 
     private val emailService = mockk<EmailService>(relaxed = true)
     private val workflowService = mockk<WorkflowService>(relaxed = true)
+    private val alertOrchestrator = mockk<AlertLifecycleOrchestrator>(relaxed = true)
 
     @BeforeTest
     fun setupDatabase() {
@@ -142,13 +144,13 @@ class NotificationServiceRoutingTest {
             val orgId = seedOrg("Workflow Route Org")
             val projectId = seedProject(orgId, "WorkflowProject")
             val eventSlot = slot<AlertLifecycleEvent>()
-            val service = NotificationService(emailService, workflowService)
+            val service = NotificationService(emailService, workflowService, alertOrchestrator)
 
             try {
                 service.onNewIssue(projectId, "2001", buildEvent())
 
                 coVerify(exactly = 1) {
-                    workflowService.publishAlertTriggered(capture(eventSlot))
+                    alertOrchestrator.process(capture(eventSlot), any())
                 }
             } finally {
                 service.shutdown()
@@ -171,13 +173,13 @@ class NotificationServiceRoutingTest {
             val orgId = seedOrg("Exception Org")
             val projectId = seedProject(orgId, "ExceptionProject")
             val eventSlot = slot<AlertLifecycleEvent>()
-            val service = NotificationService(emailService, workflowService)
+            val service = NotificationService(emailService, workflowService, alertOrchestrator)
 
             try {
                 service.onNewIssue(projectId, "4001", buildEventWithException())
 
                 coVerify(exactly = 1) {
-                    workflowService.publishAlertTriggered(capture(eventSlot))
+                    alertOrchestrator.process(capture(eventSlot), any())
                 }
             } finally {
                 service.shutdown()
@@ -193,13 +195,13 @@ class NotificationServiceRoutingTest {
     @Test
     fun `onNewIssue returns early when project does not exist`() =
         runBlocking {
-            val service = NotificationService(emailService, workflowService)
+            val service = NotificationService(emailService, workflowService, alertOrchestrator)
 
             try {
                 service.onNewIssue(99999L, "5001", buildEvent())
 
                 coVerify(exactly = 0) {
-                    workflowService.publishAlertTriggered(any())
+                    alertOrchestrator.process(any(), any())
                 }
             } finally {
                 service.shutdown()
@@ -212,15 +214,15 @@ class NotificationServiceRoutingTest {
             val orgId = seedOrg("Failure Org")
             val projectId = seedProject(orgId, "FailureProject")
             coEvery {
-                workflowService.publishAlertTriggered(any())
+                alertOrchestrator.process(any(), any())
             } throws RuntimeException("workflow queue unavailable")
-            val service = NotificationService(emailService, workflowService)
+            val service = NotificationService(emailService, workflowService, alertOrchestrator)
 
             try {
                 service.onNewIssue(projectId, "6001", buildEvent())
 
                 coVerify(exactly = 1) {
-                    workflowService.publishAlertTriggered(any())
+                    alertOrchestrator.process(any(), any())
                 }
             } finally {
                 service.shutdown()

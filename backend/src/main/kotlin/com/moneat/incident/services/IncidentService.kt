@@ -20,6 +20,8 @@ import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertStatus
+import com.moneat.alerts.services.AlertFanoutContext
+import com.moneat.alerts.services.AlertIncidentFanout
 import com.moneat.alerts.services.AlertSilenceService
 import com.moneat.config.EnvConfig
 import com.moneat.enterprise.FeatureRegistry
@@ -59,7 +61,7 @@ class IncidentService(
     private val workflowService: WorkflowService = WorkflowService(),
     private val ownershipRepository: ResourceOwnershipRepository = NoopResourceOwnershipRepository,
     private val alertSilenceService: AlertSilenceService = AlertSilenceService(),
-) {
+) : AlertIncidentFanout {
     private val logger = LoggerFactory.getLogger(IncidentService::class.java)
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -80,67 +82,41 @@ class IncidentService(
      * Fire an alert to all enabled incident providers for the organization.
      * Priority is resolved in order: per-monitor override > routing rule default > skip
      */
+    override suspend fun fireNative(context: AlertFanoutContext) {
+        if (!EnvConfig.get("ONCALL_ENABLED", "false").toBoolean()) return
+        triggerNativeEscalation(context.event)
+    }
+
+    override suspend fun fireProviders(context: AlertFanoutContext) {
+        fireProviderAlerts(context.event)
+    }
+
+    override suspend fun resolveNative(context: AlertFanoutContext) {
+        if (!EnvConfig.get("ONCALL_ENABLED", "false").toBoolean()) return
+        val event = context.event
+        resolveNativeEscalation(event.organizationId, event.source, event.deduplicationKey)
+    }
+
+    override suspend fun resolveProviders(context: AlertFanoutContext) {
+        val event = context.event
+        resolveProviderAlerts(event.organizationId, event.source, event.deduplicationKey)
+    }
+
     suspend fun fireAlert(
         event: AlertLifecycleEvent,
         publishWorkflow: Boolean = true
     ) {
         if (!shouldDeliverAlert(event, publishWorkflow)) return
-
-        // Check if native on-call is enabled
-        val onCallEnabled = EnvConfig.get("ONCALL_ENABLED", "false").toBoolean()
-
-        if (onCallEnabled) {
-            suspendRunCatching {
-                triggerNativeEscalation(event)
-            }.getOrElse { e ->
-                logger.error("Error triggering native escalation", e)
-            }
-        }
-
+        val context = AlertFanoutContext(event, null, null, deliverySilenced = false)
         suspendRunCatching {
-            val configs = getEnabledProviderConfigs(event.organizationId)
-            if (configs.isEmpty()) {
-                logger.debug("No enabled incident providers for org ${event.organizationId}")
-                return
-            }
-
-            configs.forEach { config ->
-                suspendRunCatching {
-                    // Check if we should route this alert
-                    val shouldRoute = shouldRouteAlert(config.id, event.source)
-                    if (!shouldRoute) {
-                        logger.debug("Skipping alert for provider ${config.name}: no routing rule for ${event.source}")
-                        return@forEach
-                    }
-
-                    // Get the provider implementation
-                    val provider = IncidentProviderRegistry.getProvider(config.providerType)
-                    if (provider == null) {
-                        logger.error("Provider type ${config.providerType} not registered")
-                        logEvent(config, event, success = false, errorMessage = "Provider not registered")
-                        return@forEach
-                    }
-
-                    // Send the alert
-                    val result = provider.sendAlert(event, config)
-
-                    result.fold(
-                        onSuccess = { incidentId ->
-                            logger.info("Alert sent to ${config.name}: $incidentId")
-                            logEvent(config, event, success = true, providerIncidentId = incidentId)
-                        },
-                        onFailure = { error ->
-                            logger.error("Failed to send alert to ${config.name}: ${error.message}", error)
-                            logEvent(config, event, success = false, errorMessage = error.message ?: "Unknown error")
-                        }
-                    )
-                }.getOrElse { e ->
-                    logger.error("Error processing alert for provider ${config.name}", e)
-                    logEvent(config, event, success = false, errorMessage = e.message ?: "Unknown error")
-                }
-            }
+            fireNative(context)
         }.getOrElse { e ->
-            logger.error("Error firing alert", e)
+            logger.error("Error triggering native escalation", e)
+        }
+        suspendRunCatching {
+            fireProviders(context)
+        }.getOrElse { e ->
+            logger.error("Error firing provider alert", e)
         }
     }
 
@@ -165,6 +141,41 @@ class IncidentService(
         }
     }
 
+    private suspend fun fireProviderAlerts(event: AlertLifecycleEvent) {
+        val configs = getEnabledProviderConfigs(event.organizationId)
+        if (configs.isEmpty()) {
+            logger.debug("No enabled incident providers for org ${event.organizationId}")
+            return
+        }
+        configs.forEach { config ->
+            suspendRunCatching {
+                if (!shouldRouteAlert(config.id, event.source)) {
+                    logger.debug("Skipping alert for provider ${config.name}: no routing rule for ${event.source}")
+                    return@forEach
+                }
+                val provider = IncidentProviderRegistry.getProvider(config.providerType)
+                if (provider == null) {
+                    logger.error("Provider type ${config.providerType} not registered")
+                    logEvent(config, event, success = false, errorMessage = "Provider not registered")
+                    return@forEach
+                }
+                provider.sendAlert(event, config).fold(
+                    onSuccess = { incidentId ->
+                        logger.info("Alert sent to ${config.name}: $incidentId")
+                        logEvent(config, event, success = true, providerIncidentId = incidentId)
+                    },
+                    onFailure = { error ->
+                        logger.error("Failed to send alert to ${config.name}: ${error.message}", error)
+                        logEvent(config, event, success = false, errorMessage = error.message ?: "Unknown error")
+                    },
+                )
+            }.getOrElse { error ->
+                logger.error("Error processing alert for provider ${config.name}", error)
+                logEvent(config, event, success = false, errorMessage = error.message ?: "Unknown error")
+            }
+        }
+    }
+
     /**
      * Resolve an alert with all enabled incident providers.
      */
@@ -177,14 +188,19 @@ class IncidentService(
         moneatUrl: String = "",
         publishWorkflow: Boolean = true
     ) {
-        val onCallEnabled = EnvConfig.get("ONCALL_ENABLED", "false").toBoolean()
-        if (onCallEnabled) {
-            suspendRunCatching {
-                resolveNativeEscalation(organizationId, source, deduplicationKey)
-            }.getOrElse { e ->
-                logger.error("Error resolving native escalation", e)
-            }
-        }
+        val event = AlertLifecycleEvent(
+            title = title,
+            description = description,
+            priority = AlertPriority.P3,
+            status = AlertStatus.RESOLVED,
+            source = source,
+            deduplicationKey = deduplicationKey,
+            organizationId = organizationId,
+            moneatUrl = moneatUrl,
+        )
+        val context = AlertFanoutContext(event, null, null, deliverySilenced = false)
+        suspendRunCatching { resolveNative(context) }
+            .onFailure { error -> logger.error("Error resolving native escalation", error) }
 
         if (publishWorkflow) {
             suspendRunCatching {
@@ -203,67 +219,62 @@ class IncidentService(
             }
         }
 
-        suspendRunCatching {
-            val configs = getEnabledProviderConfigs(organizationId)
-            if (configs.isEmpty()) {
-                return
-            }
+        suspendRunCatching { resolveProviders(context) }
+            .onFailure { error -> logger.error("Error resolving provider alert", error) }
+    }
 
-            configs.forEach { config ->
-                suspendRunCatching {
-                    // Check if this provider has a routing rule for this source
-                    val shouldRoute = shouldRouteAlert(config.id, source)
-                    if (!shouldRoute) {
-                        logger.debug("Skipping resolve for provider ${config.name}: no routing rule for $source")
-                        return@forEach
-                    }
-
-                    val provider = IncidentProviderRegistry.getProvider(config.providerType)
-                    if (provider == null) {
-                        logger.error("Provider type ${config.providerType} not registered")
-                        return@forEach
-                    }
-
-                    val result = provider.resolveAlert(deduplicationKey, config)
-
-                    result.fold(
-                        onSuccess = { incidentId ->
-                            logger.info("Alert resolved with ${config.name}: $incidentId")
-                            logResolveEvent(
-                                config,
-                                organizationId,
-                                source,
-                                deduplicationKey,
-                                success = true,
-                                providerIncidentId = incidentId
-                            )
-                        },
-                        onFailure = { error ->
-                            logger.error("Failed to resolve alert with ${config.name}: ${error.message}", error)
-                            logResolveEvent(
-                                config,
-                                organizationId,
-                                source,
-                                deduplicationKey,
-                                success = false,
-                                errorMessage = error.message
-                            )
-                        }
-                    )
-                }.getOrElse { e ->
-                    logger.error("Error resolving alert for provider ${config.name}", e)
-                    logResolveEvent(
-                        config,
-                        organizationId,
-                        source,
-                        deduplicationKey,
-                        success = false,
-                        errorMessage = e.message
-                    )
+    private suspend fun resolveProviderAlerts(
+        organizationId: Int,
+        source: AlertSource,
+        deduplicationKey: String,
+    ) {
+        val configs = getEnabledProviderConfigs(organizationId)
+        configs.forEach { config ->
+            suspendRunCatching {
+                if (!shouldRouteAlert(config.id, source)) {
+                    logger.debug("Skipping resolve for provider ${config.name}: no routing rule for $source")
+                    return@forEach
                 }
+                val provider = IncidentProviderRegistry.getProvider(config.providerType)
+                if (provider == null) {
+                    logger.error("Provider type ${config.providerType} not registered")
+                    return@forEach
+                }
+                provider.resolveAlert(deduplicationKey, config).fold(
+                    onSuccess = { incidentId ->
+                        logger.info("Alert resolved with ${config.name}: $incidentId")
+                        logResolveEvent(
+                            config,
+                            organizationId,
+                            source,
+                            deduplicationKey,
+                            success = true,
+                            providerIncidentId = incidentId,
+                        )
+                    },
+                    onFailure = { error ->
+                        logger.error("Failed to resolve alert with ${config.name}: ${error.message}", error)
+                        logResolveEvent(
+                            config,
+                            organizationId,
+                            source,
+                            deduplicationKey,
+                            success = false,
+                            errorMessage = error.message,
+                        )
+                    },
+                )
+            }.getOrElse { error ->
+                logger.error("Error resolving alert for provider ${config.name}", error)
+                logResolveEvent(
+                    config,
+                    organizationId,
+                    source,
+                    deduplicationKey,
+                    success = false,
+                    errorMessage = error.message,
+                )
             }
-        }.getOrElse { e ->
-            logger.error("Error resolving alert", e)
         }
     }
 
@@ -424,56 +435,52 @@ class IncidentService(
             logger.debug("On-call enterprise module not loaded — skipping native escalation")
             return
         }
-        suspendRunCatching {
-            val escalationPolicyId = getEscalationPolicyForAlert(event)
+        val escalationPolicyId = getEscalationPolicyForAlert(event)
 
-            if (escalationPolicyId == null) {
-                logger.debug("No escalation policy configured for org ${event.organizationId}, source ${event.source}")
-                return
-            }
+        if (escalationPolicyId == null) {
+            logger.debug("No escalation policy configured for org ${event.organizationId}, source ${event.source}")
+            return
+        }
 
-            val priority = bridge.resolvePriority(event.organizationId, event.priority.wire)
-            if (priority == null) {
-                logger.warn("Could not resolve alert priority ${event.priority.wire}")
-                return
-            }
+        val priority = bridge.resolvePriority(event.organizationId, event.priority.wire)
+        if (priority == null) {
+            logger.warn("Could not resolve alert priority ${event.priority.wire}")
+            return
+        }
 
-            // Check if we should escalate based on business hours
-            val shouldEscalate = bridge.shouldEscalate(event.organizationId, priority.priority)
+        // Check if we should escalate based on business hours
+        val shouldEscalate = bridge.shouldEscalate(event.organizationId, priority.priority)
 
-            if (!shouldEscalate) {
-                logger.debug("Alert deferred: outside business hours for priority ${priority.priority}")
-                return
-            }
+        if (!shouldEscalate) {
+            logger.debug("Alert deferred: outside business hours for priority ${priority.priority}")
+            return
+        }
 
-            // Trigger escalation
-            val serializedMetadata =
-                if (event.metadata.isNotEmpty()) {
-                    kotlinx.serialization.json.Json.encodeToString(
-                        kotlinx.serialization.serializer(),
-                        event.metadata,
-                    )
-                } else {
-                    null
-                }
-
-            val incidentId =
-                bridge.triggerEscalation(
-                    organizationId = event.organizationId,
-                    escalationPolicyId = escalationPolicyId,
-                    title = event.title,
-                    description = event.description,
-                    priority = priority.priority,
-                    alertSource = event.source.name,
-                    deduplicationKey = event.deduplicationKey,
-                    metadata = serializedMetadata,
+        // Trigger escalation
+        val serializedMetadata =
+            if (event.metadata.isNotEmpty()) {
+                kotlinx.serialization.json.Json.encodeToString(
+                    kotlinx.serialization.serializer(),
+                    event.metadata,
                 )
-
-            if (incidentId != null) {
-                logger.info("Native escalation triggered for incident $incidentId")
+            } else {
+                null
             }
-        }.getOrElse { e ->
-            logger.error("Error triggering native escalation", e)
+
+        val incidentId =
+            bridge.triggerEscalation(
+                organizationId = event.organizationId,
+                escalationPolicyId = escalationPolicyId,
+                title = event.title,
+                description = event.description,
+                priority = priority.priority,
+                alertSource = event.source.name,
+                deduplicationKey = event.deduplicationKey,
+                metadata = serializedMetadata,
+            )
+
+        if (incidentId != null) {
+            logger.info("Native escalation triggered for incident $incidentId")
         }
     }
 

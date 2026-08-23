@@ -16,6 +16,7 @@
 
 package com.moneat.uptime
 
+import com.moneat.alerts.services.AlertLifecycleOrchestrator
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.enterprise.EnterpriseModule
 import com.moneat.incident.services.IncidentService
@@ -61,8 +62,11 @@ class UptimeModule : EnterpriseModule {
                 checkExecutor = koin.get<UptimeCheckExecutor>(),
                 incidentService = koin.get<IncidentService>(),
                 billingQuotaService = koin.get<BillingQuotaService>(),
-                workflowService = koin.get<WorkflowService>(),
                 frontendBaseUrl = application.frontendBaseUrl(),
+                alertOrchestrator = koin.getOrNull<AlertLifecycleOrchestrator>() ?: AlertLifecycleOrchestrator(
+                    workflowFanoutProvider = { koin.get<WorkflowService>() },
+                    incidentFanoutProvider = { koin.get<IncidentService>() },
+                ),
             )
             uptimeScheduler.set(scheduler)
             scheduler.start()

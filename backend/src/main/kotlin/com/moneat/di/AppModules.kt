@@ -17,6 +17,7 @@
 package com.moneat.di
 
 import com.moneat.alerts.services.AlertEpisodeService
+import com.moneat.alerts.services.AlertLifecycleOrchestrator
 import com.moneat.alerts.services.AlertSilenceService
 import com.moneat.events.repositories.EventRepository
 import com.moneat.events.repositories.EventRepositoryImpl
@@ -58,6 +59,7 @@ val sharedModule = module {
     single { AlertNotificationPreferencesService() }
     single { AlertSilenceService() }
     single { AlertEpisodeService(get()) }
+    single { AlertLifecycleOrchestrator(get()) }
 
     single { RetentionPolicyService(get()) }
     single { RetentionBackgroundService(get()) }
@@ -81,7 +83,7 @@ val eventsModule = module {
     }
 
     single { ReleaseService() }
-    single { NotificationService(get(), get()) }
+    single { NotificationService(get(), get(), get()) }
     single { EventService(get(), get(), get()) }
     single { DashboardService(get(), get(), get(), get()) }
 }

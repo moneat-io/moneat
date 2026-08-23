@@ -22,6 +22,9 @@ import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.AlertStatus
+import com.moneat.alerts.services.AlertFanoutPlan
+import com.moneat.alerts.services.AlertFanoutState
+import com.moneat.alerts.services.AlertLifecycleOrchestrator
 import com.moneat.alerts.services.AlertSilenceService
 import com.moneat.incident.services.IncidentService
 import com.moneat.monitor.models.AlertData
@@ -40,7 +43,6 @@ import com.moneat.shared.services.toUuidOrNull
 import com.moneat.shared.services.userResourceId
 import com.moneat.shared.services.userResourceIds
 import com.moneat.utils.suspendRunCatching
-import com.moneat.workflows.services.AlertResolvedWorkflowEvent
 import com.moneat.workflows.services.WorkflowService
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
@@ -250,6 +252,10 @@ class MonitorAlertService(
     private val incidentService: IncidentService = IncidentService(),
     private val workflowService: WorkflowService = WorkflowService(),
     private val alertSilenceService: AlertSilenceService = AlertSilenceService(),
+    private val alertOrchestrator: AlertLifecycleOrchestrator = AlertLifecycleOrchestrator(
+        workflowFanoutProvider = { workflowService },
+        incidentFanoutProvider = { incidentService },
+    ),
 ) {
     private val config = ApplicationConfig("application.conf")
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
@@ -530,77 +536,20 @@ class MonitorAlertService(
         val description = "The alert for $metricLabel is no longer active."
         val deduplicationKey = hostAlertDedupKey(alert)
 
-        publishRecoveredHostAlertWorkflow(
-            alert = alert,
-            organizationId = organizationId,
-            deduplicationKey = deduplicationKey,
-            title = title,
-            description = description,
-            dashboardUrl = dashboardUrl,
-            priority = alertPriorityOverride ?: AlertPriority.P1
-        )
-        autoResolveRecoveredHostIncident(
-            alert = alert,
-            organizationId = organizationId,
-            deduplicationKey = deduplicationKey,
-            title = title,
-            description = description,
-            dashboardUrl = dashboardUrl,
-            alertPriorityOverride = alertPriorityOverride
-        )
-        logger.info { "Alert ${alert.id} recovered for host ${alert.hostId}" }
-    }
-
-    private suspend fun publishRecoveredHostAlertWorkflow(
-        alert: AlertData,
-        organizationId: Int,
-        deduplicationKey: String,
-        title: String,
-        description: String,
-        dashboardUrl: String,
-        priority: AlertPriority
-    ) {
-        suspendRunCatching {
-            workflowService.publishAlertResolved(
-                AlertResolvedWorkflowEvent(
-                    organizationId = organizationId,
-                    source = AlertSource.HOST_ALERT.name,
-                    deduplicationKey = deduplicationKey,
-                    title = title,
-                    description = description,
-                    moneatUrl = dashboardUrl,
-                    priority = priority,
-                )
-            )
-        }.getOrElse { e ->
-            logger.error(e) { "Failed to publish recovered host alert workflow ${alert.id}" }
-        }
-    }
-
-    private suspend fun autoResolveRecoveredHostIncident(
-        alert: AlertData,
-        organizationId: Int,
-        deduplicationKey: String,
-        title: String,
-        description: String,
-        dashboardUrl: String,
-        alertPriorityOverride: AlertPriority?
-    ) {
-        if (alertPriorityOverride == null) return
-
-        suspendRunCatching {
-            incidentService.autoResolveAlert(
-                organizationId = organizationId,
-                source = AlertSource.HOST_ALERT,
-                deduplicationKey = deduplicationKey,
+        alertOrchestrator.process(
+            AlertLifecycleEvent(
                 title = title,
                 description = description,
+                priority = alertPriorityOverride ?: AlertPriority.P1,
+                status = AlertStatus.RESOLVED,
+                source = AlertSource.HOST_ALERT,
+                deduplicationKey = deduplicationKey,
+                organizationId = organizationId,
                 moneatUrl = dashboardUrl,
-                publishWorkflow = false
-            )
-        }.getOrElse { e ->
-            logger.error(e) { "Failed to resolve incident for recovered alert ${alert.id}" }
-        }
+            ),
+            if (alertPriorityOverride == null) AlertFanoutPlan.WORKFLOW_ONLY else AlertFanoutPlan.FULL,
+        )
+        logger.info { "Alert ${alert.id} recovered for host ${alert.hostId}" }
     }
 
     private suspend fun triggerAlert(
@@ -1033,19 +982,10 @@ class MonitorAlertService(
                 moneatUrl = dashboardUrl
             )
 
-        val shouldNotifyIncidentProvider = suspendRunCatching {
-            workflowService.publishAlertTriggered(alertLifecycleEvent)
-        }.getOrElse { e ->
-            logger.error(e) { "Failed to publish host alert workflow" }
-            true
-        }
-        if (alertPriority != null && shouldNotifyIncidentProvider) {
-            suspendRunCatching {
-                incidentService.fireAlert(alertLifecycleEvent, publishWorkflow = false)
-            }.getOrElse { e ->
-                logger.error(e) { "Failed to fire host alert" }
-            }
-        }
+        alertOrchestrator.process(
+            alertLifecycleEvent,
+            if (alertPriority == null) AlertFanoutPlan.WORKFLOW_ONLY else AlertFanoutPlan.FULL,
+        )
     }
 
     private fun hostAlertPriorityOverride(alert: AlertData): AlertPriority? =
@@ -1166,7 +1106,7 @@ class MonitorAlertService(
                     metadata = metadata,
                     moneatUrl = dashboardUrl
                 )
-            incidentService.fireAlert(alertLifecycleEvent)
+            alertOrchestrator.process(alertLifecycleEvent, AlertFanoutPlan.FULL)
         }.getOrElse { e ->
             logger.error(e) { "Failed to fire incident provider alert for host down" }
         }
@@ -1179,15 +1119,20 @@ class MonitorAlertService(
     ): Boolean =
         suspendRunCatching {
             val hostUrl = hostDashboardUrl(hostId, organizationId)
-            incidentService.autoResolveAlert(
-                organizationId = organizationId,
-                source = AlertSource.HOST_DOWN,
-                deduplicationKey = hostDownDedupKey(hostId),
-                title = "Host Recovered: $hostName",
-                description = "$hostName is reporting metrics again.",
-                moneatUrl = hostUrl
+            val result = alertOrchestrator.process(
+                AlertLifecycleEvent(
+                    title = "Host Recovered: $hostName",
+                    description = "$hostName is reporting metrics again.",
+                    priority = AlertPriority.P0,
+                    status = AlertStatus.RESOLVED,
+                    source = AlertSource.HOST_DOWN,
+                    deduplicationKey = hostDownDedupKey(hostId),
+                    organizationId = organizationId,
+                    moneatUrl = hostUrl,
+                ),
+                AlertFanoutPlan.FULL,
             )
-            true
+            result.outcomes.none { it.state == AlertFanoutState.FAILED }
         }.getOrElse { e ->
             logger.error(e) { "Failed to resolve incident alert for host up" }
             false

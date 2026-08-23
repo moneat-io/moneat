@@ -34,11 +34,12 @@ import com.moneat.dashboards.services.DataSourceCredentials
 import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.dashboards.services.DashboardQueryEngine
 import com.moneat.alerts.models.AlertSource
+import com.moneat.alerts.models.AlertStatus
 import com.moneat.alerts.models.AlertPriority
-import com.moneat.incident.services.IncidentService
+import com.moneat.alerts.services.AlertLifecycleOrchestrator
+import com.moneat.alerts.services.AlertFanoutPlan
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.testsupport.TestDatabaseHelper
-import com.moneat.workflows.services.WorkflowService
 import io.lettuce.core.api.sync.RedisCommands
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -72,8 +73,7 @@ import kotlin.uuid.Uuid
 
 class DashboardAlertServiceTest {
 
-    private val incidentService: IncidentService = mockk(relaxed = true)
-    private val workflowService: WorkflowService = mockk(relaxed = true)
+    private val alertOrchestrator: AlertLifecycleOrchestrator = mockk(relaxed = true)
     private val queryEngine: DashboardQueryEngine = mockk(relaxed = true)
     private val retentionPolicyService: RetentionPolicyService = mockk(relaxed = true)
     private val dataSourceService: CustomDataSourceService = mockk(relaxed = true)
@@ -81,12 +81,11 @@ class DashboardAlertServiceTest {
     private var redisConfigMocked = false
 
     private val service = DashboardAlertService(
-        incidentService = incidentService,
-        workflowService = workflowService,
         queryEngine = queryEngine,
         retentionPolicyService = retentionPolicyService,
         dataSourceService = dataSourceService,
         dataSourceExecutor = dataSourceExecutor,
+        alertOrchestrator = alertOrchestrator,
     )
 
     companion object {
@@ -127,7 +126,6 @@ class DashboardAlertServiceTest {
         every { queryEngine.isTemplateDataSourceMarker(any()) } answers {
             firstArg<String>().startsWith("__")
         }
-        coEvery { workflowService.publishAlertTriggered(any()) } returns true
         transaction {
             exec(
                 """
@@ -901,14 +899,13 @@ class DashboardAlertServiceTest {
                     ),
                 )
             val numericAlertId = alertNumericId(created.id)
-            val dashboardPublicId = dashboardResourceId(dashboardId)
             every { redis.get("dashboard_alert_state:$numericAlertId") } returns "TRIGGERED"
             every { redis.del(any<String>()) } returns REDIS_DELETE_COUNT
 
             callPrivateSuspend("evaluateAlerts")
 
             coVerify(exactly = 1) {
-                workflowService.publishAlertTriggered(
+                alertOrchestrator.process(
                     match {
                         it.status.name == "RESOLVED" &&
                             it.metadata["alert.channels.email"]?.jsonPrimitive?.content == "false" &&
@@ -916,18 +913,8 @@ class DashboardAlertServiceTest {
                             it.metadata["alert.channels.discord"]?.jsonPrimitive?.content == "false" &&
                             it.metadata["alert.display_title"]?.jsonPrimitive?.content == "High Error Rate" &&
                             it.metadata["alert.current_value"]?.jsonPrimitive?.content == "50.00"
-                    }
-                )
-            }
-            coVerify(exactly = 1) {
-                incidentService.autoResolveAlert(
-                    organizationId = ORG_ID.toInt(),
-                    source = AlertSource.DASHBOARD_ALERT,
-                    deduplicationKey = "moneat-dashboard-alert-$numericAlertId",
-                    title = "Dashboard Alert Resolved: High Error Rate",
-                    description = "Test Widget on Test Dashboard recovered. Current value: 50.00",
-                    moneatUrl = "https://moneat.io/dashboards/$dashboardPublicId",
-                    publishWorkflow = false,
+                    },
+                    AlertFanoutPlan.FULL,
                 )
             }
         }
@@ -972,14 +959,15 @@ class DashboardAlertServiceTest {
             assertEquals("WARNING", fired.lastTriggeredLevel)
             assertEquals(90.0, fired.lastValue)
             coVerify(exactly = 1) {
-                workflowService.publishAlertTriggered(
+                alertOrchestrator.process(
                     match {
                         it.priority == AlertPriority.P3 &&
                             it.title == "Dashboard Warning: High Error Rate" &&
                             it.source == AlertSource.DASHBOARD_ALERT &&
                             it.metadata["alert.display_title"]?.jsonPrimitive?.content == "High Error Rate" &&
                             it.metadata["alert.dashboard.title"]?.jsonPrimitive?.content == "Test Dashboard"
-                    }
+                    },
+                    AlertFanoutPlan.WORKFLOW_ONLY,
                 )
             }
         }
@@ -1025,27 +1013,21 @@ class DashboardAlertServiceTest {
             assertEquals("ERROR", fired.lastTriggeredLevel)
             assertEquals(125.0, fired.lastValue)
             coVerify(exactly = 1) {
-                incidentService.fireAlert(
+                alertOrchestrator.process(
                     match {
                         it.priority == AlertPriority.P1 &&
-                            it.title == "Dashboard Error: High Error Rate"
-                    },
-                    publishWorkflow = false,
-                )
-            }
-            coVerify(exactly = 1) {
-                workflowService.publishAlertTriggered(
-                    match {
-                        it.metadata["alert.channels.email"]?.jsonPrimitive?.content == "false" &&
+                            it.title == "Dashboard Error: High Error Rate" &&
+                            it.metadata["alert.channels.email"]?.jsonPrimitive?.content == "false" &&
                             it.metadata["alert.channels.slack"]?.jsonPrimitive?.content == "false" &&
                             it.metadata["alert.channels.discord"]?.jsonPrimitive?.content == "false"
-                    }
+                    },
+                    AlertFanoutPlan.FULL,
                 )
             }
         }
 
     @Test
-    fun `evaluateAlerts does not fan out suppressed workflow episodes to incident providers`() =
+    fun `evaluateAlerts uses workflow only fanout without an incident priority`() =
         runBlocking {
             mockkObject(RedisConfig)
             redisConfigMocked = true
@@ -1056,8 +1038,6 @@ class DashboardAlertServiceTest {
             coEvery {
                 queryEngine.executeQuery(any(), any(), any(), any(), any())
             } returns listOf(mapOf("total" to JsonPrimitive(125.0)))
-            coEvery { workflowService.publishAlertTriggered(any()) } returns false
-
             val dashboardId = seedDashboard()
             val widgetId = seedWidget(dashboardId, queryConfigs = "[{\"dataSource\":\"events\"}]")
             service.createAlert(
@@ -1066,19 +1046,19 @@ class DashboardAlertServiceTest {
                 CREATED_BY,
                 buildCreateRequest(
                     widgetId,
-                    AlertRequestOverrides(threshold = 100.0, alertPriority = "P1"),
+                    AlertRequestOverrides(threshold = 100.0),
                 ),
             )
 
             callPrivateSuspend("evaluateAlerts")
 
-            coVerify(exactly = 0) {
-                incidentService.fireAlert(any(), publishWorkflow = false)
+            coVerify(exactly = 1) {
+                alertOrchestrator.process(any(), AlertFanoutPlan.WORKFLOW_ONLY)
             }
         }
 
     @Test
-    fun `evaluateAlerts fails open to incident providers when workflow publication fails`() =
+    fun `evaluateAlerts sends the dashboard episode through full fanout`() =
         runBlocking {
             mockkObject(RedisConfig)
             redisConfigMocked = true
@@ -1089,8 +1069,6 @@ class DashboardAlertServiceTest {
             coEvery {
                 queryEngine.executeQuery(any(), any(), any(), any(), any())
             } returns listOf(mapOf("total" to JsonPrimitive(125.0)))
-            coEvery { workflowService.publishAlertTriggered(any()) } throws RuntimeException("workflow unavailable")
-
             val dashboardId = seedDashboard()
             val widgetId = seedWidget(dashboardId, queryConfigs = "[{\"dataSource\":\"events\"}]")
             service.createAlert(
@@ -1106,7 +1084,14 @@ class DashboardAlertServiceTest {
             callPrivateSuspend("evaluateAlerts")
 
             coVerify(exactly = 1) {
-                incidentService.fireAlert(any(), publishWorkflow = false)
+                alertOrchestrator.process(
+                    match {
+                        it.status == AlertStatus.FIRING &&
+                            it.source == AlertSource.DASHBOARD_ALERT &&
+                            it.organizationId == ORG_ID.toInt()
+                    },
+                    AlertFanoutPlan.FULL,
+                )
             }
         }
 
@@ -1149,7 +1134,7 @@ class DashboardAlertServiceTest {
             val pending = service.listAlerts(dashboardId, ORG_ID).single { it.id == created.id }
             assertNull(pending.lastTriggeredLevel)
             assertEquals(90.0, pending.lastValue)
-            coVerify(exactly = 0) { incidentService.fireAlert(any()) }
+            coVerify(exactly = 0) { alertOrchestrator.process(any(), any()) }
         }
 
     @Test
@@ -1188,7 +1173,7 @@ class DashboardAlertServiceTest {
             callPrivateSuspend("evaluateAlerts")
             callPrivateSuspend("evaluateAlerts")
 
-            coVerify(exactly = 1) { workflowService.publishAlertTriggered(any()) }
+            coVerify(exactly = 1) { alertOrchestrator.process(any(), any()) }
         }
 
     @Test
@@ -1226,7 +1211,7 @@ class DashboardAlertServiceTest {
             val inactive = service.listAlerts(dashboardId, ORG_ID).single { it.id == created.id }
             assertNull(inactive.lastTriggeredLevel)
             assertEquals(70.0, inactive.lastValue)
-            coVerify(exactly = 0) { incidentService.fireAlert(any()) }
+            coVerify(exactly = 0) { alertOrchestrator.process(any(), any()) }
         }
 
     @Test
@@ -1281,7 +1266,7 @@ class DashboardAlertServiceTest {
 
             val unchanged = service.listAlerts(dashboardId, ORG_ID).single { it.id == created.id }
             assertNull(unchanged.lastValue)
-            coVerify(exactly = 0) { incidentService.fireAlert(any()) }
+            coVerify(exactly = 0) { alertOrchestrator.process(any(), any()) }
         }
 
     @Test

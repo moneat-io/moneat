@@ -20,6 +20,8 @@ import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertStatus
+import com.moneat.alerts.services.AlertFanoutPlan
+import com.moneat.alerts.services.AlertLifecycleOrchestrator
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
@@ -62,6 +64,9 @@ class SyntheticsService(
     private val billingQuotaService: BillingQuotaService = BillingQuotaService(),
     private val workflowService: WorkflowService = WorkflowService(),
     private val locationService: SyntheticLocationService = SyntheticLocationService(),
+    private val alertOrchestrator: AlertLifecycleOrchestrator = AlertLifecycleOrchestrator(
+        workflowFanoutProvider = { workflowService },
+    ),
 ) {
     companion object {
         private val logger = KotlinLogging.logger {}
@@ -498,7 +503,7 @@ class SyntheticsService(
             "https://moneat.io"
         )
 
-        workflowService.publishAlertTriggered(
+        alertOrchestrator.process(
             AlertLifecycleEvent(
                 title = subject,
                 description = message,
@@ -508,7 +513,8 @@ class SyntheticsService(
                 deduplicationKey = "moneat-synthetic-${test.id}",
                 organizationId = test.organizationId,
                 moneatUrl = "$frontendUrl/synthetics/${test.id}"
-            )
+            ),
+            AlertFanoutPlan.WORKFLOW_ONLY,
         )
     }
 
@@ -517,7 +523,7 @@ class SyntheticsService(
             "FRONTEND_URL",
             "https://moneat.io"
         )
-        workflowService.publishAlertTriggered(
+        alertOrchestrator.process(
             AlertLifecycleEvent(
                 title = "Synthetic test recovered: ${test.name}",
                 description = "Test '${test.name}' (${test.testType}) passed after previous failures.",
@@ -527,7 +533,8 @@ class SyntheticsService(
                 deduplicationKey = "moneat-synthetic-${test.id}",
                 organizationId = test.organizationId,
                 moneatUrl = "$frontendUrl/synthetics/${test.id}"
-            )
+            ),
+            AlertFanoutPlan.WORKFLOW_ONLY,
         )
     }
 

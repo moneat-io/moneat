@@ -16,6 +16,7 @@
 
 package com.moneat.dashboards
 
+import com.moneat.alerts.services.AlertLifecycleOrchestrator
 import com.moneat.dashboards.repositories.DashboardFolderRepository
 import com.moneat.dashboards.repositories.DashboardFolderRepositoryImpl
 import com.moneat.dashboards.repositories.DashboardRepository
@@ -65,12 +66,14 @@ class DashboardModule : EnterpriseModule {
                 single { DashboardTemplateCatalogService() }
                 single {
                     DashboardAlertService(
-                        incidentService = get(),
-                        workflowService = get(),
                         queryEngine = get(),
                         retentionPolicyService = get(),
                         dataSourceService = get(),
                         dataSourceExecutor = get(),
+                        alertOrchestrator = getOrNull<AlertLifecycleOrchestrator>() ?: AlertLifecycleOrchestrator(
+                            workflowFanoutProvider = { get() },
+                            incidentFanoutProvider = { get() },
+                        ),
                     )
                 }
                 single {

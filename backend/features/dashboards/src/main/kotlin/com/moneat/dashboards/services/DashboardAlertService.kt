@@ -32,12 +32,12 @@ import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.AlertStatus
-import com.moneat.incident.services.IncidentService
+import com.moneat.alerts.services.AlertFanoutPlan
+import com.moneat.alerts.services.AlertLifecycleOrchestrator
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.shared.services.TaskLock
 import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.suspendRunCatching
-import com.moneat.workflows.services.WorkflowService
 import io.ktor.server.config.ApplicationConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -90,12 +90,11 @@ private data class AlertThresholdHit(
 )
 
 class DashboardAlertService(
-    private val incidentService: IncidentService = IncidentService(),
-    private val workflowService: WorkflowService = WorkflowService(),
     private val queryEngine: DashboardQueryEngine = DashboardQueryEngine(),
     private val retentionPolicyService: RetentionPolicyService = RetentionPolicyService(),
     private val dataSourceService: CustomDataSourceService = CustomDataSourceService(),
     private val dataSourceExecutor: CustomDataSourceExecutor = CustomDataSourceExecutor(),
+    private val alertOrchestrator: AlertLifecycleOrchestrator = AlertLifecycleOrchestrator(),
 ) {
     private val config = ApplicationConfig("application.conf")
     private val json = Json { ignoreUnknownKeys = true }
@@ -492,26 +491,10 @@ class DashboardAlertService(
                 ),
                 moneatUrl = moneatUrl
             )
-        suspendRunCatching {
-            workflowService.publishAlertTriggered(event)
-        }.onFailure { e ->
-            logger.error(e) { "Failed to publish recovered dashboard alert workflow ${alert.alertId}" }
-        }
-        if (configuredAlertPriority != null) {
-            suspendRunCatching {
-                incidentService.autoResolveAlert(
-                    organizationId = alert.orgId.toInt(),
-                    source = AlertSource.DASHBOARD_ALERT,
-                    deduplicationKey = "moneat-dashboard-alert-${alert.alertId}",
-                    title = title,
-                    description = description,
-                    moneatUrl = moneatUrl,
-                    publishWorkflow = false
-                )
-            }.onFailure { e ->
-                logger.error(e) { "Failed to resolve incident for recovered dashboard alert ${alert.alertId}" }
-            }
-        }
+        alertOrchestrator.process(
+            event,
+            if (configuredAlertPriority == null) AlertFanoutPlan.WORKFLOW_ONLY else AlertFanoutPlan.FULL,
+        )
         logger.info { "Dashboard alert ${alert.alertId} recovered" }
     }
 
@@ -817,18 +800,10 @@ class DashboardAlertService(
                 moneatUrl = "$baseUrl/dashboards/${alert.dashboardResourceId}"
             )
 
-        val shouldNotifyIncidentProvider = suspendRunCatching {
-            workflowService.publishAlertTriggered(event)
-        }.onFailure { e ->
-            logger.error(e) { "Failed to publish dashboard alert workflow" }
-        }.getOrElse { true }
-        if (configuredAlertPriority != null && shouldNotifyIncidentProvider) {
-            suspendRunCatching {
-                incidentService.fireAlert(event.copy(priority = configuredAlertPriority), publishWorkflow = false)
-            }.onFailure { e ->
-                logger.error(e) { "Failed to fire dashboard alert incident" }
-            }
-        }
+        alertOrchestrator.process(
+            event,
+            if (configuredAlertPriority == null) AlertFanoutPlan.WORKFLOW_ONLY else AlertFanoutPlan.FULL,
+        )
     }
 
     private fun validateCondition(condition: String) {

@@ -24,6 +24,8 @@ import com.moneat.alerts.models.AlertStatus
 import com.moneat.alerts.services.AlertEpisodeContext
 import com.moneat.alerts.services.AlertEpisodeDecision
 import com.moneat.alerts.services.AlertEpisodeService
+import com.moneat.alerts.services.AlertFanoutContext
+import com.moneat.alerts.services.AlertWorkflowFanout
 import com.moneat.config.EnvConfig
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.security.signals.SignalOutcome
@@ -169,7 +171,7 @@ class WorkflowService(
     private val runPersistence: PersistRunActivityImpl = PersistRunActivityImpl(),
     private val executionEngine: WorkflowExecutionEngine = TemporalWorkflowExecutionEngine(TemporalClientProvider()),
     private val alertEpisodeService: AlertEpisodeService = AlertEpisodeService()
-) {
+) : AlertWorkflowFanout {
     private val json = workflowJson
     private val graphValidator = WorkflowGraphValidator()
     private val directRunExecutor =
@@ -858,6 +860,12 @@ class WorkflowService(
             logger.error(e) { "Failed to publish alert workflow triggers" }
         }
         return true
+    }
+
+    /** Publish from the shared episode-first orchestration seam without recording the episode again. */
+    override suspend fun publish(context: AlertFanoutContext) {
+        val decision = context.episodeDecision ?: return
+        publishAlertWorkflowTriggers(context.event, decision)
     }
 
     private fun isAlertDeliverySilenced(organizationId: Int): Boolean =

@@ -18,6 +18,7 @@ package com.moneat.services
 
 import com.moneat.events.models.SentryEvent
 import com.moneat.alerts.models.AlertLifecycleEvent
+import com.moneat.alerts.services.AlertLifecycleOrchestrator
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.NotificationService
 import com.moneat.shared.models.EmailsSent
@@ -112,7 +113,8 @@ class NotificationServiceTest {
             }
 
             val workflowService = mockk<WorkflowService>(relaxed = true)
-            val notificationService = NotificationService(EmailService(), workflowService)
+            val alertOrchestrator = mockk<AlertLifecycleOrchestrator>(relaxed = true)
+            val notificationService = NotificationService(EmailService(), workflowService, alertOrchestrator)
             try {
                 val event =
                     SentryEvent(
@@ -128,7 +130,7 @@ class NotificationServiceTest {
                 notificationService.onNewIssue(projectId, "1002", event.copy(eventId = "evt-2"))
 
                 coVerify(exactly = 2) {
-                    workflowService.publishAlertTriggered(capture(publishedEvents))
+                    alertOrchestrator.process(capture(publishedEvents), any())
                 }
                 assertEquals("moneat-error-1001", publishedEvents[0].deduplicationKey)
                 assertEquals("moneat-error-1002", publishedEvents[1].deduplicationKey)

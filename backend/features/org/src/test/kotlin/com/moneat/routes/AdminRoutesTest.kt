@@ -18,6 +18,9 @@ package com.moneat.routes
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
+import com.moneat.alerts.models.AlertSource
+import com.moneat.alerts.services.AlertFanoutPlan
+import com.moneat.alerts.services.AlertLifecycleOrchestrator
 import com.moneat.org.routes.adminRoutes
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
@@ -27,9 +30,16 @@ import com.moneat.testsupport.startTestKoin
 import com.moneat.testsupport.stopTestKoin
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.mockk
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
@@ -42,6 +52,7 @@ import io.ktor.server.testing.testApplication
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.koin.core.context.GlobalContext
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -175,6 +186,46 @@ class AdminRoutesTest {
 
             assertEquals(HttpStatusCode.Forbidden, response.status)
         }
+
+    @Test
+    fun `admin incident trigger delegates one full lifecycle event`() = testApplication {
+        val orchestrator = mockk<AlertLifecycleOrchestrator>()
+        coEvery { orchestrator.process(any(), any()) } returns mockk(relaxed = true)
+        GlobalContext.get().declare(orchestrator, allowOverride = true)
+        application {
+            install(ContentNegotiation) { json() }
+            installAuth()
+            routing { adminRoutes() }
+        }
+        val userId = seedUser(isAdmin = true)
+        transaction {
+            val organizationId = Organizations.insert {
+                it[name] = "Admin Alert Organization"
+                it[slug] = "admin-alert-organization"
+            } get Organizations.id
+            Memberships.insert {
+                it[user_id] = userId
+                it[organization_id] = organizationId
+                it[role] = "admin"
+            }
+        }
+
+        val response = client.post("/v1/admin/incidents/trigger") {
+            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            contentType(ContentType.Application.Json)
+            setBody(
+                """{"source":"DASHBOARD_ALERT","severity":"P1","title":"Latency","description":"High"}""",
+            )
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        coVerify(exactly = 1) {
+            orchestrator.process(
+                match { it.source == AlertSource.DASHBOARD_ALERT && it.organizationId > 0 },
+                AlertFanoutPlan.FULL,
+            )
+        }
+    }
 
     @AfterTest
     fun teardownKoin() {

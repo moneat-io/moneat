@@ -19,6 +19,7 @@ package com.moneat.services
 import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertStatus
+import com.moneat.alerts.services.AlertLifecycleOrchestrator
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.config.ClickHouseClient
 import com.moneat.shared.models.Memberships
@@ -774,9 +775,11 @@ class SyntheticsServiceTest {
     fun `executeTestAndRecord publishes firing alert for failed check`() =
         runBlocking {
             val workflowService = mockk<WorkflowService>(relaxed = true)
+            val alertOrchestrator = mockk<AlertLifecycleOrchestrator>(relaxed = true)
             val service = SyntheticsService(
                 billingQuotaService = mockk<BillingQuotaService>(relaxed = true),
-                workflowService = workflowService
+                workflowService = workflowService,
+                alertOrchestrator = alertOrchestrator,
             )
             val eventSlot = slot<AlertLifecycleEvent>()
             val testData = syntheticTestData()
@@ -789,7 +792,7 @@ class SyntheticsServiceTest {
             service.executeTestAndRecord(testData, executorReturning(failure))
 
             coVerify(exactly = 1) {
-                workflowService.publishAlertTriggered(capture(eventSlot))
+                alertOrchestrator.process(capture(eventSlot), any())
             }
             val event = eventSlot.captured
             assertEquals(AlertStatus.FIRING, event.status)
@@ -803,9 +806,11 @@ class SyntheticsServiceTest {
     fun `executeTestAndRecord publishes recovery alert after failed synthetic passes`() =
         runBlocking {
             val workflowService = mockk<WorkflowService>(relaxed = true)
+            val alertOrchestrator = mockk<AlertLifecycleOrchestrator>(relaxed = true)
             val service = SyntheticsService(
                 billingQuotaService = mockk<BillingQuotaService>(relaxed = true),
-                workflowService = workflowService
+                workflowService = workflowService,
+                alertOrchestrator = alertOrchestrator,
             )
             val eventSlot = slot<AlertLifecycleEvent>()
             val testData = syntheticTestData(lastStatus = "failed")
@@ -814,7 +819,7 @@ class SyntheticsServiceTest {
             service.executeTestAndRecord(testData, executorReturning(success))
 
             coVerify(exactly = 1) {
-                workflowService.publishAlertTriggered(capture(eventSlot))
+                alertOrchestrator.process(capture(eventSlot), any())
             }
             val event = eventSlot.captured
             assertEquals(AlertStatus.RESOLVED, event.status)
@@ -830,9 +835,11 @@ class SyntheticsServiceTest {
             seedManagedLocation("aws-us-east-1", "US East")
             seedManagedLocation("aws-us-west-2", "US West")
             val workflowService = mockk<WorkflowService>(relaxed = true)
+            val alertOrchestrator = mockk<AlertLifecycleOrchestrator>(relaxed = true)
             val service = SyntheticsService(
                 billingQuotaService = mockk<BillingQuotaService>(relaxed = true),
-                workflowService = workflowService
+                workflowService = workflowService,
+                alertOrchestrator = alertOrchestrator,
             )
             val eventSlot = slot<AlertLifecycleEvent>()
             val testData = syntheticTestData(
@@ -855,7 +862,7 @@ class SyntheticsServiceTest {
             }
 
             coVerify(exactly = 1) {
-                workflowService.publishAlertTriggered(capture(eventSlot))
+                alertOrchestrator.process(capture(eventSlot), any())
             }
             assertEquals(AlertStatus.FIRING, eventSlot.captured.status)
             assertEquals(AlertSource.SYNTHETIC_TEST, eventSlot.captured.source)

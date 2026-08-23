@@ -20,6 +20,8 @@ import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertStatus
+import com.moneat.alerts.services.AlertFanoutPlan
+import com.moneat.alerts.services.AlertLifecycleOrchestrator
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.incident.services.IncidentService
 import com.moneat.shared.services.TaskLock
@@ -28,7 +30,6 @@ import com.moneat.uptime.models.UptimeMonitorData
 import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
 import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 import com.moneat.utils.suspendRunCatching
-import com.moneat.workflows.services.WorkflowService
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -59,8 +60,10 @@ class UptimeScheduler(
     private val checkExecutor: UptimeCheckExecutor = UptimeCheckExecutor(),
     private val incidentService: IncidentService = IncidentService(),
     private val billingQuotaService: BillingQuotaService = BillingQuotaService(),
-    private val workflowService: WorkflowService = WorkflowService(),
     private val frontendBaseUrl: String,
+    private val alertOrchestrator: AlertLifecycleOrchestrator = AlertLifecycleOrchestrator(
+        incidentFanoutProvider = { incidentService },
+    ),
 ) {
     companion object {
         private const val CHECK_STATUS_DOWN = 0
@@ -321,16 +324,20 @@ class UptimeScheduler(
         suspendRunCatching {
             if (newStatus == "down") {
                 val alertLifecycleEvent = uptimeDownEvent(monitor, result, baseUrl)
-                incidentService.fireAlert(alertLifecycleEvent)
+                alertOrchestrator.process(alertLifecycleEvent, AlertFanoutPlan.FULL)
             } else if (newStatus == "up") {
-                // Resolve the incident
-                incidentService.autoResolveAlert(
-                    organizationId = monitor.organizationId,
-                    source = AlertSource.UPTIME_MONITOR,
-                    deduplicationKey = "moneat-uptime-${monitor.id}",
-                    title = "Uptime Monitor Recovered: ${monitor.name}",
-                    description = "Monitor '${monitor.name}' (${monitor.type}) is back up.",
-                    moneatUrl = "$baseUrl/uptime/${monitor.id}"
+                alertOrchestrator.process(
+                    AlertLifecycleEvent(
+                        title = "Uptime Monitor Recovered: ${monitor.name}",
+                        description = "Monitor '${monitor.name}' (${monitor.type}) is back up.",
+                        priority = monitor.alertPriority?.let { AlertPriority.fromString(it) } ?: AlertPriority.P1,
+                        status = AlertStatus.RESOLVED,
+                        source = AlertSource.UPTIME_MONITOR,
+                        deduplicationKey = "moneat-uptime-${monitor.id}",
+                        organizationId = monitor.organizationId,
+                        moneatUrl = "$baseUrl/uptime/${monitor.id}",
+                    ),
+                    AlertFanoutPlan.FULL,
                 )
             }
         }.onFailure { e ->
@@ -342,7 +349,10 @@ class UptimeScheduler(
         monitor: UptimeMonitorData,
         result: CheckResult
     ) {
-        workflowService.publishAlertTriggered(uptimeDownEvent(monitor, result, frontendBaseUrl))
+        alertOrchestrator.process(
+            uptimeDownEvent(monitor, result, frontendBaseUrl),
+            AlertFanoutPlan.WORKFLOW_ONLY,
+        )
     }
 
     private fun uptimeDownEvent(
