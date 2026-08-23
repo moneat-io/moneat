@@ -112,6 +112,11 @@ describe('alert route editor sections', () => {
     expect(onDuration).toHaveBeenLastCalledWith(600)
     rerender(<DurationField id="duration" ariaLabel="Duration" seconds={7200} minSeconds={0} onChange={onDuration} />)
     expect(screen.getByLabelText('Duration amount')).toHaveValue(2)
+    rerender(<DurationField id="duration" ariaLabel="Duration" seconds={300} minSeconds={1} onChange={onDuration} />)
+    fireEvent.change(screen.getByLabelText('Duration amount'), {target: {value: '0'}})
+    expect(onDuration).toHaveBeenLastCalledWith(1)
+    expect(screen.getByLabelText('Duration amount')).toHaveValue(1)
+    expect(screen.getByLabelText('Duration unit')).toHaveTextContent('seconds')
   })
 
   it('renders incident and recovery modes and dispatches native controls', () => {

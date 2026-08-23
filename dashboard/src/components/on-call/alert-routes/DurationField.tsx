@@ -74,8 +74,9 @@ export function DurationField({id, ariaLabel, seconds, minSeconds = 0, onChange}
     const normalizedAmount = Math.max(0, Math.round(nextAmount))
     const raw = normalizedAmount * UNIT_SECONDS[nextUnit]
     const nextSeconds = Math.max(minSeconds, raw)
-    setUnit(nextUnit)
-    setAmount(String(normalizedAmount))
+    const committedUnit = raw < minSeconds ? bestUnit(nextSeconds) : nextUnit
+    setUnit(committedUnit)
+    setAmount(displayAmount(nextSeconds, committedUnit))
     pendingSeconds.current = nextSeconds
     onChange(nextSeconds)
   }
