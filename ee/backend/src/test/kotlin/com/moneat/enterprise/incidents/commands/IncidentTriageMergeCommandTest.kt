@@ -30,6 +30,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -420,6 +421,17 @@ class IncidentTriageMergeCommandTest {
         }
         assertFailsWith<Exception> {
             transaction { insertRawIncident(status = NativeIncidentStatus.MERGED.wire, severity = "SEV-2") }
+        }
+        val selfMergeId =
+            transaction { insertRawIncident(status = NativeIncidentStatus.TRIAGE.wire, severity = null) }
+        assertFailsWith<Exception> {
+            transaction {
+                OnCallIncidents.update({ OnCallIncidents.id eq selfMergeId }) {
+                    it[status] = NativeIncidentStatus.MERGED.wire
+                    it[mergedAt] = Clock.System.now()
+                    it[mergedIntoIncidentId] = selfMergeId
+                }
+            }
         }
         // Triage outcomes that never reached acceptance stay legitimately unclassified.
         transaction { insertRawIncident(status = NativeIncidentStatus.DECLINED.wire, severity = null) }

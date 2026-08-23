@@ -328,6 +328,9 @@ object OnCallIncidents : IntIdTable("on_call_incidents") {
                 ((status neq NativeIncidentStatus.MERGED.wire) and
                     mergedAt.isNull() and mergedIntoIncidentId.isNull())
         }
+        check("chk_native_incident_merge_target") {
+            mergedIntoIncidentId.isNull() or (mergedIntoIncidentId neq id)
+        }
     }
 }
 
