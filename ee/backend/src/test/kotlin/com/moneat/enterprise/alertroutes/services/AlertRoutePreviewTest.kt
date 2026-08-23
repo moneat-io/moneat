@@ -206,7 +206,8 @@ class AlertRoutePreviewTest {
             )
 
         val grouping = result.decision!!.grouping
-        assertEquals("checkout-ownership|moneat-dashboard-alert-42#1", grouping.groupKey)
+        assertEquals(64, grouping.groupKey.length)
+        assertEquals("moneat-dashboard-alert-42#1", grouping.tuple.single().value)
         assertTrue(grouping.unresolvedKeys.isEmpty())
     }
 
