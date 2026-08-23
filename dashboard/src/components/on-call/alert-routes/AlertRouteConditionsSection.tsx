@@ -25,9 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import type {
-  AlertRouteCondition,
   AlertRouteConditionField,
-  AlertRouteConditionGroup,
   AlertRouteConditionOperator,
 } from '@/lib/api/types'
 import {
@@ -36,14 +34,17 @@ import {
   CONDITION_OPERATOR_OPTIONS,
   PRIORITY_OPTIONS,
   createDefaultCondition,
+  createEditorKey,
   fieldSupportsMetadataKey,
   operatorIsPriorityOnly,
   operatorTakesValues,
+  type AlertRouteFormCondition,
+  type AlertRouteFormConditionGroup,
 } from './alertRouteModel'
 
 interface AlertRouteConditionsSectionProps {
-  groups: AlertRouteConditionGroup[]
-  onChange: (groups: AlertRouteConditionGroup[]) => void
+  groups: AlertRouteFormConditionGroup[]
+  onChange: (groups: AlertRouteFormConditionGroup[]) => void
 }
 
 // Condition groups are OR-ed together; conditions within a group are AND-ed. This
@@ -53,16 +54,19 @@ export function AlertRouteConditionsSection({
   groups,
   onChange,
 }: Readonly<AlertRouteConditionsSectionProps>) {
-  const updateGroup = (index: number, next: AlertRouteConditionGroup) =>
+  const updateGroup = (index: number, next: AlertRouteFormConditionGroup) =>
     onChange(groups.map((group, i) => (i === index ? next : group)))
   const removeGroup = (index: number) => onChange(groups.filter((_, i) => i !== index))
   const addGroup = () =>
-    onChange([...groups, {conditions: [createDefaultCondition()]}])
+    onChange([...groups, {
+      clientKey: createEditorKey('condition-group'),
+      conditions: [createDefaultCondition()],
+    }])
 
   return (
     <div className="space-y-3">
       {groups.map((group, groupIndex) => (
-        <div key={groupIndex} className="space-y-2">
+        <div key={group.clientKey} className="space-y-2">
           {groupIndex > 0 && (
             <div className="flex items-center gap-2">
               <div className="h-px flex-1 bg-border" />
@@ -90,10 +94,10 @@ export function AlertRouteConditionsSection({
 }
 
 interface ConditionGroupEditorProps {
-  group: AlertRouteConditionGroup
+  group: AlertRouteFormConditionGroup
   groupIndex: number
   canRemoveGroup: boolean
-  onChange: (group: AlertRouteConditionGroup) => void
+  onChange: (group: AlertRouteFormConditionGroup) => void
   onRemove: () => void
 }
 
@@ -104,12 +108,12 @@ function ConditionGroupEditor({
   onChange,
   onRemove,
 }: Readonly<ConditionGroupEditorProps>) {
-  const updateCondition = (index: number, next: AlertRouteCondition) =>
-    onChange({conditions: group.conditions.map((condition, i) => (i === index ? next : condition))})
+  const updateCondition = (index: number, next: AlertRouteFormCondition) =>
+    onChange({...group, conditions: group.conditions.map((condition, i) => (i === index ? next : condition))})
   const removeCondition = (index: number) =>
-    onChange({conditions: group.conditions.filter((_, i) => i !== index)})
+    onChange({...group, conditions: group.conditions.filter((_, i) => i !== index)})
   const addCondition = () =>
-    onChange({conditions: [...group.conditions, createDefaultCondition()]})
+    onChange({...group, conditions: [...group.conditions, createDefaultCondition()]})
 
   return (
     <div className="rounded-lg border bg-muted/20 p-3">
@@ -133,7 +137,7 @@ function ConditionGroupEditor({
       <div className="space-y-2">
         {group.conditions.map((condition, conditionIndex) => (
           <ConditionRow
-            key={conditionIndex}
+            key={condition.clientKey}
             condition={condition}
             canRemove={group.conditions.length > 1}
             onChange={(next) => updateCondition(conditionIndex, next)}
@@ -150,9 +154,9 @@ function ConditionGroupEditor({
 }
 
 interface ConditionRowProps {
-  condition: AlertRouteCondition
+  condition: AlertRouteFormCondition
   canRemove: boolean
-  onChange: (condition: AlertRouteCondition) => void
+  onChange: (condition: AlertRouteFormCondition) => void
   onRemove: () => void
 }
 

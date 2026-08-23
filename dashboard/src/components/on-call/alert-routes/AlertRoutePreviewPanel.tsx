@@ -40,12 +40,14 @@ import {
   ALERT_STATUS_OPTIONS,
   APPROVED_METADATA_KEYS,
   PRIORITY_OPTIONS,
+  createEditorKey,
   describeEvaluationReason,
   formatWindow,
   overlappingEarlierRoutes,
 } from './alertRouteModel'
 
 interface MetadataRow {
+  clientKey: string
   key: string
   value: string
 }
@@ -233,7 +235,11 @@ function MetadataEditor({
   rows,
   onChange,
 }: Readonly<{rows: MetadataRow[]; onChange: (rows: MetadataRow[]) => void}>) {
-  const addRow = () => onChange([...rows, {key: APPROVED_METADATA_KEYS[0], value: ''}])
+  const addRow = () => onChange([...rows, {
+    clientKey: createEditorKey('metadata'),
+    key: APPROVED_METADATA_KEYS[0],
+    value: '',
+  }])
   const updateRow = (index: number, patch: Partial<MetadataRow>) =>
     onChange(rows.map((row, i) => (i === index ? {...row, ...patch} : row)))
   const removeRow = (index: number) => onChange(rows.filter((_, i) => i !== index))
@@ -252,7 +258,7 @@ function MetadataEditor({
         </p>
       )}
       {rows.map((row, index) => (
-        <div key={index} className="flex items-center gap-2">
+        <div key={row.clientKey} className="flex items-center gap-2">
           <Select value={row.key} onValueChange={(value) => updateRow(index, {key: value})}>
             <SelectTrigger className="h-8 w-44">
               <SelectValue />
@@ -293,6 +299,7 @@ function PreviewResult({
 }: Readonly<{result: AlertRoutePreviewResponse; editingRouteId?: string}>) {
   const overlaps = overlappingEarlierRoutes(result)
   const selected = result.evaluations.find((evaluation) => evaluation.selected)
+  const incidentAction = describeIncidentResolution(result)
 
   return (
     <div className="space-y-3 border-t pt-3">
@@ -334,12 +341,7 @@ function PreviewResult({
               {result.decision.grouping.groupKey ? ` · key ${result.decision.grouping.groupKey}` : ''}
             </li>
             <li>
-              Incident:{' '}
-              {result.decision.incident.create
-                ? `create in ${result.decision.incident.mode.toLowerCase()}${
-                    result.decision.incident.severity ? ` · ${result.decision.incident.severity}` : ''
-                  }`
-                : 'do not create'}
+              Incident: {incidentAction}
             </li>
           </ul>
           {result.decision.grouping.unresolvedKeys.length > 0 && (
@@ -373,6 +375,13 @@ function PreviewResult({
       )}
     </div>
   )
+}
+
+function describeIncidentResolution(result: AlertRoutePreviewResponse): string {
+  const incident = result.decision?.incident
+  if (!incident?.create) return 'do not create'
+  const severity = incident.severity ? ` · ${incident.severity}` : ''
+  return `create in ${incident.mode.toLowerCase()}${severity}`
 }
 
 function EvaluationRow({

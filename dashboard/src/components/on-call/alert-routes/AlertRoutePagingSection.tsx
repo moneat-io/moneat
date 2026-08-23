@@ -25,9 +25,7 @@ import {
 } from '@/components/ui/select'
 import type {
   AlertRouteOwnershipSource,
-  AlertRoutePaging,
   AlertRoutePagingMode,
-  AlertRouteTarget,
   AlertRouteTargetKind,
 } from '@/lib/api/types'
 import {
@@ -35,6 +33,8 @@ import {
   PAGING_MODE_OPTIONS,
   TARGET_KIND_OPTIONS,
   createDefaultTarget,
+  type AlertRouteFormPaging,
+  type AlertRouteFormTarget,
 } from './alertRouteModel'
 
 export interface PagingReference {
@@ -43,10 +43,10 @@ export interface PagingReference {
 }
 
 interface AlertRoutePagingSectionProps {
-  paging: AlertRoutePaging
+  paging: AlertRouteFormPaging
   escalationPolicies: PagingReference[]
   teams: PagingReference[]
-  onChange: (paging: AlertRoutePaging) => void
+  onChange: (paging: AlertRouteFormPaging) => void
 }
 
 // Paging turns a matched alert into a page. Mode NONE hides targets entirely; any
@@ -60,7 +60,7 @@ export function AlertRoutePagingSection({
 }: Readonly<AlertRoutePagingSectionProps>) {
   const setMode = (mode: AlertRoutePagingMode) =>
     onChange({mode, targets: mode === 'NONE' ? [] : paging.targets})
-  const updateTarget = (index: number, next: AlertRouteTarget) =>
+  const updateTarget = (index: number, next: AlertRouteFormTarget) =>
     onChange({...paging, targets: paging.targets.map((target, i) => (i === index ? next : target))})
   const removeTarget = (index: number) =>
     onChange({...paging, targets: paging.targets.filter((_, i) => i !== index)})
@@ -93,7 +93,7 @@ export function AlertRoutePagingSection({
           )}
           {paging.targets.map((target, index) => (
             <TargetRow
-              key={index}
+              key={target.clientKey}
               target={target}
               escalationPolicies={escalationPolicies}
               teams={teams}
@@ -112,10 +112,10 @@ export function AlertRoutePagingSection({
 }
 
 interface TargetRowProps {
-  target: AlertRouteTarget
+  target: AlertRouteFormTarget
   escalationPolicies: PagingReference[]
   teams: PagingReference[]
-  onChange: (target: AlertRouteTarget) => void
+  onChange: (target: AlertRouteFormTarget) => void
   onRemove: () => void
 }
 
@@ -125,7 +125,10 @@ function TargetRow({target, escalationPolicies, teams, onChange, onRemove}: Read
       <div className="min-w-[10rem] flex-1">
         <Select
           value={target.kind}
-          onValueChange={(value) => onChange(createDefaultTarget(value as AlertRouteTargetKind))}
+          onValueChange={(value) => onChange({
+            ...createDefaultTarget(value as AlertRouteTargetKind),
+            clientKey: target.clientKey,
+          })}
         >
           <SelectTrigger className="h-8" aria-label="Target kind">
             <SelectValue />
@@ -147,7 +150,7 @@ function TargetRow({target, escalationPolicies, teams, onChange, onRemove}: Read
             placeholder={escalationPolicies.length === 0 ? 'No escalation policies' : 'Select a policy'}
             value={target.escalationPolicyId ?? ''}
             options={escalationPolicies}
-            onChange={(id) => onChange({kind: 'ESCALATION_POLICY', escalationPolicyId: id})}
+            onChange={(id) => onChange({...target, kind: 'ESCALATION_POLICY', escalationPolicyId: id})}
           />
         )}
         {target.kind === 'TEAM' && (
@@ -156,14 +159,14 @@ function TargetRow({target, escalationPolicies, teams, onChange, onRemove}: Read
             placeholder={teams.length === 0 ? 'No teams' : 'Select a team'}
             value={target.teamId ?? ''}
             options={teams}
-            onChange={(id) => onChange({kind: 'TEAM', teamId: id})}
+            onChange={(id) => onChange({...target, kind: 'TEAM', teamId: id})}
           />
         )}
         {target.kind === 'OWNERSHIP_DERIVED' && (
           <Select
             value={target.ownershipSource ?? 'SERVICE'}
             onValueChange={(value) =>
-              onChange({kind: 'OWNERSHIP_DERIVED', ownershipSource: value as AlertRouteOwnershipSource})
+              onChange({...target, kind: 'OWNERSHIP_DERIVED', ownershipSource: value as AlertRouteOwnershipSource})
             }
           >
             <SelectTrigger className="h-8" aria-label="Ownership source">

@@ -402,6 +402,7 @@ function RouteSummary({route}: Readonly<{route: AlertRoute}>) {
   const firstGroup = route.conditionGroups[0]
   const conditionText = firstGroup?.conditions.map(describeCondition).join(' and ') ?? 'No conditions'
   const extraGroups = route.conditionGroups.length - 1
+  const incidentLabel = route.incident.mode === 'ACTIVE' ? 'active' : 'triage'
 
   return (
     <div className="mt-1.5 space-y-1 text-xs text-muted-foreground">
@@ -424,9 +425,7 @@ function RouteSummary({route}: Readonly<{route: AlertRoute}>) {
         </span>
         <span className="inline-flex items-center gap-1">
           <GitBranch className="h-3 w-3" />
-          {route.incident.create
-            ? `Incident (${route.incident.mode === 'ACTIVE' ? 'active' : 'triage'})`
-            : 'No incident'}
+          {route.incident.create ? `Incident (${incidentLabel})` : 'No incident'}
         </span>
       </div>
     </div>

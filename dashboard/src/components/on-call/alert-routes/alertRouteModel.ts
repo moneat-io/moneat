@@ -42,9 +42,32 @@ export interface Option<T extends string> {
   label: string
 }
 
-// The editor form is the mutation payload without the optimistic-concurrency
-// revision, which the editor tracks separately so it survives 409 recovery.
-export type AlertRouteFormState = Omit<AlertRouteRequest, 'expectedRevision'>
+interface EditorRow {
+  clientKey: string
+}
+
+export type AlertRouteFormCondition = AlertRouteCondition & EditorRow
+export interface AlertRouteFormConditionGroup extends EditorRow {
+  conditions: AlertRouteFormCondition[]
+}
+export type AlertRouteFormTarget = AlertRouteTarget & EditorRow
+export interface AlertRouteFormPaging extends Omit<AlertRouteRequest['paging'], 'targets'> {
+  targets: AlertRouteFormTarget[]
+}
+
+// Editor-only keys keep dynamic React rows stable and are deliberately omitted
+// by formToRequest so the wire contract remains identical to AlertRouteRequest.
+export interface AlertRouteFormState extends Omit<AlertRouteRequest, 'expectedRevision' | 'conditionGroups' | 'paging'> {
+  conditionGroups: AlertRouteFormConditionGroup[]
+  paging: AlertRouteFormPaging
+}
+
+const editorKeySequence = {current: 0}
+
+export function createEditorKey(prefix: string): string {
+  editorKeySequence.current += 1
+  return `${prefix}-${editorKeySequence.current}`
+}
 
 export const ALERT_ROUTE_KEY_PATTERN = /^[a-z0-9][a-z0-9_-]*$/
 export const MAX_WINDOW_SECONDS = 86_400
@@ -189,20 +212,26 @@ function isValidGroupingReference(reference: string): boolean {
 
 // A fresh condition for a newly added row. Defaults to the common "priority is at
 // least as severe as P3" shape so a new row is valid without further edits.
-export function createDefaultCondition(): AlertRouteCondition {
-  return {field: 'priority', operator: 'AT_LEAST_AS_SEVERE_AS', values: ['P3']}
+export function createDefaultCondition(): AlertRouteFormCondition {
+  return {
+    clientKey: createEditorKey('condition'),
+    field: 'priority',
+    operator: 'AT_LEAST_AS_SEVERE_AS',
+    values: ['P3'],
+  }
 }
 
 // A fresh paging target of the given kind, carrying only the field that kind uses.
-export function createDefaultTarget(kind: AlertRouteTargetKind): AlertRouteTarget {
+export function createDefaultTarget(kind: AlertRouteTargetKind): AlertRouteFormTarget {
+  const clientKey = createEditorKey('target')
   switch (kind) {
     case 'TEAM':
-      return {kind, teamId: null}
+      return {clientKey, kind, teamId: null}
     case 'OWNERSHIP_DERIVED':
-      return {kind, ownershipSource: 'SERVICE'}
+      return {clientKey, kind, ownershipSource: 'SERVICE'}
     case 'ESCALATION_POLICY':
     default:
-      return {kind, escalationPolicyId: null}
+      return {clientKey, kind, escalationPolicyId: null}
   }
 }
 
@@ -227,7 +256,15 @@ export function createEmptyAlertRouteForm(): AlertRouteFormState {
     name: '',
     description: '',
     enabled: true,
-    conditionGroups: [{ conditions: [{ field: 'priority', operator: 'AT_LEAST_AS_SEVERE_AS', values: ['P2'] }] }],
+    conditionGroups: [{
+      clientKey: createEditorKey('condition-group'),
+      conditions: [{
+        clientKey: createEditorKey('condition'),
+        field: 'priority',
+        operator: 'AT_LEAST_AS_SEVERE_AS',
+        values: ['P2'],
+      }],
+    }],
     paging: { mode: 'NONE', targets: [] },
     grouping: { behavior: 'SUGGESTED', keys: [], windowKind: 'ROLLING', windowSeconds: DEFAULT_WINDOW_SECONDS },
     incident: { create: false, mode: 'TRIAGE' },
@@ -244,14 +281,22 @@ export function alertRouteToForm(route: AlertRoute): AlertRouteFormState {
     description: route.description ?? '',
     enabled: route.enabled,
     conditionGroups: route.conditionGroups.map((group) => ({
+      clientKey: createEditorKey('condition-group'),
       conditions: group.conditions.map((condition) => ({
+        clientKey: createEditorKey('condition'),
         field: condition.field,
         operator: condition.operator,
         values: [...condition.values],
         metadataKey: condition.metadataKey ?? undefined,
       })),
     })),
-    paging: { mode: route.paging.mode, targets: route.paging.targets.map((target) => ({ ...target })) },
+    paging: {
+      mode: route.paging.mode,
+      targets: route.paging.targets.map((target) => ({
+        ...target,
+        clientKey: createEditorKey('target'),
+      })),
+    },
     grouping: { ...route.grouping, keys: [...route.grouping.keys] },
     incident: { ...route.incident },
     recovery: { ...route.recovery },
@@ -260,7 +305,7 @@ export function alertRouteToForm(route: AlertRoute): AlertRouteFormState {
 
 function trimmedOrUndefined(value: string | null | undefined): string | undefined {
   const trimmed = value?.trim()
-  return trimmed ? trimmed : undefined
+  return trimmed || undefined
 }
 
 // Normalize a form into the wire request: drop blank values, trim strings, and

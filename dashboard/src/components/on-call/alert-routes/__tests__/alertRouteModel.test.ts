@@ -32,11 +32,12 @@ describe('alert route request mapping and validation', () => {
     form.conditionGroups[0].conditions[0].values = [' P1 ', '']
     form.paging = {
       mode: 'EVERY_EPISODE',
-      targets: [{kind: 'TEAM', teamId: 'team-id', escalationPolicyId: 'stale'}],
+      targets: [{clientKey: 'target', kind: 'TEAM', teamId: 'team-id', escalationPolicyId: 'stale'}],
     }
     form.grouping.keys = [' Ownership.Service ', 'metadata.environment']
 
-    expect(formToRequest(form, 7)).toMatchObject({
+    const request = formToRequest(form, 7)
+    expect(request).toMatchObject({
       key: 'payments-route',
       name: 'Payments',
       description: null,
@@ -45,6 +46,7 @@ describe('alert route request mapping and validation', () => {
       paging: {targets: [{kind: 'TEAM', teamId: 'team-id'}]},
       grouping: {keys: ['ownership.service', 'metadata.environment']},
     })
+    expect(JSON.stringify(request)).not.toContain('clientKey')
   })
 
   it('requires valid route fields, paging targets, grouping windows, and active severity', () => {
