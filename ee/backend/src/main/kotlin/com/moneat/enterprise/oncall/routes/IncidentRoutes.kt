@@ -70,6 +70,8 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.uuid.Uuid
 
+private const val JWT_AUTH_PROVIDER = "auth-jwt"
+
 private const val DEFAULT_INCIDENT_LIMIT = 50
 private const val MIN_INCIDENT_LIMIT = 1
 private const val MAX_INCIDENT_LIMIT = 200
@@ -207,7 +209,7 @@ private fun Route.registerIncidentRolloutStatusRoute(
     rolloutStatusProvider: (Int) -> NativeIncidentRolloutStatus,
 ) {
     route("/v1/on-call/incident-response/capabilities") {
-        authenticate("auth-jwt") {
+        authenticate(JWT_AUTH_PROVIDER) {
             get {
                 val organizationId = call.requireOrganizationId() ?: return@get
                 val status = rolloutStatusProvider(organizationId)
@@ -230,7 +232,7 @@ private fun Route.registerAlertRoutes(
     incidentEntitlement: IncidentEntitlement,
 ) {
     route("/v1/on-call/alerts") {
-        authenticate("auth-jwt") {
+        authenticate(JWT_AUTH_PROVIDER) {
             registerListAlertsRoute(alertServiceProvider)
             registerGetAlertRoute(alertServiceProvider)
             registerAlertTimelineRoute(alertServiceProvider)
@@ -254,7 +256,7 @@ private fun Route.registerDeclaredIncidentRoutes(
     incidentEntitlement: IncidentEntitlement,
 ) {
     route("/v1/on-call/incidents") {
-        authenticate("auth-jwt") {
+        authenticate(JWT_AUTH_PROVIDER) {
             installNativeIncidentRolloutGate("NativeIncidentRoutesGate", incidentEntitlement)
             registerDeclareIncidentRoute(services.incidentService, services.configurationService)
             registerListDeclaredIncidentsRoute(services.incidentService)

@@ -38,6 +38,6 @@ data class NativeIncidentRolloutStatus(
  * Runtime bridge implemented by the open-source feature flag module.
  * Native incident consumers use this instead of depending on feature flag persistence directly.
  */
-interface NativeIncidentRolloutBridge {
+fun interface NativeIncidentRolloutBridge {
     fun status(organizationId: Int, environment: String): NativeIncidentRolloutStatus
 }

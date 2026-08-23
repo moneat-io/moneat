@@ -26,15 +26,17 @@ import com.moneat.featureflags.services.FeatureFlagService
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
 
-class FeatureFlagsModule :
+class FeatureFlagsModule(
+    private val featureFlagService: FeatureFlagService = FeatureFlagService(),
+    private val evaluator: FeatureFlagEvaluator = FeatureFlagEvaluator(),
+    nativeIncidentRolloutBridge: NativeIncidentRolloutBridge =
+        FeatureFlagNativeIncidentRolloutBridge(featureFlagService, evaluator),
+) :
     EnterpriseModule,
-    NativeIncidentRolloutBridge {
+    NativeIncidentRolloutBridge by nativeIncidentRolloutBridge {
     override val name: String = "Feature Flags"
 
-    private val featureFlagService = FeatureFlagService()
-    private val evaluator = FeatureFlagEvaluator()
     private val eventService = FeatureFlagEventService()
-    private val nativeIncidentRolloutBridge = FeatureFlagNativeIncidentRolloutBridge(featureFlagService, evaluator)
 
     override fun registerRoutes(route: Route) {
         route.featureFlagRoutes(
@@ -47,7 +49,4 @@ class FeatureFlagsModule :
     override fun startBackgroundJobs(application: Application) = Unit
 
     override fun stopBackgroundJobs() = Unit
-
-    override fun status(organizationId: Int, environment: String) =
-        nativeIncidentRolloutBridge.status(organizationId, environment)
 }

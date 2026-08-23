@@ -63,7 +63,7 @@ import type {
   NativeIncidentRolloutState,
 } from '../types'
 
-const NATIVE_INCIDENT_ROLLOUT_STATES: readonly NativeIncidentRolloutState[] = [
+const NATIVE_INCIDENT_ROLLOUT_STATES: ReadonlySet<NativeIncidentRolloutState> = new Set([
   'ENABLED',
   'DISABLED',
   'ENVIRONMENT_NOT_FOUND',
@@ -71,7 +71,7 @@ const NATIVE_INCIDENT_ROLLOUT_STATES: readonly NativeIncidentRolloutState[] = [
   'EVALUATION_ERROR',
   'PROVIDER_UNAVAILABLE',
   'MODULE_UNAVAILABLE',
-]
+])
 
 /**
  * Normalize the native incident capability payload into a strict, gating-safe
@@ -82,7 +82,7 @@ const NATIVE_INCIDENT_ROLLOUT_STATES: readonly NativeIncidentRolloutState[] = [
 function normalizeNativeIncidentCapabilities(raw: unknown): NativeIncidentCapabilities {
   const value = (raw ?? {}) as Record<string, unknown>
   const state = value.state
-  const normalizedState = NATIVE_INCIDENT_ROLLOUT_STATES.includes(state as NativeIncidentRolloutState)
+  const normalizedState = NATIVE_INCIDENT_ROLLOUT_STATES.has(state as NativeIncidentRolloutState)
     ? (state as NativeIncidentRolloutState)
     : 'EVALUATION_ERROR'
   return {
