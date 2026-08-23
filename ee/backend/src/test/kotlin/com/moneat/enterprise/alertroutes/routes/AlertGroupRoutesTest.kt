@@ -51,6 +51,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
@@ -79,7 +80,19 @@ class AlertGroupRoutesTest {
 
         val listed = client.get("/v1/on-call/alert-groups") { authorize() }
         assertEquals(HttpStatusCode.OK, listed.status)
-        assertEquals(groupId.toString(), listed.json().jsonArray.single().jsonObject.string("id"))
+        val listedGroup = listed.json().jsonArray.single().jsonObject
+        assertEquals(groupId.toString(), listedGroup.string("id"))
+        assertTrue(listedGroup["members"]!!.jsonArray.isEmpty())
+        assertTrue(listedGroup["decisions"]!!.jsonArray.isEmpty())
+
+        assertEquals(
+            HttpStatusCode.BadRequest,
+            client.get("/v1/on-call/alert-groups?limit=invalid") { authorize() }.status,
+        )
+        assertEquals(
+            HttpStatusCode.BadRequest,
+            client.get("/v1/on-call/alert-groups?limit=201") { authorize() }.status,
+        )
 
         val found = client.get("/v1/on-call/alert-groups/$groupId") { authorize() }
         assertEquals(HttpStatusCode.OK, found.status)

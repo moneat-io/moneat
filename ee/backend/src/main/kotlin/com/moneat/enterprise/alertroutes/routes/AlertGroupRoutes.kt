@@ -31,6 +31,7 @@ import io.ktor.server.routing.route
 import kotlin.uuid.Uuid
 
 private const val ALERT_GROUP_BASE_PATH = "/v1/on-call/alert-groups"
+private const val DEFAULT_ALERT_GROUP_LIMIT = 50
 
 fun Route.alertGroupRoutes(
     groupService: AlertGroupService = AlertGroupService(),
@@ -41,7 +42,13 @@ fun Route.alertGroupRoutes(
             get {
                 val context = call.requireUserContext() ?: return@get
                 call.respondAlertGroupFailure {
-                    call.respond(groupService.list(context.organizationId).map { it.toResponse() })
+                    call.respond(
+                        groupService.list(
+                            context.organizationId,
+                            call.alertGroupLimit(),
+                            call.alertGroupOffset(),
+                        ).map { it.toResponse() },
+                    )
                 }
             }
             get("/{groupId}") {
@@ -129,6 +136,22 @@ private fun ApplicationCall.episodeId(): Uuid =
 private fun ApplicationCall.expectedVersion(): Int =
     request.queryParameters["expectedVersion"]?.toIntOrNull()?.takeIf { it > 0 }
         ?: throw IllegalArgumentException("Expected version is required")
+
+private fun ApplicationCall.alertGroupLimit(): Int =
+    request.queryParameters["limit"]?.toIntOrNull()
+        ?: if (request.queryParameters["limit"] == null) {
+            DEFAULT_ALERT_GROUP_LIMIT
+        } else {
+            throw IllegalArgumentException("Invalid alert group limit")
+        }
+
+private fun ApplicationCall.alertGroupOffset(): Long =
+    request.queryParameters["offset"]?.toLongOrNull()
+        ?: if (request.queryParameters["offset"] == null) {
+            0
+        } else {
+            throw IllegalArgumentException("Invalid alert group offset")
+        }
 
 private fun OnCallUserContext.toGroupActor() = AlertGroupActor(organizationId, userId, "REST")
 

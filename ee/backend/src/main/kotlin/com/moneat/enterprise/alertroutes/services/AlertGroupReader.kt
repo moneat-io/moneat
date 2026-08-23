@@ -22,17 +22,25 @@ import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.uuid.Uuid
 
 object AlertGroupReader {
-    fun list(organizationId: Int): List<AlertGroupRecord> = transaction {
-        EnterpriseAlertGroups
+    fun list(organizationId: Int, limit: Int, offset: Long): List<AlertGroupRecord> = transaction {
+        val rows = EnterpriseAlertGroups
             .selectAll()
             .where { EnterpriseAlertGroups.organizationId eq organizationId }
             .orderBy(EnterpriseAlertGroups.updatedAt to SortOrder.DESC)
-            .map { load(organizationId, it) }
+            .limit(limit)
+            .offset(offset)
+            .toList()
+        val incidentIds = rows.flatMap { row ->
+            listOfNotNull(row[EnterpriseAlertGroups.incidentId], row[EnterpriseAlertGroups.candidateIncidentId])
+        }.toSet()
+        val incidents = incidentResourceIds(organizationId, incidentIds)
+        rows.map { row -> groupRecord(row, incidents, emptyList(), emptyList()) }
     }
 
     fun get(organizationId: Int, groupId: Uuid): AlertGroupRecord = transaction {
@@ -70,7 +78,7 @@ object AlertGroupReader {
                         resolvedAt = it[EnterpriseAlertGroupMembers.resolvedAt],
                     )
                 }
-        val decisions =
+        val decisionRows =
             EnterpriseAlertGroupDecisions
                 .selectAll()
                 .where {
@@ -80,8 +88,31 @@ object AlertGroupReader {
                     EnterpriseAlertGroupDecisions.createdAt to SortOrder.ASC,
                     EnterpriseAlertGroupDecisions.id to SortOrder.ASC,
                 )
-                .map { decisionRow(organizationId, it) }
-        return AlertGroupRecord(
+                .toList()
+        val decisions = decisionRows.map(
+            decisionMapper(
+                episodeResourceIds(organizationId, decisionRows.mapNotNull {
+                    it[EnterpriseAlertGroupDecisions.alertEpisodeId]
+                }.toSet()),
+                incidentResourceIds(organizationId, decisionRows.mapNotNull {
+                    it[EnterpriseAlertGroupDecisions.incidentId]
+                }.toSet()),
+                userResourceIds(decisionRows.mapNotNull { it[EnterpriseAlertGroupDecisions.actorUserId] }.toSet()),
+            ),
+        )
+        val incidentIds = setOfNotNull(
+            row[EnterpriseAlertGroups.incidentId],
+            row[EnterpriseAlertGroups.candidateIncidentId],
+        )
+        return groupRecord(row, incidentResourceIds(organizationId, incidentIds), members, decisions)
+    }
+
+    private fun groupRecord(
+        row: ResultRow,
+        incidentIds: Map<Int, Uuid>,
+        members: List<AlertGroupMemberRecord>,
+        decisions: List<AlertGroupDecisionRecord>,
+    ): AlertGroupRecord = AlertGroupRecord(
             id = row[EnterpriseAlertGroups.resourceId],
             routeId = row[EnterpriseAlertGroups.routeResourceId],
             routeRevision = row[EnterpriseAlertGroups.routeRevision],
@@ -96,8 +127,8 @@ object AlertGroupReader {
             closesAt = row[EnterpriseAlertGroups.closesAt],
             state = AlertGroupState.valueOf(row[EnterpriseAlertGroups.state]),
             version = row[EnterpriseAlertGroups.version],
-            incidentId = incidentResourceId(organizationId, row[EnterpriseAlertGroups.incidentId]),
-            candidateIncidentId = incidentResourceId(organizationId, row[EnterpriseAlertGroups.candidateIncidentId]),
+            incidentId = row[EnterpriseAlertGroups.incidentId]?.let(incidentIds::get),
+            candidateIncidentId = row[EnterpriseAlertGroups.candidateIncidentId]?.let(incidentIds::get),
             routeSnapshot = row[EnterpriseAlertGroups.routeSnapshot],
             incidentTemplateSnapshot = row[EnterpriseAlertGroups.incidentTemplateSnapshot],
             pagingMode = AlertRoutePagingMode.valueOf(row[EnterpriseAlertGroups.pagingMode]),
@@ -107,38 +138,51 @@ object AlertGroupReader {
             createdAt = row[EnterpriseAlertGroups.createdAt],
             updatedAt = row[EnterpriseAlertGroups.updatedAt],
         )
-    }
 
-    private fun decisionRow(organizationId: Int, row: ResultRow): AlertGroupDecisionRecord =
+    private fun decisionMapper(
+        episodes: Map<Int, Uuid>,
+        incidents: Map<Int, Uuid>,
+        users: Map<Int, Uuid>,
+    ): (ResultRow) -> AlertGroupDecisionRecord = { row ->
         AlertGroupDecisionRecord(
             id = row[EnterpriseAlertGroupDecisions.resourceId],
             type = AlertGroupDecisionType.valueOf(row[EnterpriseAlertGroupDecisions.decisionType]),
-            episodeId = episodeResourceId(organizationId, row[EnterpriseAlertGroupDecisions.alertEpisodeId]),
-            incidentId = incidentResourceId(organizationId, row[EnterpriseAlertGroupDecisions.incidentId]),
-            actorId = userResourceId(row[EnterpriseAlertGroupDecisions.actorUserId]),
+            episodeId = row[EnterpriseAlertGroupDecisions.alertEpisodeId]?.let(episodes::get),
+            incidentId = row[EnterpriseAlertGroupDecisions.incidentId]?.let(incidents::get),
+            actorId = row[EnterpriseAlertGroupDecisions.actorUserId]?.let(users::get),
             commandKey = row[EnterpriseAlertGroupDecisions.commandKey],
             details = row[EnterpriseAlertGroupDecisions.details],
             createdAt = row[EnterpriseAlertGroupDecisions.createdAt],
         )
+    }
 
-    private fun episodeResourceId(organizationId: Int, id: Int?): Uuid? =
-        id?.let {
+    private fun episodeResourceIds(organizationId: Int, ids: Set<Int>): Map<Int, Uuid> =
+        if (ids.isEmpty()) {
+            emptyMap()
+        } else {
             AlertEpisodes
                 .selectAll()
-                .where { (AlertEpisodes.organizationId eq organizationId) and (AlertEpisodes.id eq it) }
-                .singleOrNull()
-                ?.get(AlertEpisodes.resourceId)
+                .where { (AlertEpisodes.organizationId eq organizationId) and (AlertEpisodes.id inList ids) }
+                .associate { it[AlertEpisodes.id].value to it[AlertEpisodes.resourceId] }
         }
 
-    private fun incidentResourceId(organizationId: Int, id: Int?): Uuid? =
-        id?.let {
+    private fun incidentResourceIds(organizationId: Int, ids: Set<Int>): Map<Int, Uuid> =
+        if (ids.isEmpty()) {
+            emptyMap()
+        } else {
             OnCallIncidents
                 .selectAll()
-                .where { (OnCallIncidents.organizationId eq organizationId) and (OnCallIncidents.id eq it) }
-                .singleOrNull()
-                ?.get(OnCallIncidents.resourceId)
+                .where { (OnCallIncidents.organizationId eq organizationId) and (OnCallIncidents.id inList ids) }
+                .associate { it[OnCallIncidents.id].value to it[OnCallIncidents.resourceId] }
         }
 
-    private fun userResourceId(id: Int?): Uuid? =
-        id?.let { Users.selectAll().where { Users.id eq it }.singleOrNull()?.get(Users.resource_id) }
+    private fun userResourceIds(ids: Set<Int>): Map<Int, Uuid> =
+        if (ids.isEmpty()) {
+            emptyMap()
+        } else {
+            Users
+                .selectAll()
+                .where { Users.id inList ids }
+                .associate { it[Users.id] to it[Users.resource_id] }
+        }
 }

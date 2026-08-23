@@ -630,4 +630,25 @@ class AlertRouteCommandServiceTest {
         assertEquals(AlertRouteIncidentMode.TRIAGE, triage.incident.mode)
         assertEquals(null, triage.incident.severity)
     }
+
+    @Test
+    fun `grouping references require canonical spelling`() {
+        listOf(
+            listOf(" metadata.service "),
+            listOf("Metadata.service"),
+            listOf("metadata.service", " metadata.service "),
+        ).forEachIndexed { index, keys ->
+            assertFailsWith<IllegalArgumentException> {
+                service.execute(
+                    CreateAlertRouteCommand(
+                        commandKey = "non-canonical-grouping-$index",
+                        actor = admin(),
+                        specification = specification().copy(
+                            grouping = AlertRouteGroupingInput(keys = keys),
+                        ),
+                    ),
+                )
+            }
+        }
+    }
 }

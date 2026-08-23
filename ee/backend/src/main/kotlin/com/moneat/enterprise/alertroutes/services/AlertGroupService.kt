@@ -35,6 +35,7 @@ import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
@@ -47,11 +48,24 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
+private val retryablePagingStates = listOf(
+    AlertGroupPagingState.READY.wire,
+    AlertGroupPagingState.FAILED.wire,
+)
+private const val DEFAULT_GROUP_PAGE_SIZE = 50
+private const val MAX_GROUP_PAGE_SIZE = 200
+
 /** Transactional grouping persistence used by route execution and responder commands. */
 class AlertGroupService(private val policy: AlertGroupPolicy = AlertGroupPolicy()) {
-    fun list(organizationId: Int): List<AlertGroupRecord> {
+    fun list(
+        organizationId: Int,
+        limit: Int = DEFAULT_GROUP_PAGE_SIZE,
+        offset: Long = 0,
+    ): List<AlertGroupRecord> {
         policy.requireEnabled(organizationId)
-        return AlertGroupReader.list(organizationId)
+        require(limit in 1..MAX_GROUP_PAGE_SIZE) { "Alert group limit must be between 1 and $MAX_GROUP_PAGE_SIZE" }
+        require(offset >= 0) { "Alert group offset cannot be negative" }
+        return AlertGroupReader.list(organizationId, limit, offset)
     }
 
     fun get(organizationId: Int, groupId: Uuid): AlertGroupRecord {
@@ -130,7 +144,7 @@ class AlertGroupService(private val policy: AlertGroupPolicy = AlertGroupPolicy(
                 AlertRoutePagingMode.FIRST_EPISODE_PER_GROUP ->
                     EnterpriseAlertGroups.update({
                         (EnterpriseAlertGroups.id eq group[EnterpriseAlertGroups.id]) and
-                            (EnterpriseAlertGroups.pagingState eq AlertGroupPagingState.READY.wire)
+                            (EnterpriseAlertGroups.pagingState inList retryablePagingStates)
                     }) {
                         it[pagingState] = AlertGroupPagingState.CLAIMED.wire
                         it[pagingCommandKey] = commandKey
@@ -140,7 +154,7 @@ class AlertGroupService(private val policy: AlertGroupPolicy = AlertGroupPolicy(
                     val member = requireMember(organizationId, group[EnterpriseAlertGroups.id].value, episodeId)
                     EnterpriseAlertGroupMembers.update({
                         (EnterpriseAlertGroupMembers.id eq member[EnterpriseAlertGroupMembers.id]) and
-                            (EnterpriseAlertGroupMembers.pagingState eq AlertGroupPagingState.READY.wire)
+                            (EnterpriseAlertGroupMembers.pagingState inList retryablePagingStates)
                     }) {
                         it[pagingState] = AlertGroupPagingState.CLAIMED.wire
                         it[pagingCommandKey] = commandKey

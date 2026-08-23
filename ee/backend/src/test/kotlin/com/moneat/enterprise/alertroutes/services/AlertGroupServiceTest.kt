@@ -280,6 +280,31 @@ class AlertGroupServiceTest {
         val members = groupService.get(organization.organizationId, first.id).members.associateBy { it.episodeId }
         assertEquals(AlertGroupPagingState.CLAIMED, members.getValue(firstEpisode).pagingState)
         assertEquals(AlertGroupPagingState.FAILED, members.getValue(secondEpisode).pagingState)
+        assertTrue(groupService.claimPaging(
+            organization.organizationId,
+            first.id,
+            secondEpisode,
+            "every-second-retry",
+        ))
+    }
+
+    @Test
+    fun `failed first episode group paging can be claimed again`() {
+        val route = createRoute(listOf("metadata.service"))
+        val episode = seedEpisode("retry-first")
+        val group = record(route, episode, mapOf("service" to "checkout"), Instant.parse("2026-08-23T12:00:00Z"))
+        assertTrue(groupService.claimPaging(organization.organizationId, group.id, episode, "first-attempt"))
+        groupService.completePaging(
+            AlertGroupPagingCompletion(
+                organization.organizationId,
+                group.id,
+                episode,
+                "first-attempt",
+                succeeded = false,
+            ),
+        )
+
+        assertTrue(groupService.claimPaging(organization.organizationId, group.id, episode, "retry-attempt"))
     }
 
     private fun createRoute(
