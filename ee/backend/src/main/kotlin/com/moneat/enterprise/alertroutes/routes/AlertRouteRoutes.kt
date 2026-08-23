@@ -34,6 +34,7 @@ import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 
 private const val ALERT_ROUTE_BASE_PATH = "/v1/on-call/alert-routes"
+private const val ALERT_ROUTE_ITEM_PATH = "/{routeId}"
 
 /**
  * Administrator APIs for enterprise Alert Routes.
@@ -123,21 +124,21 @@ private fun Route.registerReorderRoute(commandService: AlertRouteCommandService)
 }
 
 private fun Route.registerItemRoutes(commandService: AlertRouteCommandService) {
-    get("/{routeId}") {
+    get(ALERT_ROUTE_ITEM_PATH) {
         val context = call.requireUserContext() ?: return@get
         call.respondAlertRouteFailure {
             val routeId = parseRouteId(call.parameters["routeId"])
             call.respond(commandService.get(context.organizationId, routeId).toResponse())
         }
     }
-    get("/{routeId}/revisions") {
+    get("$ALERT_ROUTE_ITEM_PATH/revisions") {
         val context = call.requireUserContext() ?: return@get
         call.respondAlertRouteFailure {
             val routeId = parseRouteId(call.parameters["routeId"])
             call.respond(commandService.revisions(context.organizationId, routeId).map { it.toPayload() })
         }
     }
-    put("/{routeId}") {
+    put(ALERT_ROUTE_ITEM_PATH) {
         val context = call.requireIncidentAdminContext() ?: return@put
         val request = call.receive<AlertRouteRequest>()
         call.respondAlertRouteFailure {
@@ -156,7 +157,7 @@ private fun Route.registerItemRoutes(commandService: AlertRouteCommandService) {
             call.respond(route.toResponse())
         }
     }
-    delete("/{routeId}") {
+    delete(ALERT_ROUTE_ITEM_PATH) {
         val context = call.requireIncidentAdminContext() ?: return@delete
         call.respondAlertRouteFailure {
             commandService.execute(
