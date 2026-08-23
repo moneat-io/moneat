@@ -12,6 +12,27 @@ import com.moneat.enterprise.alertroutes.models.EnterpriseAlertRouteCommands
 import com.moneat.enterprise.alertroutes.models.EnterpriseAlertRouteRevisions
 import com.moneat.enterprise.alertroutes.models.EnterpriseAlertRouteTargets
 import com.moneat.enterprise.alertroutes.models.EnterpriseAlertRoutes
+import com.moneat.enterprise.alertroutes.models.EnterpriseAlertGroupCommands
+import com.moneat.enterprise.alertroutes.models.EnterpriseAlertGroupDecisions
+import com.moneat.enterprise.alertroutes.models.EnterpriseAlertGroupEscalations
+import com.moneat.enterprise.alertroutes.models.EnterpriseAlertGroupMembers
+import com.moneat.enterprise.alertroutes.models.EnterpriseAlertGroups
+import com.moneat.enterprise.incidents.models.NativeIncidentAlertEpisodeLinks
+import com.moneat.enterprise.incidents.models.NativeIncidentCommands
+import com.moneat.enterprise.incidents.models.NativeIncidentCustomFieldOptions
+import com.moneat.enterprise.incidents.models.NativeIncidentCustomFields
+import com.moneat.enterprise.incidents.models.NativeIncidentFormFields
+import com.moneat.enterprise.incidents.models.NativeIncidentForms
+import com.moneat.enterprise.incidents.models.NativeIncidentFormSubmissions
+import com.moneat.enterprise.incidents.models.NativeIncidentOutboxDeliveries
+import com.moneat.enterprise.incidents.models.NativeIncidentOutboxEvents
+import com.moneat.enterprise.incidents.models.NativeIncidentSourceLinks
+import com.moneat.enterprise.incidents.models.NativeIncidentTimelineRevisions
+import com.moneat.enterprise.incidents.models.NativeIncidentTypes
+import com.moneat.enterprise.oncall.models.OnCallAlerts
+import com.moneat.enterprise.oncall.models.OnCallIncidentAlerts
+import com.moneat.enterprise.oncall.models.OnCallIncidentTimeline
+import com.moneat.enterprise.oncall.models.OnCallIncidents
 import com.moneat.enterprise.sso.support.EnterpriseTestDatabaseHelper
 import com.moneat.incident.models.IncidentEventLog
 import com.moneat.incident.models.IncidentProviderConfigs
@@ -63,6 +84,22 @@ object AlertRouteTestDatabase {
             OrganizationTeams,
             ResourceOwnership,
             AlertEpisodes,
+            NativeIncidentTypes,
+            NativeIncidentCustomFields,
+            NativeIncidentCustomFieldOptions,
+            NativeIncidentForms,
+            NativeIncidentFormFields,
+            OnCallIncidents,
+            OnCallAlerts,
+            OnCallIncidentAlerts,
+            OnCallIncidentTimeline,
+            NativeIncidentTimelineRevisions,
+            NativeIncidentFormSubmissions,
+            NativeIncidentAlertEpisodeLinks,
+            NativeIncidentSourceLinks,
+            NativeIncidentCommands,
+            NativeIncidentOutboxEvents,
+            NativeIncidentOutboxDeliveries,
             IncidentProviderConfigs,
             IncidentRoutingRules,
             IncidentEventLog,
@@ -73,6 +110,11 @@ object AlertRouteTestDatabase {
             EnterpriseAlertRouteTargets,
             EnterpriseAlertRouteRevisions,
             EnterpriseAlertRouteCommands,
+            EnterpriseAlertGroups,
+            EnterpriseAlertGroupMembers,
+            EnterpriseAlertGroupDecisions,
+            EnterpriseAlertGroupEscalations,
+            EnterpriseAlertGroupCommands,
         )
     }
 

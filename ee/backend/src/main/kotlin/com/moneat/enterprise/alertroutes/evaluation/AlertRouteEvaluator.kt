@@ -234,18 +234,15 @@ class AlertRouteEvaluator(
     ): AlertRouteGroupingResolution {
         val keys = route.grouping.keys.ifEmpty { DEFAULT_GROUPING_KEYS }
         val unresolved = mutableListOf<String>()
-        val parts =
-            keys.map { key ->
-                context.reference(key) ?: run {
-                    unresolved.add(key)
-                    ""
-                }
-            }
+        keys.forEach { key -> if (context.reference(key) == null) unresolved.add(key) }
+        val identity = CanonicalAlertGrouping.resolve(route.resourceId, keys, context)
         return AlertRouteGroupingResolution(
             behavior = route.grouping.behavior,
             automatic = route.grouping.behavior == AlertRouteGroupingBehavior.AUTOMATIC,
-            groupKey = (listOf(route.key) + parts).joinToString(GROUP_KEY_SEPARATOR),
+            groupKey = identity.hash,
             keys = keys,
+            tuple = identity.entries,
+            singleton = identity.singleton,
             unresolvedKeys = unresolved,
             windowKind = route.grouping.windowKind,
             windowSeconds = route.grouping.windowSeconds,
@@ -277,7 +274,6 @@ class AlertRouteEvaluator(
         }
 
     private companion object {
-        const val GROUP_KEY_SEPARATOR = "|"
         val DEFAULT_GROUPING_KEYS = listOf("alert.deduplication_key")
         val NEGATIVE_OPERATORS =
             setOf(

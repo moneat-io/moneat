@@ -143,6 +143,7 @@ internal object AlertRouteValidator {
     private fun validateGrouping(specification: AlertRouteSpecification) {
         val grouping = specification.grouping
         require(grouping.keys.size <= MAX_GROUPING_KEYS) { "Alert route has too many grouping keys" }
+        require(grouping.keys.distinct().size == grouping.keys.size) { "Grouping keys must be unique" }
         grouping.keys.forEach(::validateReference)
         require(grouping.windowSeconds in 1..MAX_WINDOW_SECONDS) {
             "Grouping window must be between 1 and $MAX_WINDOW_SECONDS seconds"

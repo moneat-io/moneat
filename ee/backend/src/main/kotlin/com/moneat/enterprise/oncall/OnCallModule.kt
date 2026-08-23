@@ -12,6 +12,7 @@ import com.moneat.enterprise.OnCallIncidentDeclaration
 import com.moneat.enterprise.OnCallUserInfo
 import com.moneat.enterprise.PriorityInfo
 import com.moneat.enterprise.alertroutes.routes.alertRouteRoutes
+import com.moneat.enterprise.alertroutes.routes.alertGroupRoutes
 import com.moneat.enterprise.incidents.commands.DeclareIncidentCommand
 import com.moneat.enterprise.incidents.commands.IncidentCommandActor
 import com.moneat.enterprise.incidents.events.IncidentOutboxService
@@ -128,6 +129,7 @@ class OnCallModule :
             deviceRoutes()
             incidentRoutes({ onCallAlertService })
             alertRouteRoutes()
+            alertGroupRoutes()
             twilioWebhookRoutes()
             notificationPreferencesRoutes { pushNotificationService }
         }

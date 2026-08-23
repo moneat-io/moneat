@@ -165,6 +165,8 @@ data class AlertRouteGroupingResolutionPayload(
     val automatic: Boolean,
     val groupKey: String,
     val keys: List<String>,
+    val tuple: Map<String, String>,
+    val singleton: Boolean,
     val unresolvedKeys: List<String>,
     val windowKind: String,
     val windowSeconds: Int,

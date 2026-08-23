@@ -261,7 +261,15 @@ class AlertRouteEvaluatorTest {
                 .evaluate(listOf(route), context(metadata = mapOf("service" to "checkout")))
         val grouping = result.decision!!.grouping
 
-        assertEquals("checkout|checkout|DASHBOARD_ALERT|", grouping.groupKey)
+        assertEquals(64, grouping.groupKey.length)
+        assertEquals(
+            listOf(
+                AlertGroupingTupleEntry("ownership.service", "checkout"),
+                AlertGroupingTupleEntry("alert.source", "DASHBOARD_ALERT"),
+            ),
+            grouping.tuple,
+        )
+        assertTrue(!grouping.singleton)
         assertEquals(listOf("metadata.environment"), grouping.unresolvedKeys)
         assertEquals(now + 10.minutes, grouping.windowClosesAt(groupStartedAt = now, lastAlertAt = now + 5.minutes))
 

@@ -77,6 +77,8 @@ data class AlertRouteGroupingResolution(
     val automatic: Boolean,
     val groupKey: String,
     val keys: List<String>,
+    val tuple: List<AlertGroupingTupleEntry>,
+    val singleton: Boolean,
     val unresolvedKeys: List<String>,
     val windowKind: AlertRouteGroupingWindowKind,
     val windowSeconds: Int,
