@@ -19,6 +19,8 @@ package com.moneat.services
 import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertStatus
+import com.moneat.alerts.services.AlertLifecycleOrchestrator
+import com.moneat.alerts.services.AlertFanoutPlan
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.incident.services.IncidentService
 import com.moneat.shared.services.TaskLock
@@ -27,7 +29,6 @@ import com.moneat.uptime.models.UptimeMonitorData
 import com.moneat.uptime.services.UptimeCheckExecutor
 import com.moneat.uptime.services.UptimeScheduler
 import com.moneat.uptime.services.UptimeService
-import com.moneat.workflows.services.WorkflowService
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -55,15 +56,15 @@ class UptimeSchedulerTest {
     private val checkExecutor = mockk<UptimeCheckExecutor>(relaxed = true)
     private val incidentService = mockk<IncidentService>(relaxed = true)
     private val billingQuotaService = mockk<BillingQuotaService>(relaxed = true)
-    private val workflowService = mockk<WorkflowService>(relaxed = true)
+    private val alertOrchestrator = mockk<AlertLifecycleOrchestrator>(relaxed = true)
 
     private val scheduler = UptimeScheduler(
         uptimeService = uptimeService,
         checkExecutor = checkExecutor,
         incidentService = incidentService,
         billingQuotaService = billingQuotaService,
-        workflowService = workflowService,
         frontendBaseUrl = TEST_FRONTEND_BASE_URL,
+        alertOrchestrator = alertOrchestrator,
     )
 
     @AfterTest
@@ -276,7 +277,7 @@ class UptimeSchedulerTest {
             callPrivateSuspend("performCheck", monitor.id)
 
             coVerify(exactly = 1) {
-                workflowService.publishAlertTriggered(capture(eventSlot))
+                alertOrchestrator.process(capture(eventSlot), AlertFanoutPlan.WORKFLOW_ONLY)
             }
             val event = eventSlot.captured
             assertEquals(AlertStatus.FIRING, event.status)
@@ -301,13 +302,14 @@ class UptimeSchedulerTest {
             )
 
             coVerify(exactly = 1) {
-                incidentService.autoResolveAlert(
-                    organizationId = monitor.organizationId,
-                    source = AlertSource.UPTIME_MONITOR,
-                    deduplicationKey = "moneat-uptime-${monitor.id}",
-                    title = "Uptime Monitor Recovered: Test Monitor",
-                    description = "Monitor 'Test Monitor' (http) is back up.",
-                    moneatUrl = "https://moneat.io/uptime/${monitor.id}",
+                alertOrchestrator.process(
+                    match {
+                        it.status == AlertStatus.RESOLVED &&
+                            it.source == AlertSource.UPTIME_MONITOR &&
+                            it.deduplicationKey == "moneat-uptime-${monitor.id}" &&
+                            it.title == "Uptime Monitor Recovered: Test Monitor"
+                    },
+                    AlertFanoutPlan.FULL,
                 )
             }
         }

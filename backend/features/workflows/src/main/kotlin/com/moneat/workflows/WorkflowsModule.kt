@@ -16,6 +16,7 @@
 
 package com.moneat.workflows
 
+import com.moneat.alerts.services.AlertWorkflowFanout
 import com.moneat.enterprise.EnterpriseModule
 import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.workflows.engine.temporal.ExecuteActionActivityImpl
@@ -72,6 +73,7 @@ class WorkflowsModule : EnterpriseModule {
                 single { TemporalClientProvider() }
                 single<WorkflowExecutionEngine> { TemporalWorkflowExecutionEngine(get()) }
                 single { WorkflowService(get(), get(), get(), get(), get(), get(), get(), get()) }
+                single<AlertWorkflowFanout> { get<WorkflowService>() }
                 single { WorkflowGovernanceService(get()) }
             }
         )

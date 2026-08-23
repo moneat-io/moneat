@@ -22,6 +22,8 @@ import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.AlertStatus
+import com.moneat.alerts.services.AlertFanoutPlan
+import com.moneat.alerts.services.AlertLifecycleOrchestrator
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.NotificationPreferences
@@ -72,6 +74,9 @@ private const val WEEKLY_SUMMARY_JOB_NAME = "weekly_summary"
 class NotificationService(
     private val emailService: EmailService,
     private val workflowService: WorkflowService = WorkflowService(),
+    private val alertOrchestrator: AlertLifecycleOrchestrator = AlertLifecycleOrchestrator(
+        workflowFanoutProvider = { workflowService },
+    ),
 ) {
     enum class WeeklySummaryResult { SENT, SKIPPED, FAILED }
     private val config = ApplicationConfig("application.conf")
@@ -208,7 +213,7 @@ class NotificationService(
                     stackFrames = emailStackFrames
                 )
 
-            workflowService.publishAlertTriggered(
+            alertOrchestrator.process(
                 AlertLifecycleEvent(
                     title = "New Issue: ${emailData.issueTitle}",
                     description = "${emailData.projectName} reported ${emailData.issueLevel.uppercase()}: " +
@@ -219,7 +224,8 @@ class NotificationService(
                     deduplicationKey = "moneat-error-$issueId",
                     organizationId = orgId,
                     moneatUrl = issueUrl
-                )
+                ),
+                AlertFanoutPlan.WORKFLOW_ONLY,
             )
         }.getOrElse { e ->
             logger.error(e) { "Error in onNewIssue handler" }

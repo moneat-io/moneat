@@ -16,10 +16,14 @@
 
 package com.moneat.synthetics
 
+import com.moneat.alerts.services.AlertLifecycleOrchestrator
+import com.moneat.billing.services.BillingQuotaService
 import com.moneat.enterprise.EnterpriseModule
+import com.moneat.synthetics.routes.SyntheticLocationService
 import com.moneat.synthetics.routes.SyntheticsScheduler
 import com.moneat.synthetics.routes.SyntheticsService
 import com.moneat.synthetics.routes.syntheticsRoutes
+import com.moneat.workflows.services.WorkflowService
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
 import org.koin.core.module.Module
@@ -37,7 +41,18 @@ class SyntheticsModule : EnterpriseModule {
     override fun koinModules(): List<Module> =
         listOf(
             module {
-                single { SyntheticsService(get(), get()) }
+                single {
+                    val billingQuotaService = get<BillingQuotaService>()
+                    val workflowService = get<WorkflowService>()
+                    SyntheticsService(
+                        billingQuotaService,
+                        workflowService,
+                        SyntheticLocationService(),
+                        getOrNull<AlertLifecycleOrchestrator>() ?: AlertLifecycleOrchestrator(
+                            workflowFanoutProvider = { workflowService },
+                        ),
+                    )
+                }
             }
         )
 

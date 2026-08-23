@@ -16,6 +16,7 @@
 
 package com.moneat.incident
 
+import com.moneat.alerts.services.AlertIncidentFanout
 import com.moneat.enterprise.EnterpriseModule
 import com.moneat.incident.routes.incidentProviderRoutes
 import com.moneat.incident.services.IncidentService
@@ -36,6 +37,7 @@ class IncidentModule : EnterpriseModule {
         listOf(
             module {
                 single { IncidentService(get(), get<ResourceOwnershipRepository>(), get()) }
+                single<AlertIncidentFanout> { get<IncidentService>() }
             }
         )
 

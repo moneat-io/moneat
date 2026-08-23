@@ -5,6 +5,7 @@
 package com.moneat.enterprise.oncall
 
 import com.moneat.config.RedisClient
+import com.moneat.alerts.services.AlertRouteFanoutRegistry
 import com.moneat.enterprise.EnterpriseModule
 import com.moneat.enterprise.IncidentInfo
 import com.moneat.enterprise.OnCallBridge
@@ -13,6 +14,7 @@ import com.moneat.enterprise.OnCallUserInfo
 import com.moneat.enterprise.PriorityInfo
 import com.moneat.enterprise.alertroutes.routes.alertRouteRoutes
 import com.moneat.enterprise.alertroutes.routes.alertGroupRoutes
+import com.moneat.enterprise.alertroutes.services.EnterpriseAlertRouteFanout
 import com.moneat.enterprise.incidents.commands.DeclareIncidentCommand
 import com.moneat.enterprise.incidents.commands.IncidentCommandActor
 import com.moneat.enterprise.incidents.events.IncidentOutboxService
@@ -114,6 +116,7 @@ class OnCallModule :
             )
         }
     private val incidentOutboxWorker by incidentOutboxWorkerDelegate
+    private val alertRouteFanout = EnterpriseAlertRouteFanout()
 
     override val name: String = "On-Call"
     override val licenseFeature: String = "oncall"
@@ -143,6 +146,7 @@ class OnCallModule :
 
     override fun startBackgroundJobs(application: Application) {
         logger.info { "Starting on-call enterprise background jobs" }
+        AlertRouteFanoutRegistry.register(alertRouteFanout)
         escalationEngine.start()
         slackUserGroupSyncService.start()
         onCallHandoffService.start()
@@ -152,6 +156,7 @@ class OnCallModule :
 
     override fun stopBackgroundJobs() {
         logger.info { "Stopping on-call enterprise background jobs" }
+        AlertRouteFanoutRegistry.unregister(alertRouteFanout)
         if (escalationEngineDelegate.isInitialized()) escalationEngine.stop()
         if (slackUserGroupSyncServiceDelegate.isInitialized()) slackUserGroupSyncService.stop()
         if (onCallHandoffServiceDelegate.isInitialized()) onCallHandoffService.stop()

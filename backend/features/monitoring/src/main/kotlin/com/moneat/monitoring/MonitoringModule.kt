@@ -16,6 +16,9 @@
 
 package com.moneat.monitoring
 
+import com.moneat.alerts.services.AlertLifecycleOrchestrator
+import com.moneat.alerts.services.AlertSilenceService
+import com.moneat.incident.services.IncidentService
 import com.moneat.enterprise.EnterpriseModule
 import com.moneat.monitor.repositories.HostAlertRepository
 import com.moneat.monitor.repositories.HostAlertRepositoryImpl
@@ -38,6 +41,7 @@ import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.monitor.services.MonitorService
 import com.moneat.monitor.services.ResourceCatalogService
 import com.moneat.monitor.services.ResourceCatalogTeamResolver
+import com.moneat.workflows.services.WorkflowService
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
 import kotlinx.coroutines.CoroutineScope
@@ -76,7 +80,20 @@ class MonitoringModule : EnterpriseModule {
                 single<HostAlertRepository> { HostAlertRepositoryImpl() }
 
                 single { MonitorService(get(), get(), get(), get()) }
-                single { MonitorAlertService(get(), get(), get()) }
+                single {
+                    val incidentService = get<IncidentService>()
+                    val workflowService = get<WorkflowService>()
+                    val silenceService = get<AlertSilenceService>()
+                    MonitorAlertService(
+                        incidentService,
+                        workflowService,
+                        silenceService,
+                        getOrNull<AlertLifecycleOrchestrator>() ?: AlertLifecycleOrchestrator(
+                            workflowFanoutProvider = { workflowService },
+                            incidentFanoutProvider = { incidentService },
+                        ),
+                    )
+                }
                 single<ResourceOwnershipRepository> { ResourceOwnershipRepositoryImpl() }
                 single {
                     ResourceCatalogService(

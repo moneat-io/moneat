@@ -27,7 +27,8 @@ import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.AlertStatus
-import com.moneat.incident.services.IncidentService
+import com.moneat.alerts.services.AlertFanoutPlan
+import com.moneat.alerts.services.AlertLifecycleOrchestrator
 import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.SlackService
@@ -208,7 +209,7 @@ fun Route.adminRoutes() {
     val emailService = GlobalContext.get().get<EmailService>()
     val slackService = GlobalContext.get().get<SlackService>()
     val discordService = GlobalContext.get().get<DiscordService>()
-    val incidentService = GlobalContext.get().get<IncidentService>()
+    val alertOrchestrator = GlobalContext.get().get<AlertLifecycleOrchestrator>()
 
     authenticate("auth-jwt") {
         route("/v1/admin") {
@@ -410,7 +411,7 @@ fun Route.adminRoutes() {
                             metadata = mapOf("triggered_by" to JsonPrimitive(userResourceId(userId)))
                         )
 
-                    incidentService.fireAlert(event)
+                    alertOrchestrator.process(event, AlertFanoutPlan.FULL)
                     call.respond(HttpStatusCode.OK, AdminSuccessResponse(success = true))
                 }.getOrElse { e ->
                     call.respond(
