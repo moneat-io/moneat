@@ -71,7 +71,9 @@ const group: AlertGroup = {
 
 function renderDetail(id = GROUP_ID) {
   const client = new QueryClient({defaultOptions: {queries: {retry: false}, mutations: {retry: false}}})
-  return render(<QueryClientProvider client={client}><AlertGroupDetail groupId={id} /></QueryClientProvider>)
+  return {client, ...render(
+    <QueryClientProvider client={client}><AlertGroupDetail groupId={id} /></QueryClientProvider>
+  )}
 }
 
 describe('AlertGroupDetail', () => {
@@ -119,13 +121,28 @@ describe('AlertGroupDetail', () => {
     expect(screen.getByText('Invalid group ID')).toBeInTheDocument()
     invalid.unmount()
 
-    api.getAlertGroup.mockRejectedValueOnce(new Error('missing'))
+    api.getAlertGroup.mockRejectedValueOnce(Object.assign(new Error('missing'), {status: 404}))
     const missing = renderDetail()
     expect(await screen.findByText('Alert group not found')).toBeInTheDocument()
     missing.unmount()
 
     api.getAlertGroup.mockResolvedValueOnce({...group, state: 'CLOSED', incidentId: INCIDENT_ID})
-    renderDetail()
+    const closed = renderDetail()
     expect(await screen.findByText(/This group is closed/)).toBeInTheDocument()
+    closed.unmount()
+
+    api.getAlertGroup.mockResolvedValue(group)
+    api.removeAlertGroupEpisode.mockRejectedValueOnce(Object.assign(new Error('stale'), {status: 409}))
+    renderDetail()
+    fireEvent.click(await screen.findByText('Remove'))
+    await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.objectContaining({title: 'Group changed'})))
+  })
+
+  it('distinguishes service failures from missing groups and can retry', async () => {
+    api.getAlertGroup.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(group)
+    renderDetail()
+    expect(await screen.findByText('Unable to load alert group')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Try again'))
+    expect(await screen.findByText('Checkout route')).toBeInTheDocument()
   })
 })

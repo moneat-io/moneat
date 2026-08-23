@@ -50,6 +50,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {useToast} from '@/hooks/useToast'
+import {isNotFoundError} from '@/lib/api/errors'
 import {isUuidResourceId} from '@/lib/api/utils'
 import type {AlertGroup} from '@/lib/api/types'
 import {formatDateTime, shortResourceId, timeAgo} from '@/components/on-call/incident-modeling'
@@ -64,7 +65,7 @@ import {
   relativeWindow,
   windowKindLabel,
 } from './alertGroupFormat'
-import {alertGroupQueryKey} from './alertGroupQueries'
+import {ALERT_GROUPS_QUERY_KEY, alertGroupQueryKey} from './alertGroupQueries'
 
 interface AlertGroupDetailProps {
   groupId: string
@@ -83,17 +84,22 @@ export function AlertGroupDetail({groupId}: Readonly<AlertGroupDetailProps>) {
   const [attachOpen, setAttachOpen] = useState(false)
   const [triageOpen, setTriageOpen] = useState(false)
 
-  const {data: group, isLoading, isError} = useQuery({
+  const {data: group, error: groupError, isLoading, isError, refetch} = useQuery({
     queryKey: groupKey,
     queryFn: () => api.getAlertGroup(groupId),
     enabled: hasValidId,
   })
 
-  const applyGroup = (updated: AlertGroup) => queryClient.setQueryData(groupKey, updated)
+  const refreshGroupList = () => queryClient.invalidateQueries({queryKey: ALERT_GROUPS_QUERY_KEY})
+  const applyGroup = (updated: AlertGroup) => {
+    queryClient.setQueryData(groupKey, updated)
+    refreshGroupList()
+  }
 
   const onError = (error: Error) => {
     if (isConflict(error)) {
       queryClient.invalidateQueries({queryKey: groupKey})
+      refreshGroupList()
       toast({title: 'Group changed', description: STALE_GROUP_MESSAGE, variant: 'destructive'})
       return
     }
@@ -166,7 +172,17 @@ export function AlertGroupDetail({groupId}: Readonly<AlertGroupDetailProps>) {
       </div>
     )
   }
-  if (isError || !group) {
+  if (isError && !isNotFoundError(groupError)) {
+    return (
+      <EmptyState
+        icon={AlertTriangle}
+        title="Unable to load alert group"
+        description="The group could not be loaded. Check your connection and try again."
+        action={<Button size="sm" onClick={() => refetch()}>Try again</Button>}
+      />
+    )
+  }
+  if (!group) {
     return (
       <EmptyState
         icon={AlertTriangle}

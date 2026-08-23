@@ -177,6 +177,38 @@ export function AlertRoutePreviewPanel({
               className="h-8"
             />
           </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="preview-description">Description</Label>
+            <Input
+              id="preview-description"
+              value={sample.description}
+              onChange={(event) => updateSample({description: event.target.value})}
+              placeholder="CPU usage exceeded the configured threshold"
+              className="h-8"
+            />
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="preview-deduplication-key">Deduplication key</Label>
+              <Input
+                id="preview-deduplication-key"
+                value={sample.deduplicationKey}
+                onChange={(event) => updateSample({deduplicationKey: event.target.value})}
+                placeholder="host:web-1:cpu"
+                className="h-8"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="preview-url">Alert URL</Label>
+              <Input
+                id="preview-url"
+                value={sample.url}
+                onChange={(event) => updateSample({url: event.target.value})}
+                placeholder="https://alerts.example.com/alert/123"
+                className="h-8"
+              />
+            </div>
+          </div>
           <MetadataEditor rows={metadataRows} onChange={setMetadataRows} />
         </div>
       ) : (

@@ -102,6 +102,7 @@ describe('IncidentTriageActions', () => {
     api.acceptOnCallIncident.mockRejectedValue(error)
     const actions = renderActions()
     fireEvent.click(screen.getByText('Accept'))
+    fireEvent.click(await screen.findByText('SEV-1'))
     fireEvent.click(await screen.findByRole('button', {name: 'Accept incident'}))
     await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.objectContaining({title: 'Action failed'})))
     actions.unmount()

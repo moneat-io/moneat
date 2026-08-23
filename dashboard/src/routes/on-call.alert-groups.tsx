@@ -20,6 +20,7 @@ import {useState} from 'react'
 import {Bell, Boxes, ChevronRight, Layers, ShieldAlert, Ticket} from 'lucide-react'
 import {api} from '@/lib/api'
 import {Badge} from '@/components/ui/badge'
+import {Button} from '@/components/ui/button'
 import {Card, CardContent} from '@/components/ui/card'
 import {EmptyState} from '@/components/ui/empty-state'
 import {PageHeader} from '@/components/ui/page-header'
@@ -45,6 +46,19 @@ export const Route = createFileRoute('/on-call/alert-groups')({
 })
 
 type StateFilter = 'open' | 'all'
+const ALERT_GROUP_PAGE_SIZE = 200
+
+async function loadAllAlertGroups(): Promise<AlertGroup[]> {
+  const groups: AlertGroup[] = []
+  let offset = 0
+  let page: AlertGroup[]
+  do {
+    page = await api.getAlertGroups({limit: ALERT_GROUP_PAGE_SIZE, offset})
+    groups.push(...page)
+    offset += page.length
+  } while (page.length === ALERT_GROUP_PAGE_SIZE)
+  return groups
+}
 
 function AlertGroupsPage() {
   const pathname = useRouterState({select: (state) => state.location.pathname})
@@ -53,9 +67,9 @@ function AlertGroupsPage() {
 
   const isDetailRoute = pathname.startsWith('/on-call/alert-groups/')
 
-  const {data, isLoading} = useQuery({
+  const {data, isError, isLoading, refetch} = useQuery({
     queryKey: ALERT_GROUPS_QUERY_KEY,
-    queryFn: () => api.getAlertGroups({limit: 100}),
+    queryFn: loadAllAlertGroups,
     enabled: rollout.enabled && !isDetailRoute,
     refetchInterval: 30_000,
   })
@@ -107,7 +121,16 @@ function AlertGroupsPage() {
         </div>
       )}
 
-      {!isLoading && visibleGroups.length === 0 && (
+      {isError && (
+        <EmptyState
+          icon={ShieldAlert}
+          title="Unable to load alert groups"
+          description="Alert groups could not be loaded. Check your connection and try again."
+          action={<Button size="sm" onClick={() => refetch()}>Try again</Button>}
+        />
+      )}
+
+      {!isLoading && !isError && visibleGroups.length === 0 && (
         <EmptyState
           icon={Boxes}
           title={stateFilter === 'open' ? 'No open alert groups' : 'No alert groups yet'}

@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import {useEffect, useRef, useState} from 'react'
 import {Input} from '@/components/ui/input'
 import {
   Select,
@@ -39,6 +40,10 @@ function bestUnit(totalSeconds: number): DurationUnit {
   return 'seconds'
 }
 
+function displayAmount(totalSeconds: number, unit: DurationUnit): string {
+  return String(totalSeconds === 0 ? 0 : Math.round(totalSeconds / UNIT_SECONDS[unit]))
+}
+
 interface DurationFieldProps {
   id?: string
   ariaLabel: string
@@ -50,12 +55,42 @@ interface DurationFieldProps {
 // A numeric amount paired with a unit that together resolve to whole seconds — the
 // wire unit for grouping windows and recovery grace periods.
 export function DurationField({id, ariaLabel, seconds, minSeconds = 0, onChange}: Readonly<DurationFieldProps>) {
-  const unit = bestUnit(seconds)
-  const amount = seconds === 0 ? 0 : Math.round(seconds / UNIT_SECONDS[unit])
+  const initialUnit = bestUnit(seconds)
+  const [unit, setUnit] = useState<DurationUnit>(initialUnit)
+  const [amount, setAmount] = useState(() => displayAmount(seconds, initialUnit))
+  const pendingSeconds = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (pendingSeconds.current === seconds) {
+      pendingSeconds.current = null
+      return
+    }
+    const nextUnit = bestUnit(seconds)
+    setUnit(nextUnit)
+    setAmount(displayAmount(seconds, nextUnit))
+  }, [seconds])
 
   const commit = (nextAmount: number, nextUnit: DurationUnit) => {
-    const raw = Math.max(0, Math.round(nextAmount)) * UNIT_SECONDS[nextUnit]
-    onChange(Math.max(minSeconds, raw))
+    const normalizedAmount = Math.max(0, Math.round(nextAmount))
+    const raw = normalizedAmount * UNIT_SECONDS[nextUnit]
+    const nextSeconds = Math.max(minSeconds, raw)
+    setUnit(nextUnit)
+    setAmount(String(normalizedAmount))
+    pendingSeconds.current = nextSeconds
+    onChange(nextSeconds)
+  }
+
+  const onAmountChange = (rawAmount: string) => {
+    setAmount(rawAmount)
+    if (rawAmount.trim() === '') return
+    const parsed = Number(rawAmount)
+    if (Number.isFinite(parsed)) commit(parsed, unit)
+  }
+
+  const onAmountBlur = () => {
+    if (amount.trim() === '' || !Number.isFinite(Number(amount))) {
+      setAmount(displayAmount(seconds, unit))
+    }
   }
 
   return (
@@ -67,9 +102,22 @@ export function DurationField({id, ariaLabel, seconds, minSeconds = 0, onChange}
         aria-label={`${ariaLabel} amount`}
         className="h-8 w-24"
         value={amount}
-        onChange={(event) => commit(Number(event.target.value), unit)}
+        onChange={(event) => onAmountChange(event.target.value)}
+        onBlur={onAmountBlur}
       />
-      <Select value={unit} onValueChange={(value) => commit(amount, value as DurationUnit)}>
+      <Select
+        value={unit}
+        onValueChange={(value) => {
+          const nextUnit = value as DurationUnit
+          const parsed = Number(amount)
+          if (amount.trim() !== '' && Number.isFinite(parsed)) {
+            commit(parsed, nextUnit)
+          } else {
+            setUnit(nextUnit)
+            setAmount(displayAmount(seconds, nextUnit))
+          }
+        }}
+      >
         <SelectTrigger className="h-8 w-32" aria-label={`${ariaLabel} unit`}>
           <SelectValue />
         </SelectTrigger>

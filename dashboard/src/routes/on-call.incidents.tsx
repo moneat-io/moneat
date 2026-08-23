@@ -224,6 +224,7 @@ function DeclaredIncidents() {
           {triageCount > 0 && (
             <button
               onClick={() => setTriageOnly((prev) => !prev)}
+              aria-pressed={triageOnly}
               className={cn(
                 'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors',
                 triageOnly

@@ -71,6 +71,9 @@ describe('AlertRoutePreviewPanel', () => {
     const onRun = vi.fn()
     render(<AlertRoutePreviewPanel onRun={onRun} result={result} isLoading={false} editingRouteId="shadowed" />)
     fireEvent.change(screen.getByLabelText('Title'), {target: {value: 'CPU alert'}})
+    fireEvent.change(screen.getByLabelText('Description'), {target: {value: 'CPU is high'}})
+    fireEvent.change(screen.getByLabelText('Deduplication key'), {target: {value: 'host:web-1:cpu'}})
+    fireEvent.change(screen.getByLabelText('Alert URL'), {target: {value: 'https://alerts.example/1'}})
     fireEvent.click(screen.getByText('Add attribute'))
     const metadataValue = screen.getByPlaceholderText('value')
     metadataValue.focus()
@@ -82,6 +85,9 @@ describe('AlertRoutePreviewPanel', () => {
 
     expect(onRun).toHaveBeenCalledWith({sample: expect.objectContaining({
       title: 'CPU alert',
+      description: 'CPU is high',
+      deduplicationKey: 'host:web-1:cpu',
+      url: 'https://alerts.example/1',
       metadata: {'alert.condition': 'production'},
     })})
     expect(screen.getByText(/will not run/)).toBeInTheDocument()

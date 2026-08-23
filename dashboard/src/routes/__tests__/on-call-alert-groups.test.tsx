@@ -26,7 +26,9 @@ vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => (options: unknown) => ({options}),
   useRouterState: ({select}: {select: (value: unknown) => unknown}) =>
     select({location: {pathname: state.pathname}}),
-  Link: ({children}: {children: ReactNode}) => <a href="/group">{children}</a>,
+  Link: ({children, params, to}: {children: ReactNode; params: {groupId: string}; to: string}) => (
+    <a href={to} data-group-id={params.groupId}>{children}</a>
+  ),
   Outlet: () => <div>Group detail outlet</div>,
 }))
 vi.mock('@/lib/api', () => ({api}))
@@ -100,8 +102,13 @@ describe('alert groups page', () => {
   it('filters open and historical groups and renders linkage details', async () => {
     renderPage()
     expect(await screen.findByText('Checkout')).toBeInTheDocument()
+    expect(screen.getByRole('link', {name: /Checkout/})).toHaveAttribute(
+      'href', '/on-call/alert-groups/$groupId'
+    )
+    expect(screen.getByRole('link', {name: /Checkout/})).toHaveAttribute('data-group-id', baseGroup.id)
     expect(screen.getByText('Linked incident')).toBeInTheDocument()
     expect(screen.queryByText('fallback')).not.toBeInTheDocument()
+    expect(api.getAlertGroups).toHaveBeenCalledWith({limit: 200, offset: 0})
     fireEvent.click(screen.getByText('3 All'))
     expect(screen.getByText('fallback')).toBeInTheDocument()
     expect(screen.getByText('Candidate incident')).toBeInTheDocument()
@@ -129,5 +136,24 @@ describe('alert groups page', () => {
     Object.assign(state, {enabled: true, pathname: '/on-call/alert-groups/group-id'})
     renderPage()
     expect(screen.getByText('Group detail outlet')).toBeInTheDocument()
+  })
+
+  it('renders a retryable list failure', async () => {
+    api.getAlertGroups.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce([])
+    renderPage()
+    expect(await screen.findByText('Unable to load alert groups')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Try again'))
+    expect(await screen.findByText('No open alert groups')).toBeInTheDocument()
+  })
+
+  it('loads subsequent pages before presenting the complete list', async () => {
+    const firstPage = Array.from({length: 200}, (_, index) => ({
+      ...baseGroup,
+      id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+    }))
+    api.getAlertGroups.mockResolvedValueOnce(firstPage).mockResolvedValueOnce([])
+    renderPage()
+    await screen.findAllByText('Checkout')
+    expect(api.getAlertGroups).toHaveBeenNthCalledWith(2, {limit: 200, offset: 200})
   })
 })

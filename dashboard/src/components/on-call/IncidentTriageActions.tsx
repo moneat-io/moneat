@@ -235,6 +235,7 @@ function AcceptDialog({open, incident, isPending, onOpenChange, onConfirm}: Read
                   type="button"
                   variant={severity === sev ? 'default' : 'outline'}
                   size="sm"
+                  aria-pressed={severity === sev}
                   onClick={() => setSeverity(sev)}
                 >
                   {sev}
