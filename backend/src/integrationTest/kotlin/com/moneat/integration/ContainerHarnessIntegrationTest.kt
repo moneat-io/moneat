@@ -188,7 +188,7 @@ class ContainerHarnessIntegrationTest {
             }.also { start.countDown() }.map { it.get() }
 
             assertEquals(1, groups.toSet().size)
-            val group = service.get(seed.organizationId, groups.single())
+            val group = service.get(seed.organizationId, groups.first())
             assertEquals(2, group.members.size)
 
             val pagingStart = CountDownLatch(1)
