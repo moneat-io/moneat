@@ -178,6 +178,10 @@ describe('IncidentConfiguration', () => {
       enabled: true,
       environment: 'production',
       state: 'ENABLED',
+      entitlementEnabled: true,
+      plan: 'TEAM',
+      entitlementReason: null,
+      quotas: {},
       externalProviderPassthroughAffected: false,
     })
     mockApi.getIncidentTypes.mockResolvedValue([

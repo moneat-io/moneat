@@ -41,7 +41,16 @@ const {mockApi, mockCapabilities, mockPathname, mockParams, mockNavigate} = vi.h
     addAlertNote: vi.fn(),
     declareIncidentFromAlert: vi.fn(),
   },
-  mockCapabilities: {current: {enabled: false, environment: 'production', state: 'DISABLED', externalProviderPassthroughAffected: false}},
+  mockCapabilities: {current: {
+    enabled: false,
+    environment: 'production',
+    state: 'DISABLED',
+    entitlementEnabled: true,
+    plan: 'TEAM',
+    entitlementReason: null,
+    quotas: {},
+    externalProviderPassthroughAffected: false,
+  }},
   mockPathname: {current: '/on-call'},
   mockParams: {current: {} as Record<string, string>},
   mockNavigate: vi.fn(),
@@ -70,8 +79,26 @@ import {Route as IncidentDetailRoute} from '../on-call.incidents.$incidentId'
 import {Route as IncidentConfigurationRoute} from '../on-call.incident-configuration'
 import {Route as AlertDetailRoute} from '../on-call.alerts.$alertId'
 
-const ENABLED = {enabled: true, environment: 'production', state: 'ENABLED', externalProviderPassthroughAffected: false}
-const DISABLED = {enabled: false, environment: 'production', state: 'DISABLED', externalProviderPassthroughAffected: false}
+const ENABLED = {
+  enabled: true,
+  environment: 'production',
+  state: 'ENABLED',
+  entitlementEnabled: true,
+  plan: 'TEAM',
+  entitlementReason: null,
+  quotas: {},
+  externalProviderPassthroughAffected: false,
+}
+const DISABLED = {
+  enabled: false,
+  environment: 'production',
+  state: 'DISABLED',
+  entitlementEnabled: true,
+  plan: 'TEAM',
+  entitlementReason: null,
+  quotas: {},
+  externalProviderPassthroughAffected: false,
+}
 
 const triggeredAlert = {
   id: ALERT_ID,

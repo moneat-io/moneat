@@ -513,6 +513,12 @@ describe('onCallMethods', () => {
             enabled: true,
             environment: 'production',
             state: 'ENABLED',
+            entitlementEnabled: true,
+            plan: 'TEAM',
+            entitlementReason: null,
+            quotas: {
+              native_incidents: {limit: 250, used: 10, remaining: 240, exhausted: false},
+            },
             externalProviderPassthroughAffected: false,
           })
         )
@@ -522,6 +528,12 @@ describe('onCallMethods', () => {
         enabled: true,
         environment: 'production',
         state: 'ENABLED',
+        entitlementEnabled: true,
+        plan: 'TEAM',
+        entitlementReason: null,
+        quotas: {
+          native_incidents: {limit: 250, used: 10, remaining: 240, exhausted: false},
+        },
         externalProviderPassthroughAffected: false,
       })
     })
@@ -554,6 +566,10 @@ describe('onCallMethods', () => {
         enabled: false,
         environment: '',
         state: 'EVALUATION_ERROR',
+        entitlementEnabled: false,
+        plan: 'UNKNOWN',
+        entitlementReason: null,
+        quotas: {},
         externalProviderPassthroughAffected: false,
       })
     })
@@ -567,6 +583,26 @@ describe('onCallMethods', () => {
       const result = await api.getNativeIncidentCapabilities()
       expect(result.enabled).toBe(false)
       expect(result.state).toBe('EVALUATION_ERROR')
+    })
+
+    it('fails closed when rollout is enabled but the plan entitlement is disabled', async () => {
+      server.use(
+        http.get(`${API_BASE}/on-call/incident-response/capabilities`, () =>
+          HttpResponse.json({
+            enabled: false,
+            environment: 'production',
+            state: 'ENABLED',
+            entitlementEnabled: false,
+            plan: 'FREE',
+            entitlementReason: 'Upgrade the plan',
+            quotas: {},
+          })
+        )
+      )
+      const result = await api.getNativeIncidentCapabilities()
+      expect(result.enabled).toBe(false)
+      expect(result.entitlementEnabled).toBe(false)
+      expect(result.entitlementReason).toBe('Upgrade the plan')
     })
   })
 

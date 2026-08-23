@@ -59,6 +59,25 @@ class FeatureRegistryNativeIncidentRolloutTest {
         assertEquals(NativeIncidentRolloutState.ENABLED, status.state)
     }
 
+    @Test
+    fun `native incident availability requires rollout and paid entitlement independently`() {
+        System.setProperty(FEATURE_FLAG_ENVIRONMENT_VARIABLE, "production")
+        FeatureRegistry.registerForTest(
+            TestModule("On-Call"),
+            RecordingRolloutModule(),
+            EntitlementModule(enabled = false),
+        )
+        assertFalse(FeatureRegistry.isNativeIncidentResponseEnabled(42))
+
+        FeatureRegistry.resetForTest()
+        FeatureRegistry.registerForTest(
+            TestModule("On-Call"),
+            RecordingRolloutModule(),
+            EntitlementModule(enabled = true),
+        )
+        assertTrue(FeatureRegistry.isNativeIncidentResponseEnabled(42))
+    }
+
     private open class TestModule(override val name: String) : EnterpriseModule {
         override fun registerRoutes(route: Route) = Unit
 
@@ -80,6 +99,31 @@ class FeatureRegistryNativeIncidentRolloutTest {
                 state = NativeIncidentRolloutState.ENABLED,
             )
         }
+    }
+
+    private class EntitlementModule(private val enabled: Boolean) :
+        TestModule("Billing"),
+        NativeIncidentEntitlementBridge {
+        override fun status(organizationId: Int): NativeIncidentEntitlementStatus =
+            NativeIncidentEntitlementStatus(enabled = enabled, plan = "TEST")
+
+        override fun consume(
+            organizationId: Int,
+            quotaKey: NativeIncidentQuotaKey,
+            quantity: Long,
+            idempotencyKey: String,
+        ): NativeIncidentQuotaDecision =
+            NativeIncidentQuotaDecision(
+                allowed = enabled,
+                status = NativeIncidentQuotaStatus(quotaKey, limit = 1, used = 0),
+            )
+
+        override fun reconcile(
+            organizationId: Int,
+            quotaKey: NativeIncidentQuotaKey,
+            authoritativeUsage: Long,
+            idempotencyKey: String,
+        ): NativeIncidentQuotaDecision = consume(organizationId, quotaKey, 1, idempotencyKey)
     }
 
     private companion object {

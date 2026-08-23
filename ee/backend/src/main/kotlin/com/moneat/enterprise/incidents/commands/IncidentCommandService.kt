@@ -74,6 +74,7 @@ class IncidentCommandService(
         transaction {
             requireActorMembership(command.actor)
             replayResult(command)?.let { return@transaction it }
+            policy.requireQuota(command)
             val mutation = applyCommand(command)
             recordCommand(command, mutation)
             if (mutation.changed) {

@@ -33,6 +33,7 @@ dependencies {
     implementation(libs.kotlinx.datetime)
     implementation(libs.exposed.core)
     implementation(libs.exposed.jdbc)
+    implementation(libs.exposed.kotlin.datetime)
     implementation(libs.stripe.java)
     implementation(libs.sentry.kotlin)
     implementation(libs.kotlin.logging)

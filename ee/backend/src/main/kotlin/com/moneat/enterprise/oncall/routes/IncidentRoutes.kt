@@ -8,6 +8,7 @@ import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.alerts.models.IncidentSeverity
 import com.moneat.alerts.models.AlertEpisodes
 import com.moneat.enterprise.FeatureRegistry
+import com.moneat.enterprise.NativeIncidentEntitlementStatus
 import com.moneat.enterprise.NativeIncidentRolloutStatus
 import com.moneat.enterprise.incidents.commands.DeclareIncidentCommand
 import com.moneat.enterprise.incidents.commands.IncidentCommandActor
@@ -16,6 +17,7 @@ import com.moneat.enterprise.incidents.commands.IncidentCommandDeniedException
 import com.moneat.enterprise.incidents.commands.IncidentEntitlement
 import com.moneat.enterprise.incidents.commands.IncidentCommandException
 import com.moneat.enterprise.incidents.commands.IncidentCommandNotFoundException
+import com.moneat.enterprise.incidents.commands.IncidentCommandQuotaExceededException
 import com.moneat.enterprise.incidents.commands.LinkOnCallAlertCommand
 import com.moneat.enterprise.incidents.commands.IncidentSourceReference
 import com.moneat.enterprise.incidents.commands.LinkIncidentSourceCommand
@@ -109,6 +111,7 @@ internal fun incidentCommandStatus(error: IncidentCommandException): HttpStatusC
         is IncidentCommandDeniedException -> HttpStatusCode.Forbidden
         is IncidentCommandNotFoundException -> HttpStatusCode.NotFound
         is IncidentCommandConflictException -> HttpStatusCode.Conflict
+        is IncidentCommandQuotaExceededException -> HttpStatusCode.TooManyRequests
         else -> HttpStatusCode.BadRequest
     }
 
@@ -168,7 +171,19 @@ data class NativeIncidentRolloutResponse(
     val enabled: Boolean,
     val environment: String,
     val state: String,
+    val entitlementEnabled: Boolean,
+    val plan: String,
+    val entitlementReason: String? = null,
+    val quotas: Map<String, NativeIncidentQuotaResponse>,
     val externalProviderPassthroughAffected: Boolean,
+)
+
+@Serializable
+data class NativeIncidentQuotaResponse(
+    val limit: Long,
+    val used: Long,
+    val remaining: Long,
+    val exhausted: Boolean,
 )
 
 private data class IncidentRouteServices(
@@ -186,6 +201,8 @@ fun Route.incidentRoutes(
         FeatureRegistry.isNativeIncidentResponseEnabled(it)
     },
     rolloutStatusProvider: (Int) -> NativeIncidentRolloutStatus = FeatureRegistry::nativeIncidentRolloutStatus,
+    entitlementStatusProvider: (Int) -> NativeIncidentEntitlementStatus =
+        FeatureRegistry::nativeIncidentEntitlementStatus,
 ) {
     val services =
         IncidentRouteServices(
@@ -195,7 +212,7 @@ fun Route.incidentRoutes(
             responderService = IncidentResponderService(),
             timelineService = IncidentTimelineService(),
         )
-    registerIncidentRolloutStatusRoute(rolloutStatusProvider)
+    registerIncidentRolloutStatusRoute(rolloutStatusProvider, entitlementStatusProvider)
     registerAlertRoutes(services.alertServiceProvider, services.incidentService, incidentEntitlement)
     registerDeclaredIncidentRoutes(services, incidentEntitlement)
     registerIncidentConfigurationRoutes(
@@ -207,17 +224,30 @@ fun Route.incidentRoutes(
 
 private fun Route.registerIncidentRolloutStatusRoute(
     rolloutStatusProvider: (Int) -> NativeIncidentRolloutStatus,
+    entitlementStatusProvider: (Int) -> NativeIncidentEntitlementStatus,
 ) {
     route("/v1/on-call/incident-response/capabilities") {
         authenticate(JWT_AUTH_PROVIDER) {
             get {
                 val organizationId = call.requireOrganizationId() ?: return@get
-                val status = rolloutStatusProvider(organizationId)
+                val rollout = rolloutStatusProvider(organizationId)
+                val entitlement = entitlementStatusProvider(organizationId)
                 call.respond(
                     NativeIncidentRolloutResponse(
-                        enabled = status.enabled,
-                        environment = status.environment,
-                        state = status.state.name,
+                        enabled = rollout.enabled && entitlement.enabled,
+                        environment = rollout.environment,
+                        state = rollout.state.name,
+                        entitlementEnabled = entitlement.enabled,
+                        plan = entitlement.plan,
+                        entitlementReason = entitlement.reason,
+                        quotas = entitlement.quotas.mapKeys { it.key.wire }.mapValues { (_, quota) ->
+                            NativeIncidentQuotaResponse(
+                                limit = quota.limit,
+                                used = quota.used,
+                                remaining = quota.remaining,
+                                exhausted = quota.exhausted,
+                            )
+                        },
                         externalProviderPassthroughAffected = false,
                     ),
                 )
