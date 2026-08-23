@@ -18,6 +18,7 @@ import {createFileRoute, Link, Outlet, useRouterState} from '@tanstack/react-rou
 import {Bell, Calendar, ListChecks, AlertTriangle, Settings2, Shield, Users2} from 'lucide-react'
 import {cn} from '@/lib/utils'
 import {PageHeader} from '@/components/ui/page-header'
+import {useNativeIncidentRollout} from '@/hooks/useNativeIncidentRollout'
 
 export const Route = createFileRoute('/on-call')({
   component: OnCallLayout,
@@ -38,9 +39,17 @@ const tabs = [
   },
 ]
 
+// Tabs that expose native incident response and stay hidden unless the rollout
+// is enabled for the organization.
+const NATIVE_INCIDENT_TAB_IDS = new Set(['incidents', 'incident-configuration'])
+
 function OnCallLayout() {
   const router = useRouterState()
   const currentPath = router.location.pathname
+  const nativeIncidentRollout = useNativeIncidentRollout()
+  const visibleTabs = tabs.filter((tab) =>
+    NATIVE_INCIDENT_TAB_IDS.has(tab.id) ? nativeIncidentRollout.enabled : true
+  )
 
   return (
     <div className="px-6 py-4 space-y-4">
@@ -53,7 +62,7 @@ function OnCallLayout() {
       {/* Tab Navigation */}
       <div className="border-b">
         <nav className="flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {tabs.map((tab) => {
+          {visibleTabs.map((tab) => {
             const isActive = tab.href === '/on-call'
               ? currentPath === '/on-call'
               : currentPath.startsWith(tab.href)

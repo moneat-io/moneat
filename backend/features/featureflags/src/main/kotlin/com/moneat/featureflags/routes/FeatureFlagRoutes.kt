@@ -240,10 +240,12 @@ private fun Route.flagManagementRoutes(
         }
 
         delete {
-            val context = call.requireFeatureFlagAdmin(membershipService) ?: return@delete
-            val flagKey = call.parameters["flagKey"].orEmpty()
-            val deleted = featureFlagService.archiveFlag(context.organizationId, context.userId, flagKey)
-            if (deleted) call.respond(HttpStatusCode.NoContent) else call.respondNotFound(FEATURE_FLAG_NOT_FOUND)
+            call.respondHandlingBadRequest {
+                val context = call.requireFeatureFlagAdmin(membershipService) ?: return@respondHandlingBadRequest
+                val flagKey = call.parameters["flagKey"].orEmpty()
+                val deleted = featureFlagService.archiveFlag(context.organizationId, context.userId, flagKey)
+                if (deleted) call.respond(HttpStatusCode.NoContent) else call.respondNotFound(FEATURE_FLAG_NOT_FOUND)
+            }
         }
 
         put("/config/{environmentKey}") {

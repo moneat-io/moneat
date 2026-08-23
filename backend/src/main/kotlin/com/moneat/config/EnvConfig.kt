@@ -82,6 +82,11 @@ object EnvConfig {
             get() = get("SELF_HOSTED", "false").toBoolean()
     }
 
+    object FeatureFlags {
+        val environment: String
+            get() = get("MONEAT_FEATURE_FLAG_ENVIRONMENT", "production").trim().ifBlank { "production" }
+    }
+
     // Demo mode configuration
     object Demo {
         val enabled: Boolean

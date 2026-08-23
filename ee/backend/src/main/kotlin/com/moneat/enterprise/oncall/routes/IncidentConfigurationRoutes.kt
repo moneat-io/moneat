@@ -5,6 +5,7 @@
 package com.moneat.enterprise.oncall.routes
 
 import com.moneat.enterprise.incidents.commands.IncidentCommandException
+import com.moneat.enterprise.incidents.commands.IncidentEntitlement
 import com.moneat.enterprise.incidents.config.CreateIncidentCustomField
 import com.moneat.enterprise.incidents.config.CreateIncidentForm
 import com.moneat.enterprise.incidents.config.CreateIncidentType
@@ -86,9 +87,11 @@ data class CreateIncidentRoleRequest(
 internal fun Route.registerIncidentConfigurationRoutes(
     service: IncidentConfigurationService,
     responderService: IncidentResponderService,
+    incidentEntitlement: IncidentEntitlement,
 ) {
     route("/v1/on-call/incident-configuration") {
         authenticate("auth-jwt") {
+            installNativeIncidentRolloutGate("NativeIncidentConfigurationGate", incidentEntitlement)
             route("/types") {
                 get {
                     val context = call.requireUserContext() ?: return@get

@@ -47,6 +47,10 @@ import {
 import {useState} from 'react'
 import type {ReactNode} from 'react'
 import {isUuidResourceId} from '@/lib/api/utils'
+import {
+  nativeIncidentUnavailableCopy,
+  useNativeIncidentRollout,
+} from '@/hooks/useNativeIncidentRollout'
 import {incidentStatusConfig, isResolvableIncidentStatus} from '@/lib/incident-status'
 import {IncidentTimelinePanel} from '@/components/on-call/IncidentTimelinePanel'
 import {IncidentRolesPanel} from '@/components/on-call/IncidentRolesPanel'
@@ -70,6 +74,7 @@ function DeclaredIncidentDetailComponent() {
   const [resolveOpen, setResolveOpen] = useState(false)
   const [resolutionNote, setResolutionNote] = useState('')
   const [note, setNote] = useState('')
+  const rollout = useNativeIncidentRollout()
   const normalizedIncidentId = incidentId.trim()
   const hasValidIncidentId = isUuidResourceId(normalizedIncidentId)
   const incidentKey = ['declared-incident', normalizedIncidentId]
@@ -77,7 +82,9 @@ function DeclaredIncidentDetailComponent() {
   const {data: incident, isLoading} = useQuery({
     queryKey: incidentKey,
     queryFn: () => api.getOnCallIncident(normalizedIncidentId),
-    enabled: hasValidIncidentId,
+    // Hold the incident fetch (and the child panels' native queries) until the
+    // rollout is confirmed enabled.
+    enabled: hasValidIncidentId && rollout.enabled,
   })
 
   const refreshIncident = () => queryClient.invalidateQueries({queryKey: incidentKey})
@@ -112,6 +119,19 @@ function DeclaredIncidentDetailComponent() {
       toast({title: 'Error', description: error.message, variant: 'destructive'})
     },
   })
+
+  if (rollout.isLoading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted border-t-primary" />
+      </div>
+    )
+  }
+
+  if (!rollout.enabled) {
+    const copy = nativeIncidentUnavailableCopy(rollout)
+    return <EmptyState icon={AlertTriangle} title={copy.title} description={copy.description} />
+  }
 
   if (isLoading) {
     return (

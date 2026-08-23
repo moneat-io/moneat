@@ -12,6 +12,7 @@ const {
   mockNavigate,
 } = vi.hoisted(() => ({
   mockApi: {
+    getCurrentUser: vi.fn(),
     isAuthenticated: vi.fn(),
     checkAuth: vi.fn(),
     getProjects: vi.fn(),
@@ -39,6 +40,7 @@ const {
     markAlertUnavailable: vi.fn(),
     addAlertNote: vi.fn(),
     declareIncidentFromAlert: vi.fn(),
+    getNativeIncidentCapabilities: vi.fn(),
     getOnCallIncidents: vi.fn(),
     getOnCallIncident: vi.fn(),
     getOnCallIncidentTimeline: vi.fn(),
@@ -413,6 +415,7 @@ describe('overview alert and incident dashboard', () => {
     mockRoutePathname.current = '/'
     mockApi.isAuthenticated.mockReturnValue(true)
     mockApi.checkAuth.mockResolvedValue(true)
+    mockApi.getCurrentUser.mockResolvedValue({orgId: 'organization-one'})
     mockApi.getProjects.mockResolvedValue([project])
     mockApi.getProjectStats.mockResolvedValue(projectStats)
     mockApi.getOrganizationIssues.mockResolvedValue([issue])
@@ -481,6 +484,13 @@ describe('overview alert and incident dashboard', () => {
     mockApi.markAlertUnavailable.mockResolvedValue(undefined)
     mockApi.addAlertNote.mockResolvedValue(alertTimeline[1])
     mockApi.declareIncidentFromAlert.mockResolvedValue(declaredIncident)
+    // Native incident rollout enabled so existing incident/declare coverage holds.
+    mockApi.getNativeIncidentCapabilities.mockResolvedValue({
+      enabled: true,
+      environment: 'production',
+      state: 'ENABLED',
+      externalProviderPassthroughAffected: false,
+    })
     mockApi.getOnCallIncidents.mockResolvedValue([declaredIncident])
     mockApi.getOnCallIncident.mockResolvedValue(declaredIncident)
     mockApi.getOnCallIncidentTimeline.mockResolvedValue(declaredIncidentTimeline)

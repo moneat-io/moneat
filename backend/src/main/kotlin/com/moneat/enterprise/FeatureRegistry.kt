@@ -20,6 +20,7 @@ import com.moneat.authz.PermissionBridge
 import com.moneat.config.EnvConfig
 import com.moneat.enterprise.license.LicenseInfo
 import com.moneat.enterprise.license.LicenseValidator
+import com.moneat.monitoring.OperationalMetrics
 import com.moneat.workflows.WorkflowApprovalBridge
 import com.moneat.workflows.WorkflowConnectionVault
 import com.moneat.workflows.WorkflowPremiumConnectorBridge
@@ -185,6 +186,42 @@ object FeatureRegistry {
         return modules.filterIsInstance<DetectionSignalEvidenceBridge>().firstOrNull()
     }
 
+    /** Resolve the native incident rollout for an organization. Missing dependencies fail closed. */
+    fun nativeIncidentRolloutStatus(organizationId: Int): NativeIncidentRolloutStatus {
+        val environment = EnvConfig.FeatureFlags.environment
+        if (!hasModule(ON_CALL_MODULE_NAME)) {
+            return NativeIncidentRolloutStatus(
+                enabled = false,
+                environment = environment,
+                state = NativeIncidentRolloutState.MODULE_UNAVAILABLE,
+            )
+        }
+        val bridge = modules.filterIsInstance<NativeIncidentRolloutBridge>().firstOrNull()
+            ?: return NativeIncidentRolloutStatus(
+                enabled = false,
+                environment = environment,
+                state = NativeIncidentRolloutState.PROVIDER_UNAVAILABLE,
+            )
+        return suspendRunCatching { bridge.status(organizationId, environment) }
+            .getOrElse { error ->
+                logger.error(error) {
+                    "Native incident rollout provider failed for organization $organizationId in $environment"
+                }
+                NativeIncidentRolloutStatus(
+                    enabled = false,
+                    environment = environment,
+                    state = NativeIncidentRolloutState.EVALUATION_ERROR,
+                )
+            }
+    }
+
+    fun isNativeIncidentResponseEnabled(organizationId: Int): Boolean =
+        nativeIncidentRolloutStatus(organizationId).enabled
+
+    fun recordNativeIncidentRolloutDecision(surface: String, outcome: String) {
+        OperationalMetrics.recordNativeIncidentRolloutDecision(surface, outcome)
+    }
+
     fun resolveIngestionRateLimitKey(rateLimitName: String, call: ApplicationCall): String? =
         modules
             .filterIsInstance<IngestionRateLimitKeyResolver>()
@@ -217,4 +254,6 @@ object FeatureRegistry {
         license = null
         initialized = false
     }
+
+    private const val ON_CALL_MODULE_NAME = "On-Call"
 }

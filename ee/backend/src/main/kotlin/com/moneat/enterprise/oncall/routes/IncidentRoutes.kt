@@ -7,10 +7,13 @@ package com.moneat.enterprise.oncall.routes
 import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.alerts.models.IncidentSeverity
 import com.moneat.alerts.models.AlertEpisodes
+import com.moneat.enterprise.FeatureRegistry
+import com.moneat.enterprise.NativeIncidentRolloutStatus
 import com.moneat.enterprise.incidents.commands.DeclareIncidentCommand
 import com.moneat.enterprise.incidents.commands.IncidentCommandActor
 import com.moneat.enterprise.incidents.commands.IncidentCommandConflictException
 import com.moneat.enterprise.incidents.commands.IncidentCommandDeniedException
+import com.moneat.enterprise.incidents.commands.IncidentEntitlement
 import com.moneat.enterprise.incidents.commands.IncidentCommandException
 import com.moneat.enterprise.incidents.commands.IncidentCommandNotFoundException
 import com.moneat.enterprise.incidents.commands.LinkOnCallAlertCommand
@@ -35,6 +38,7 @@ import com.moneat.enterprise.oncall.models.OnCallIncidents
 import com.moneat.enterprise.oncall.services.OnCallAlertService
 import com.moneat.enterprise.oncall.services.OnCallIncidentService
 import com.moneat.org.services.OrgRole
+import com.moneat.monitoring.OperationalMetrics
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Users
 import com.moneat.shared.services.toUuidOrNull
@@ -42,6 +46,9 @@ import com.moneat.utils.ErrorResponse
 import com.moneat.utils.MessageResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
+import io.ktor.server.application.createRouteScopedPlugin
+import io.ktor.server.application.isHandled
+import io.ktor.server.auth.AuthenticationChecked
 import io.ktor.server.auth.authenticate
 import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.auth.jwt.JWTPrincipal
@@ -62,6 +69,8 @@ import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.uuid.Uuid
+
+private const val JWT_AUTH_PROVIDER = "auth-jwt"
 
 private const val DEFAULT_INCIDENT_LIMIT = 50
 private const val MIN_INCIDENT_LIMIT = 1
@@ -154,30 +163,76 @@ data class ResolveIncidentRequest(
     val note: String? = null,
 )
 
+@Serializable
+data class NativeIncidentRolloutResponse(
+    val enabled: Boolean,
+    val environment: String,
+    val state: String,
+    val externalProviderPassthroughAffected: Boolean,
+)
+
+private data class IncidentRouteServices(
+    val alertServiceProvider: () -> OnCallAlertService,
+    val incidentService: OnCallIncidentService,
+    val configurationService: IncidentConfigurationService,
+    val responderService: IncidentResponderService,
+    val timelineService: IncidentTimelineService,
+)
+
 fun Route.incidentRoutes(
     alertServiceProvider: () -> OnCallAlertService,
     onCallIncidentService: OnCallIncidentService = OnCallIncidentService(),
+    incidentEntitlement: IncidentEntitlement = IncidentEntitlement {
+        FeatureRegistry.isNativeIncidentResponseEnabled(it)
+    },
+    rolloutStatusProvider: (Int) -> NativeIncidentRolloutStatus = FeatureRegistry::nativeIncidentRolloutStatus,
 ) {
-    val configurationService = IncidentConfigurationService()
-    val responderService = IncidentResponderService()
-    val timelineService = IncidentTimelineService()
-    registerAlertRoutes(alertServiceProvider, onCallIncidentService)
-    registerDeclaredIncidentRoutes(
-        alertServiceProvider,
-        onCallIncidentService,
-        configurationService,
-        responderService,
-        timelineService,
+    val services =
+        IncidentRouteServices(
+            alertServiceProvider = alertServiceProvider,
+            incidentService = onCallIncidentService,
+            configurationService = IncidentConfigurationService(),
+            responderService = IncidentResponderService(),
+            timelineService = IncidentTimelineService(),
+        )
+    registerIncidentRolloutStatusRoute(rolloutStatusProvider)
+    registerAlertRoutes(services.alertServiceProvider, services.incidentService, incidentEntitlement)
+    registerDeclaredIncidentRoutes(services, incidentEntitlement)
+    registerIncidentConfigurationRoutes(
+        services.configurationService,
+        services.responderService,
+        incidentEntitlement,
     )
-    registerIncidentConfigurationRoutes(configurationService, responderService)
+}
+
+private fun Route.registerIncidentRolloutStatusRoute(
+    rolloutStatusProvider: (Int) -> NativeIncidentRolloutStatus,
+) {
+    route("/v1/on-call/incident-response/capabilities") {
+        authenticate(JWT_AUTH_PROVIDER) {
+            get {
+                val organizationId = call.requireOrganizationId() ?: return@get
+                val status = rolloutStatusProvider(organizationId)
+                call.respond(
+                    NativeIncidentRolloutResponse(
+                        enabled = status.enabled,
+                        environment = status.environment,
+                        state = status.state.name,
+                        externalProviderPassthroughAffected = false,
+                    ),
+                )
+            }
+        }
+    }
 }
 
 private fun Route.registerAlertRoutes(
     alertServiceProvider: () -> OnCallAlertService,
     onCallIncidentService: OnCallIncidentService,
+    incidentEntitlement: IncidentEntitlement,
 ) {
     route("/v1/on-call/alerts") {
-        authenticate("auth-jwt") {
+        authenticate(JWT_AUTH_PROVIDER) {
             registerListAlertsRoute(alertServiceProvider)
             registerGetAlertRoute(alertServiceProvider)
             registerAlertTimelineRoute(alertServiceProvider)
@@ -187,31 +242,59 @@ private fun Route.registerAlertRoutes(
             registerAddAlertNoteRoute(alertServiceProvider)
             registerViewAlertRoute(alertServiceProvider)
             registerUnavailableAlertRoute(alertServiceProvider)
-            registerDeclareIncidentFromAlertRoute(alertServiceProvider, onCallIncidentService)
+            registerDeclareIncidentFromAlertRoute(
+                alertServiceProvider,
+                onCallIncidentService,
+                incidentEntitlement,
+            )
         }
     }
 }
 
 private fun Route.registerDeclaredIncidentRoutes(
-    alertServiceProvider: () -> OnCallAlertService,
-    onCallIncidentService: OnCallIncidentService,
-    configurationService: IncidentConfigurationService,
-    responderService: IncidentResponderService,
-    timelineService: IncidentTimelineService,
+    services: IncidentRouteServices,
+    incidentEntitlement: IncidentEntitlement,
 ) {
     route("/v1/on-call/incidents") {
-        authenticate("auth-jwt") {
-            registerDeclareIncidentRoute(onCallIncidentService, configurationService)
-            registerListDeclaredIncidentsRoute(onCallIncidentService)
-            registerGetDeclaredIncidentRoute(onCallIncidentService)
-            registerResolveDeclaredIncidentRoute(onCallIncidentService)
-            registerAddAlertToIncidentRoute(alertServiceProvider, onCallIncidentService)
-            registerIncidentSourceRoutes(onCallIncidentService)
-            registerIncidentResponderRoutes(onCallIncidentService, responderService)
-            registerIncidentTimelineRoutes(timelineService)
-            registerAddIncidentNoteRoute(onCallIncidentService)
+        authenticate(JWT_AUTH_PROVIDER) {
+            installNativeIncidentRolloutGate("NativeIncidentRoutesGate", incidentEntitlement)
+            registerDeclareIncidentRoute(services.incidentService, services.configurationService)
+            registerListDeclaredIncidentsRoute(services.incidentService)
+            registerGetDeclaredIncidentRoute(services.incidentService)
+            registerResolveDeclaredIncidentRoute(services.incidentService)
+            registerAddAlertToIncidentRoute(services.alertServiceProvider, services.incidentService)
+            registerIncidentSourceRoutes(services.incidentService)
+            registerIncidentResponderRoutes(services.incidentService, services.responderService)
+            registerIncidentTimelineRoutes(services.timelineService)
+            registerAddIncidentNoteRoute(services.incidentService)
         }
     }
+}
+
+internal fun Route.installNativeIncidentRolloutGate(
+    pluginName: String,
+    incidentEntitlement: IncidentEntitlement,
+) {
+    install(
+        createRouteScopedPlugin(pluginName) {
+            on(AuthenticationChecked) { call ->
+                if (call.isHandled) return@on
+                val organizationId = call.principal<JWTPrincipal>()?.currentOrgIdOrNull()
+                if (organizationId == null) {
+                    OperationalMetrics.recordNativeIncidentRolloutDecision("http", "denied")
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Organization context is required"))
+                    return@on
+                }
+                if (!incidentEntitlement.isEnabled(organizationId)) {
+                    OperationalMetrics.recordNativeIncidentRolloutDecision("http", "denied")
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        ErrorResponse("Native incident response is not enabled for this organization"),
+                    )
+                }
+            }
+        },
+    )
 }
 
 private fun Route.registerIncidentSourceRoutes(onCallIncidentService: OnCallIncidentService) {
@@ -735,9 +818,18 @@ private fun Route.registerUnavailableAlertRoute(alertServiceProvider: () -> OnCa
 private fun Route.registerDeclareIncidentFromAlertRoute(
     alertServiceProvider: () -> OnCallAlertService,
     onCallIncidentService: OnCallIncidentService,
+    incidentEntitlement: IncidentEntitlement,
 ) {
     post("/{alertId}/declare-incident") {
         val context = call.requireUserContext() ?: return@post
+        if (!incidentEntitlement.isEnabled(context.organizationId)) {
+            OperationalMetrics.recordNativeIncidentRolloutDecision("http", "denied")
+            call.respond(
+                HttpStatusCode.Forbidden,
+                ErrorResponse("Native incident response is not enabled for this organization"),
+            )
+            return@post
+        }
         val alertId = call.requireAlertId(context.organizationId, "alertId") ?: return@post
         val alertService = alertServiceProvider()
         if (!call.ensureAlertInOrganization(alertService, alertId, context.organizationId)) return@post

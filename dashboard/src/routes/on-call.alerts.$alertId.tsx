@@ -37,6 +37,7 @@ import {cn} from '@/lib/utils'
 import {isUuidResourceId} from '@/lib/api/utils'
 import {IncidentDeclarationForm} from '@/components/on-call/IncidentDeclarationForm'
 import type {DeclareIncidentInput} from '@/lib/api/types'
+import {useNativeIncidentRollout} from '@/hooks/useNativeIncidentRollout'
 
 export const Route = createFileRoute('/on-call/alerts/$alertId')({
   component: AlertDetailPage,
@@ -119,6 +120,7 @@ function AlertDetailPage() {
   const {toast} = useToast()
   const [note, setNote] = useState('')
   const [declareOpen, setDeclareOpen] = useState(false)
+  const nativeIncidentRollout = useNativeIncidentRollout()
   const normalizedAlertId = alertId.trim()
   const hasValidAlertId = isUuidResourceId(normalizedAlertId)
   const alertQueryKey = ['alert', normalizedAlertId] as const
@@ -354,34 +356,36 @@ function AlertDetailPage() {
               I'm not available
             </Button>
 
-            <Dialog open={declareOpen} onOpenChange={setDeclareOpen}>
-              <DialogTrigger asChild>
-                <Button variant="link" size="sm" className="h-auto p-0 text-muted-foreground hover:text-foreground text-xs">
-                  Declare Incident
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
-                <DialogHeader>
-                  <DialogTitle>Declare incident</DialogTitle>
-                  <DialogDescription>
-                    Declare an incident from this alert. Details are prefilled and stay editable.
-                  </DialogDescription>
-                </DialogHeader>
-                {declareOpen && (
-                  <IncidentDeclarationForm
-                    defaults={{
-                      title: alert.title,
-                      description: alert.description || '',
-                      severity: 'SEV-2',
-                    }}
-                    originHint={`Declaring from alert "${alert.title}" — the alert will be linked to the new incident.`}
-                    isSubmitting={declareMutation.isPending}
-                    onSubmit={(input) => declareMutation.mutate(input)}
-                    onCancel={() => setDeclareOpen(false)}
-                  />
-                )}
-              </DialogContent>
-            </Dialog>
+            {nativeIncidentRollout.enabled && (
+              <Dialog open={declareOpen} onOpenChange={setDeclareOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="link" size="sm" className="h-auto p-0 text-muted-foreground hover:text-foreground text-xs">
+                    Declare Incident
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Declare incident</DialogTitle>
+                    <DialogDescription>
+                      Declare an incident from this alert. Details are prefilled and stay editable.
+                    </DialogDescription>
+                  </DialogHeader>
+                  {declareOpen && (
+                    <IncidentDeclarationForm
+                      defaults={{
+                        title: alert.title,
+                        description: alert.description || '',
+                        severity: 'SEV-2',
+                      }}
+                      originHint={`Declaring from alert "${alert.title}" — the alert will be linked to the new incident.`}
+                      isSubmitting={declareMutation.isPending}
+                      onSubmit={(input) => declareMutation.mutate(input)}
+                      onCancel={() => setDeclareOpen(false)}
+                    />
+                  )}
+                </DialogContent>
+              </Dialog>
+            )}
           </div>
         </div>
       )}

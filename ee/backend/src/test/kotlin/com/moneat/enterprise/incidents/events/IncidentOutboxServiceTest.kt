@@ -10,6 +10,7 @@ import com.moneat.enterprise.incidents.commands.DeclareIncidentCommand
 import com.moneat.enterprise.incidents.commands.IncidentCommandActor
 import com.moneat.enterprise.incidents.commands.IncidentCommandPolicy
 import com.moneat.enterprise.incidents.commands.IncidentCommandService
+import com.moneat.enterprise.incidents.commands.IncidentEntitlement
 import com.moneat.enterprise.incidents.commands.UpdateIncidentCommand
 import com.moneat.enterprise.incidents.models.IncidentDeliveryStatus
 import com.moneat.enterprise.incidents.models.IncidentOutboxStatus
@@ -49,10 +50,38 @@ class IncidentOutboxServiceTest {
     }
 
     @Test
+    fun `disabled rollout defers events without attempts or data loss and resumes after enablement`() = runBlocking {
+        declare("rollout-deferred")
+        val consumer = RecordingConsumer()
+        var rolloutEnabled = false
+        val service =
+            IncidentOutboxService(
+                consumers = listOf(consumer),
+                workerId = "rollout-worker",
+                clock = clock,
+                entitlement = IncidentEntitlement { rolloutEnabled },
+            )
+
+        assertEquals(1, service.processBatch())
+        assertEquals(emptyList(), consumer.attemptedKeys)
+        transaction {
+            val event = NativeIncidentOutboxEvents.selectAll().single()
+            assertEquals(IncidentOutboxStatus.PENDING.wire, event[NativeIncidentOutboxEvents.status])
+            assertEquals(0, event[NativeIncidentOutboxEvents.attemptCount])
+            assertEquals(0, NativeIncidentOutboxDeliveries.selectAll().count())
+        }
+
+        rolloutEnabled = true
+        clock.advance(31.seconds)
+        assertEquals(1, service.processBatch())
+        assertEquals(listOf("${member.organizationId}:rollout-deferred:recording"), consumer.completedKeys)
+    }
+
+    @Test
     fun `retries failed delivery without duplicating a completed consumer effect`() = runBlocking {
         declare("outbox-retry")
         val consumer = RecordingConsumer(failuresRemaining = 1)
-        val service = IncidentOutboxService(listOf(consumer), workerId = "test-worker", clock = clock)
+        val service = rolloutEnabledService(consumer, "test-worker")
 
         assertEquals(1, service.processBatch())
         assertEquals(1, consumer.attemptedKeys.size)
@@ -93,7 +122,7 @@ class IncidentOutboxServiceTest {
             }
         }
         val consumer = RecordingConsumer()
-        val restarted = IncidentOutboxService(listOf(consumer), workerId = "restarted-worker", clock = clock)
+        val restarted = rolloutEnabledService(consumer, "restarted-worker")
 
         assertEquals(1, restarted.processBatch())
         assertEquals(listOf("${member.organizationId}:outbox-crash:recording"), consumer.completedKeys)
@@ -112,7 +141,7 @@ class IncidentOutboxServiceTest {
             ),
         )
         val consumer = RecordingConsumer(failuresRemaining = 1)
-        val service = IncidentOutboxService(listOf(consumer), workerId = "ordering-worker", clock = clock)
+        val service = rolloutEnabledService(consumer, "ordering-worker")
 
         assertEquals(1, service.processBatch(limit = 2))
         assertEquals(listOf("INCIDENT_DECLARE"), consumer.attemptedEventTypes)
@@ -139,7 +168,7 @@ class IncidentOutboxServiceTest {
             ),
         )
         val consumer = RecordingConsumer(failuresRemaining = 8)
-        val service = IncidentOutboxService(listOf(consumer), workerId = "dead-letter-worker", clock = clock)
+        val service = rolloutEnabledService(consumer, "dead-letter-worker")
 
         repeat(8) {
             assertEquals(1, service.processBatch(limit = 2))
@@ -183,6 +212,14 @@ class IncidentOutboxServiceTest {
                 description = null,
                 severity = "SEV-1",
             ),
+        )
+
+    private fun rolloutEnabledService(consumer: NativeIncidentEventConsumer, workerId: String) =
+        IncidentOutboxService(
+            consumers = listOf(consumer),
+            workerId = workerId,
+            clock = clock,
+            entitlement = IncidentEntitlement { true },
         )
 
     private fun actor() = IncidentCommandActor(member.organizationId, member.userId, "REST")
