@@ -10,6 +10,7 @@ import com.moneat.enterprise.incidents.IncidentTestDatabase
 import com.moneat.enterprise.incidents.SeededMember
 import com.moneat.enterprise.NativeIncidentRolloutState
 import com.moneat.enterprise.NativeIncidentRolloutStatus
+import com.moneat.enterprise.NativeIncidentEntitlementStatus
 import com.moneat.enterprise.incidents.commands.IncidentCommandPolicy
 import com.moneat.enterprise.incidents.commands.IncidentCommandService
 import com.moneat.enterprise.incidents.commands.IncidentEntitlement
@@ -84,6 +85,25 @@ class IncidentRoutesTest {
         assertEquals(false, body["enabled"]?.jsonPrimitive?.content?.toBoolean())
         assertEquals("production", body.requiredString("environment"))
         assertEquals("DISABLED", body.requiredString("state"))
+        assertEquals(true, body["entitlementEnabled"]?.jsonPrimitive?.content?.toBoolean())
+        assertEquals("TEST", body.requiredString("plan"))
+        assertEquals(false, body["externalProviderPassthroughAffected"]?.jsonPrimitive?.content?.toBoolean())
+    }
+
+    @Test
+    fun `plan entitlement independently denies native routes`() = testApplication {
+        application { installIncidentRoutes(entitlementEnabled = false) }
+
+        val incidents = client.get("/v1/on-call/incidents") { authorize() }
+        val capabilities = client.get("/v1/on-call/incident-response/capabilities") { authorize() }
+
+        assertEquals(HttpStatusCode.Forbidden, incidents.status)
+        assertEquals(HttpStatusCode.OK, capabilities.status)
+        val body = capabilities.jsonObject()
+        assertEquals(false, body["enabled"]?.jsonPrimitive?.content?.toBoolean())
+        assertEquals("ENABLED", body["state"]?.jsonPrimitive?.content)
+        assertEquals(false, body["entitlementEnabled"]?.jsonPrimitive?.content?.toBoolean())
+        assertEquals("Upgrade the plan", body.requiredString("entitlementReason"))
         assertEquals(false, body["externalProviderPassthroughAffected"]?.jsonPrimitive?.content?.toBoolean())
     }
 
@@ -384,7 +404,10 @@ class IncidentRoutesTest {
         assertEquals(HttpStatusCode.OK, selfRemoval.status)
     }
 
-    private fun Application.installIncidentRoutes(rolloutEnabled: Boolean = true) {
+    private fun Application.installIncidentRoutes(
+        rolloutEnabled: Boolean = true,
+        entitlementEnabled: Boolean = true,
+    ) {
         install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
         install(Authentication) {
             jwt("auth-jwt") {
@@ -404,7 +427,7 @@ class IncidentRoutesTest {
                 onCallIncidentService = OnCallIncidentService(
                     IncidentCommandService(policy = IncidentCommandPolicy.allowForTests()),
                 ),
-                incidentEntitlement = IncidentEntitlement { rolloutEnabled },
+                incidentEntitlement = IncidentEntitlement { rolloutEnabled && entitlementEnabled },
                 rolloutStatusProvider = {
                     NativeIncidentRolloutStatus(
                         enabled = rolloutEnabled,
@@ -415,6 +438,13 @@ class IncidentRoutesTest {
                             } else {
                                 NativeIncidentRolloutState.DISABLED
                             },
+                    )
+                },
+                entitlementStatusProvider = {
+                    NativeIncidentEntitlementStatus(
+                        enabled = entitlementEnabled,
+                        plan = "TEST",
+                        reason = if (entitlementEnabled) null else "Upgrade the plan",
                     )
                 },
             )

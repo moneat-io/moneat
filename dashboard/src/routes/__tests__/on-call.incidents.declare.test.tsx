@@ -58,6 +58,10 @@ describe('standalone incident declaration', () => {
       enabled: true,
       environment: 'production',
       state: 'ENABLED',
+      entitlementEnabled: true,
+      plan: 'TEAM',
+      entitlementReason: null,
+      quotas: {},
       externalProviderPassthroughAffected: false,
     })
   })

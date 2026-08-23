@@ -293,3 +293,5 @@ class IncidentCommandDeniedException(message: String) : IncidentCommandException
 class IncidentCommandConflictException(message: String) : IncidentCommandException(message)
 
 class IncidentCommandNotFoundException(message: String) : IncidentCommandException(message)
+
+class IncidentCommandQuotaExceededException(message: String) : IncidentCommandException(message)

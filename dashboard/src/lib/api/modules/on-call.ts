@@ -86,11 +86,42 @@ function normalizeNativeIncidentCapabilities(raw: unknown): NativeIncidentCapabi
     ? (state as NativeIncidentRolloutState)
     : 'EVALUATION_ERROR'
   return {
-    enabled: value.enabled === true && normalizedState === 'ENABLED',
+    enabled:
+      value.enabled === true && normalizedState === 'ENABLED' && value.entitlementEnabled === true,
     environment: typeof value.environment === 'string' ? value.environment : '',
     state: normalizedState,
+    entitlementEnabled: value.entitlementEnabled === true,
+    plan: typeof value.plan === 'string' ? value.plan : 'UNKNOWN',
+    entitlementReason:
+      typeof value.entitlementReason === 'string' ? value.entitlementReason : null,
+    quotas: normalizeNativeIncidentQuotas(value.quotas),
     externalProviderPassthroughAffected: value.externalProviderPassthroughAffected === true,
   }
+}
+
+function normalizeNativeIncidentQuotas(
+  raw: unknown
+): NativeIncidentCapabilities['quotas'] {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return {}
+  return Object.fromEntries(
+    Object.entries(raw).flatMap(([key, candidate]) => {
+      if (typeof candidate !== 'object' || candidate === null || Array.isArray(candidate)) return []
+      const quota = candidate as Record<string, unknown>
+      if (
+        typeof quota.limit !== 'number' ||
+        typeof quota.used !== 'number' ||
+        typeof quota.remaining !== 'number'
+      ) {
+        return []
+      }
+      return [[key, {
+        limit: quota.limit,
+        used: quota.used,
+        remaining: quota.remaining,
+        exhausted: quota.exhausted === true,
+      }]]
+    })
+  )
 }
 
 function appendAlertStatusFilters(

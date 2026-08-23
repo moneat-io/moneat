@@ -431,6 +431,89 @@ class IncidentCommandServiceTest {
         }
     }
 
+    @Test
+    fun `quota exhaustion rejects declaration without mutation`() {
+        val quotaDeniedService =
+            IncidentCommandService(
+                policy = IncidentCommandPolicy(
+                    entitlement = IncidentEntitlement { true },
+                    authorizer = IncidentCommandAuthorizer { _, _ -> true },
+                    quotaAdmission = IncidentQuotaAdmission {
+                        com.moneat.enterprise.NativeIncidentQuotaDecision(
+                            allowed = false,
+                            status = com.moneat.enterprise.NativeIncidentQuotaStatus(
+                                com.moneat.enterprise.NativeIncidentQuotaKey.NATIVE_INCIDENTS,
+                                limit = 1,
+                                used = 1,
+                            ),
+                            message = "native incidents quota is exhausted; upgrade the plan or reduce usage",
+                        )
+                    },
+                ),
+            )
+
+        val error = assertFailsWith<IncidentCommandQuotaExceededException> {
+            quotaDeniedService.execute(
+                DeclareIncidentCommand(
+                    commandKey = "quota-denied",
+                    actor = actor(),
+                    title = "Denied by quota",
+                    description = null,
+                    severity = "SEV-3",
+                ),
+            )
+        }
+
+        assertTrue(error.message.orEmpty().contains("upgrade the plan"))
+        transaction {
+            assertEquals(0, NativeIncidentCommands.selectAll().count())
+            assertEquals(0, NativeIncidentOutboxEvents.selectAll().count())
+        }
+    }
+
+    @Test
+    fun `declaration replay returns before quota admission`() {
+        var quotaAdmissions = 0
+        val quotaAwareService =
+            IncidentCommandService(
+                policy = IncidentCommandPolicy(
+                    entitlement = IncidentEntitlement { true },
+                    authorizer = IncidentCommandAuthorizer { _, _ -> true },
+                    quotaAdmission = IncidentQuotaAdmission {
+                        quotaAdmissions += 1
+                        com.moneat.enterprise.NativeIncidentQuotaDecision(
+                            allowed = true,
+                            status = com.moneat.enterprise.NativeIncidentQuotaStatus(
+                                key = com.moneat.enterprise.NativeIncidentQuotaKey.NATIVE_INCIDENTS,
+                                limit = 10,
+                                used = quotaAdmissions.toLong(),
+                            ),
+                        )
+                    },
+                ),
+            )
+        val command = DeclareIncidentCommand(
+            commandKey = "quota-replay",
+            actor = actor(),
+            title = "Replay-safe declaration",
+            description = null,
+            severity = "SEV-3",
+        )
+
+        val declared = quotaAwareService.execute(command)
+        val replay = quotaAwareService.execute(command)
+
+        assertEquals(declared.incidentId, replay.incidentId)
+        assertEquals(declared.incidentResourceId, replay.incidentResourceId)
+        assertEquals(declared.version, replay.version)
+        assertTrue(replay.replayed)
+        assertEquals(1, quotaAdmissions)
+        transaction {
+            assertEquals(1, NativeIncidentCommands.selectAll().count())
+            assertEquals(1, NativeIncidentOutboxEvents.selectAll().count())
+        }
+    }
+
     private fun actor() = IncidentCommandActor(member.organizationId, member.userId, "REST")
 
     private fun seedAlert(deduplicationKey: String): Int =

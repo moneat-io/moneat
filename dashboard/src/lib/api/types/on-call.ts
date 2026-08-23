@@ -320,6 +320,18 @@ export interface NativeIncidentCapabilities {
   /** Feature-flag environment the decision was evaluated in. */
   environment: string
   state: NativeIncidentRolloutState
+  /** Paid-plan entitlement is evaluated independently from rollout state. */
+  entitlementEnabled: boolean
+  plan: string
+  entitlementReason: string | null
+  quotas: Record<string, NativeIncidentQuotaStatus>
   /** Always false: forwarded external-provider incident passthrough is never gated by this rollout. */
   externalProviderPassthroughAffected: boolean
+}
+
+export interface NativeIncidentQuotaStatus {
+  limit: number
+  used: number
+  remaining: number
+  exhausted: boolean
 }

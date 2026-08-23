@@ -215,8 +215,52 @@ object FeatureRegistry {
             }
     }
 
+    /** Resolve the paid-plan entitlement and quota state. Missing billing dependencies fail closed. */
+    fun nativeIncidentEntitlementStatus(organizationId: Int): NativeIncidentEntitlementStatus {
+        val bridge = modules.filterIsInstance<NativeIncidentEntitlementBridge>().firstOrNull()
+            ?: return NativeIncidentEntitlementStatus(
+                enabled = false,
+                plan = "UNKNOWN",
+                reason = "Native incident billing entitlement provider is unavailable",
+            )
+        return suspendRunCatching { bridge.status(organizationId) }
+            .getOrElse { error ->
+                logger.error(error) {
+                    "Native incident entitlement provider failed for organization $organizationId"
+                }
+                NativeIncidentEntitlementStatus(
+                    enabled = false,
+                    plan = "UNKNOWN",
+                    reason = "Native incident billing entitlement evaluation failed",
+                )
+            }
+    }
+
     fun isNativeIncidentResponseEnabled(organizationId: Int): Boolean =
-        nativeIncidentRolloutStatus(organizationId).enabled
+        nativeIncidentRolloutStatus(organizationId).enabled &&
+            isNativeIncidentEntitlementEnabled(organizationId)
+
+    fun consumeNativeIncidentQuota(
+        organizationId: Int,
+        quotaKey: NativeIncidentQuotaKey,
+        quantity: Long,
+        idempotencyKey: String,
+    ): NativeIncidentQuotaDecision {
+        val bridge = modules.filterIsInstance<NativeIncidentEntitlementBridge>().firstOrNull()
+            ?: return unavailableQuotaDecision(quotaKey)
+        return bridge.consume(organizationId, quotaKey, quantity, idempotencyKey)
+    }
+
+    fun reconcileNativeIncidentQuota(
+        organizationId: Int,
+        quotaKey: NativeIncidentQuotaKey,
+        authoritativeUsage: Long,
+        idempotencyKey: String,
+    ): NativeIncidentQuotaDecision {
+        val bridge = modules.filterIsInstance<NativeIncidentEntitlementBridge>().firstOrNull()
+            ?: return unavailableQuotaDecision(quotaKey)
+        return bridge.reconcile(organizationId, quotaKey, authoritativeUsage, idempotencyKey)
+    }
 
     fun recordNativeIncidentRolloutDecision(surface: String, outcome: String) {
         OperationalMetrics.recordNativeIncidentRolloutDecision(surface, outcome)
@@ -253,6 +297,24 @@ object FeatureRegistry {
         modules.clear()
         license = null
         initialized = false
+    }
+
+    private fun unavailableQuotaDecision(quotaKey: NativeIncidentQuotaKey): NativeIncidentQuotaDecision =
+        NativeIncidentQuotaDecision(
+            allowed = false,
+            status = NativeIncidentQuotaStatus(quotaKey, limit = 0, used = 0),
+            message = "Native incident billing entitlement provider is unavailable",
+        )
+
+    private fun isNativeIncidentEntitlementEnabled(organizationId: Int): Boolean {
+        val bridge = modules.filterIsInstance<NativeIncidentEntitlementBridge>().firstOrNull() ?: return false
+        return suspendRunCatching { bridge.isEnabled(organizationId) }
+            .getOrElse { error ->
+                logger.error(error) {
+                    "Native incident entitlement provider failed for organization $organizationId"
+                }
+                false
+            }
     }
 
     private const val ON_CALL_MODULE_NAME = "On-Call"

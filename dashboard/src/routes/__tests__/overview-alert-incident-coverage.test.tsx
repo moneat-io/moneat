@@ -489,6 +489,10 @@ describe('overview alert and incident dashboard', () => {
       enabled: true,
       environment: 'production',
       state: 'ENABLED',
+      entitlementEnabled: true,
+      plan: 'TEAM',
+      entitlementReason: null,
+      quotas: {},
       externalProviderPassthroughAffected: false,
     })
     mockApi.getOnCallIncidents.mockResolvedValue([declaredIncident])

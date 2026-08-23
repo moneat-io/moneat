@@ -24,10 +24,12 @@ import com.moneat.billing.routes.stripeWebhookRoutes
 import com.moneat.billing.services.AdminBillingService
 import com.moneat.billing.services.BillingBackgroundService
 import com.moneat.billing.services.BillingQuotaService
+import com.moneat.billing.services.BillingNativeIncidentEntitlementBridge
 import com.moneat.billing.services.EntitlementService
 import com.moneat.billing.services.PricingTierService
 import com.moneat.billing.services.StripeService
 import com.moneat.enterprise.EnterpriseModule
+import com.moneat.enterprise.NativeIncidentEntitlementBridge
 import com.moneat.shared.repositories.OrganizationRepository
 import io.ktor.server.application.Application
 import io.ktor.server.auth.authenticate
@@ -44,7 +46,11 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 import java.util.concurrent.atomic.AtomicReference
 
-class BillingModule : EnterpriseModule {
+class BillingModule(
+    nativeIncidentEntitlementBridge: NativeIncidentEntitlementBridge =
+        BillingNativeIncidentEntitlementBridge(),
+) : EnterpriseModule,
+    NativeIncidentEntitlementBridge by nativeIncidentEntitlementBridge {
     override val name: String = "Billing"
     private val runningBackgroundJobs = AtomicReference<RunningBillingJobs?>(null)
     private val lifecycleLock = Any()
