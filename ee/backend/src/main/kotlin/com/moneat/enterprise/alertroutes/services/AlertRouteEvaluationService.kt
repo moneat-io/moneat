@@ -21,6 +21,7 @@ import com.moneat.enterprise.alertroutes.evaluation.AlertRouteTeamEscalationReso
 import com.moneat.enterprise.incidents.commands.IncidentCommandNotFoundException
 import com.moneat.shared.models.EscalationPolicies
 import com.moneat.shared.models.OrganizationTeams
+import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -77,7 +78,8 @@ class AlertRouteEvaluationService(
     /** Explain match and non-match for a supplied alert sample. */
     fun preview(organizationId: Int, sample: AlertRouteSampleInput): AlertRouteEvaluationResult {
         policy.requireReadAllowed(organizationId)
-        val ownership = ownershipResolver.resolve(organizationId, sample.metadata)
+        val approved = AlertRouteMetadataPolicy.approve(sample.metadata.mapValues { JsonPrimitive(it.value) })
+        val ownership = ownershipResolver.resolve(organizationId, approved.values)
         return evaluateContext(AlertRouteContextFactory.fromSample(organizationId, sample, ownership))
     }
 
@@ -89,7 +91,8 @@ class AlertRouteEvaluationService(
     ): AlertRouteEvaluationResult {
         policy.requireReadAllowed(organizationId)
         val sample = loadEpisodeSample(organizationId, episodeId, metadata)
-        val ownership = ownershipResolver.resolve(organizationId, sample.metadata)
+        val approved = AlertRouteMetadataPolicy.approve(sample.metadata.mapValues { JsonPrimitive(it.value) })
+        val ownership = ownershipResolver.resolve(organizationId, approved.values)
         return evaluateContext(AlertRouteContextFactory.fromSample(organizationId, sample, ownership))
     }
 

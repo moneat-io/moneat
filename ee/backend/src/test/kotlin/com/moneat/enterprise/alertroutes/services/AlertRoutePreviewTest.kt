@@ -121,7 +121,7 @@ class AlertRoutePreviewTest {
                     priority = "P1",
                     title = "Checkout latency high",
                     deduplicationKey = "moneat-dashboard-alert-42",
-                    metadata = mapOf("catalog_resource_id" to catalogResourceId),
+                    metadata = mapOf(" catalog_resource_id " to catalogResourceId),
                 ),
             )
 

@@ -74,7 +74,7 @@ class IncidentProviderRegistryTest {
         assertEquals(null, IncidentProviderRegistry.getProvider(providerType))
     }
 
-    private class TestIncidentProvider(override val providerType: String) : IncidentProvider {
+    private data class TestIncidentProvider(override val providerType: String) : IncidentProvider {
         override suspend fun sendAlert(event: AlertLifecycleEvent, config: ProviderConfig): Result<String> =
             Result.success("ok")
 
