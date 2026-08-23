@@ -40,6 +40,7 @@ import { integrationsMethods } from './modules/integrations'
 import { connectorsMethods } from './modules/connectors'
 import { statusPagesMethods } from './modules/status-pages'
 import { onCallMethods } from './modules/on-call'
+import { alertRoutesMethods } from './modules/alert-routes'
 import { aiMethods } from './modules/ai'
 import { llmMethods } from './modules/llm'
 import { analyticsMethods } from './modules/analytics'
@@ -84,6 +85,7 @@ export const api = {
   ...connectorsMethods(core),
   ...statusPagesMethods(core),
   ...onCallMethods(core),
+  ...alertRoutesMethods(core),
   ...aiMethods(core),
   ...llmMethods(core),
   ...analyticsMethods(core),

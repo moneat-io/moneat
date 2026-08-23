@@ -52,6 +52,8 @@ import {
   useNativeIncidentRollout,
 } from '@/hooks/useNativeIncidentRollout'
 import {incidentStatusConfig, isResolvableIncidentStatus} from '@/lib/incident-status'
+import {IncidentTriageActions} from '@/components/on-call/IncidentTriageActions'
+import {isTriageIncident} from '@/components/on-call/triage'
 import {IncidentTimelinePanel} from '@/components/on-call/IncidentTimelinePanel'
 import {IncidentRolesPanel} from '@/components/on-call/IncidentRolesPanel'
 import {IncidentSourcesPanel} from '@/components/on-call/IncidentSourcesPanel'
@@ -214,6 +216,45 @@ function DeclaredIncidentDetailComponent() {
           <span>
             This is a <span className="font-medium">{modeMeta.label.toLowerCase()}</span> incident — {modeMeta.description.toLowerCase()}.
           </span>
+        </div>
+      )}
+
+      {/* Triage Banner */}
+      {isTriageIncident(incident.status) && (
+        <div className="flex flex-col gap-3 rounded-xl border border-warning-border bg-warning-bg p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-warning-bg">
+              <StatusIcon className="h-5 w-5 text-warning-fg" />
+            </div>
+            <div>
+              <p className="text-sm font-medium">This incident is awaiting triage</p>
+              <p className="text-xs text-muted-foreground">
+                Accept it into active response, merge it into another incident, or decline it.
+              </p>
+            </div>
+          </div>
+          <IncidentTriageActions incident={incident} layout="banner" onMutated={refreshIncident} />
+        </div>
+      )}
+
+      {/* Merged notice */}
+      {incident.status === 'MERGED' && incident.mergedIntoIncidentId && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border bg-muted/30 p-4">
+          <p className="text-sm text-muted-foreground">
+            This incident was merged into another incident.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              navigate({
+                to: '/on-call/incidents/$incidentId',
+                params: {incidentId: incident.mergedIntoIncidentId!},
+              })
+            }
+          >
+            View incident
+          </Button>
         </div>
       )}
 

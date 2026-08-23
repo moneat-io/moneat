@@ -37,13 +37,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {Filter, Zap, CheckCircle2, ChevronRight, FileText, Plus, ShieldAlert} from 'lucide-react'
+import {Filter, Zap, CheckCircle2, ChevronRight, Clock, FileText, Plus, ShieldAlert} from 'lucide-react'
 import {useState} from 'react'
 import {cn} from '@/lib/utils'
 import {useToast} from '@/hooks/useToast'
 import {incidentStatusConfig} from '@/lib/incident-status'
-import type {DeclareIncidentInput, OnCallIncidentStatus} from '@/lib/api/types'
+import type {DeclareIncidentInput, OnCallIncident, OnCallIncidentStatus} from '@/lib/api/types'
 import {IncidentDeclarationForm} from '@/components/on-call/IncidentDeclarationForm'
+import {IncidentTriageActions, TriageSeverityBadge} from '@/components/on-call/IncidentTriageActions'
+import {isTriageIncident} from '@/components/on-call/triage'
 import {
   nativeIncidentUnavailableCopy,
   useNativeIncidentRollout,
@@ -106,6 +108,7 @@ function DeclaredIncidents() {
     useState<IncidentStatusFilter>(DEFAULT_DECLARED_INCIDENT_STATUS_FILTER)
   const [severityFilter, setSeverityFilter] = useState<IncidentSeverityFilter>('all')
   const [declareOpen, setDeclareOpen] = useState(false)
+  const [triageOnly, setTriageOnly] = useState(false)
   const rollout = useNativeIncidentRollout()
   const isDetailRoute = pathname.startsWith('/on-call/incidents/')
 
@@ -137,9 +140,29 @@ function DeclaredIncidents() {
     enabled: rollout.enabled,
   })
 
+  // The triage queue is its own always-on surface: responders act on unclassified
+  // incidents without hunting through the status filter. Fetched separately so the
+  // count and queue stay visible regardless of the main list's filter.
+  const {data: triageIncidents} = useQuery({
+    queryKey: ['on-call-incidents', 'triage-queue'],
+    queryFn: () => api.getOnCallIncidents({status: 'TRIAGE'}),
+    refetchInterval: 30000,
+    enabled: rollout.enabled,
+  })
+
+  // Treat the server-side status filter as an optimization, not a trust boundary.
+  // This also prevents stale/intermediate cache data from duplicating active
+  // incidents in the triage queue.
+  const triageQueue = (triageIncidents ?? []).filter((incident) =>
+    isTriageIncident(incident.status)
+  )
+  const triageCount = triageQueue.length
   const activeCount = incidents?.filter(i => i.status === 'ACTIVE').length || 0
   const resolvedCount = incidents?.filter(i => i.status === 'RESOLVED').length || 0
-  const hasIncidents = incidents !== undefined && incidents.length > 0
+  // Triage incidents live in the dedicated queue, so never duplicate them in the
+  // main list (they can otherwise appear under the "all statuses" filter).
+  const listIncidents = incidents?.filter((incident) => !isTriageIncident(incident.status)) ?? []
+  const hasIncidents = listIncidents.length > 0
 
   if (isDetailRoute) {
     return <Outlet />
@@ -196,13 +219,30 @@ function DeclaredIncidents() {
       </Dialog>
 
       {/* Stats Row */}
-      {!isLoading && incidents && incidents.length > 0 && (
-        <div className="flex gap-1.5">
+      {!isLoading && (triageCount > 0 || (incidents && incidents.length > 0)) && (
+        <div className="flex flex-wrap gap-1.5">
+          {triageCount > 0 && (
+            <button
+              onClick={() => setTriageOnly((prev) => !prev)}
+              className={cn(
+                'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors',
+                triageOnly
+                  ? 'bg-warning-bg border-warning-border text-warning-fg'
+                  : 'hover:bg-muted/60'
+              )}
+            >
+              <Clock className="h-3 w-3" />
+              <span>{triageCount} Needs triage</span>
+            </button>
+          )}
           <button
-            onClick={() => setStatusFilter(statusFilter === 'ACTIVE' ? 'all' : 'ACTIVE')}
+            onClick={() => {
+              setTriageOnly(false)
+              setStatusFilter(statusFilter === 'ACTIVE' ? 'all' : 'ACTIVE')
+            }}
             className={cn(
               'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors',
-              statusFilter === 'ACTIVE'
+              !triageOnly && statusFilter === 'ACTIVE'
                 ? 'bg-danger-bg border-danger-border text-danger-fg'
                 : 'hover:bg-muted/60'
             )}
@@ -211,10 +251,13 @@ function DeclaredIncidents() {
             <span>{activeCount} Active</span>
           </button>
           <button
-            onClick={() => setStatusFilter(statusFilter === 'RESOLVED' ? 'all' : 'RESOLVED')}
+            onClick={() => {
+              setTriageOnly(false)
+              setStatusFilter(statusFilter === 'RESOLVED' ? 'all' : 'RESOLVED')
+            }}
             className={cn(
               'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors',
-              statusFilter === 'RESOLVED'
+              !triageOnly && statusFilter === 'RESOLVED'
                 ? 'bg-success-bg border-success-border text-success-fg'
                 : 'hover:bg-muted/60'
             )}
@@ -225,6 +268,13 @@ function DeclaredIncidents() {
         </div>
       )}
 
+      {/* Triage queue */}
+      {triageCount > 0 && (
+        <TriageQueue incidents={triageQueue} />
+      )}
+
+      {(!triageOnly || triageCount === 0) && (
+      <>
       {/* Filters */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -276,7 +326,7 @@ function DeclaredIncidents() {
       )}
       {!isLoading && hasIncidents && (
         <div className="space-y-2">
-          {incidents?.map((incident) => {
+          {listIncidents.map((incident) => {
             const statusCfg = incidentStatusConfig(incident.status)
             const StatusIcon = statusCfg.icon
             return (
@@ -350,6 +400,69 @@ function DeclaredIncidents() {
           }
         />
       )}
+      </>
+      )}
+    </div>
+  )
+}
+
+// Dedicated triage queue: unclassified incidents a responder must accept, merge,
+// or decline. Rendered above the main list so the work is never buried. Each row's
+// title links to the detail view while the action controls sit outside the link.
+function TriageQueue({incidents}: Readonly<{incidents: OnCallIncident[]}>) {
+  return (
+    <Card className="border-l-[3px] border-l-warning-solid">
+      <CardContent className="p-3">
+        <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <Clock className="h-3.5 w-3.5" />
+          Needs triage
+          <Badge variant="warning" size="sm" className="ml-1">
+            {incidents.length}
+          </Badge>
+        </div>
+        <div className="space-y-2">
+          {incidents.map((incident) => (
+            <TriageQueueRow key={incident.id} incident={incident} />
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function TriageQueueRow({incident}: Readonly<{incident: OnCallIncident}>) {
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <TriageSeverityBadge severity={incident.severity} />
+          <Link
+            to="/on-call/incidents/$incidentId"
+            params={{incidentId: String(incident.id)}}
+            className="truncate text-sm font-semibold hover:underline"
+          >
+            {incident.title}
+          </Link>
+        </div>
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+          <span>Declared {timeAgo(incident.declaredAt)}</span>
+          {incident.declaredByName && (
+            <>
+              <span className="text-muted-foreground/40">·</span>
+              <span>by {incident.declaredByName}</span>
+            </>
+          )}
+          {incident.alertCount > 0 && (
+            <>
+              <span className="text-muted-foreground/40">·</span>
+              <span>{incident.alertCount} alert{incident.alertCount > 1 ? 's' : ''}</span>
+            </>
+          )}
+        </div>
+      </div>
+      <div className="shrink-0">
+        <IncidentTriageActions incident={incident} layout="inline" />
+      </div>
     </div>
   )
 }

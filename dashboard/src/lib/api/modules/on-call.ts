@@ -61,6 +61,9 @@ import type {
   CreateIncidentRoleInput,
   NativeIncidentCapabilities,
   NativeIncidentRolloutState,
+  AcceptIncidentInput,
+  DeclineIncidentInput,
+  MergeIncidentInput,
 } from '../types'
 
 const NATIVE_INCIDENT_ROLLOUT_STATES: ReadonlySet<NativeIncidentRolloutState> = new Set([
@@ -342,6 +345,28 @@ export function onCallMethods(core: ApiClientCore) {
       core.request<OnCallIncident>(`${base}/on-call/incidents/${encodeURIComponent(id)}/resolve`, {
         method: 'POST',
         body: JSON.stringify({ note }),
+      }),
+
+    // Triage lifecycle. Accept classifies a triage incident, Decline dismisses
+    // it, and Merge folds it into another incident. All carry an optional
+    // expectedVersion for optimistic concurrency; the backend replies 409 on a
+    // stale version.
+    acceptOnCallIncident: (id: string, input: AcceptIncidentInput = {}) =>
+      core.request<OnCallIncident>(`${base}/on-call/incidents/${encodeURIComponent(id)}/accept`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+
+    declineOnCallIncident: (id: string, input: DeclineIncidentInput = {}) =>
+      core.request<OnCallIncident>(`${base}/on-call/incidents/${encodeURIComponent(id)}/decline`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+
+    mergeOnCallIncident: (id: string, input: MergeIncidentInput) =>
+      core.request<OnCallIncident>(`${base}/on-call/incidents/${encodeURIComponent(id)}/merge`, {
+        method: 'POST',
+        body: JSON.stringify(input),
       }),
 
     // Canonical, evidence-preserving incident timeline. Supersedes the legacy
