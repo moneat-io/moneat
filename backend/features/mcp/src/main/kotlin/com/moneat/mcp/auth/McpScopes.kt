@@ -142,9 +142,11 @@ object McpScopes {
         "get_incident_context",
         "get_infrastructure_summary",
         "get_notification_preferences",
+        "get_on_call_alert",
         "get_overnight_summary",
         "get_weekly_report",
         "list_incidents",
+        "list_on_call_alerts",
         "list_schedules",
     ).associateWith { setOf(ORG_READ) }
 
