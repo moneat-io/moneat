@@ -22,6 +22,7 @@ import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.AlertStatus
+import com.moneat.alerts.services.AlertFanoutArm
 import com.moneat.alerts.services.AlertFanoutPlan
 import com.moneat.alerts.services.AlertFanoutState
 import com.moneat.alerts.services.AlertLifecycleOrchestrator
@@ -1132,7 +1133,11 @@ class MonitorAlertService(
                 ),
                 AlertFanoutPlan.FULL,
             )
-            result.outcomes.none { it.state == AlertFanoutState.FAILED }
+            result.outcomes
+                .filter {
+                    it.arm == AlertFanoutArm.NATIVE_ON_CALL ||
+                        it.arm == AlertFanoutArm.INCIDENT_PROVIDERS
+                }.none { it.state == AlertFanoutState.FAILED }
         }.getOrElse { e ->
             logger.error(e) { "Failed to resolve incident alert for host up" }
             false

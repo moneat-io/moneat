@@ -1046,13 +1046,17 @@ class MonitorAlertServiceCoverageTest {
             every { failedResult.outcomes } returns listOf(
                 AlertFanoutOutcome(AlertFanoutArm.INCIDENT_PROVIDERS, AlertFanoutState.FAILED, "resolve failed"),
             )
-            val succeededResult = mockk<com.moneat.alerts.services.AlertOrchestrationResult>(relaxed = true)
+            val nonIncidentFailureResult = mockk<com.moneat.alerts.services.AlertOrchestrationResult>()
+            every { nonIncidentFailureResult.outcomes } returns listOf(
+                AlertFanoutOutcome(AlertFanoutArm.WORKFLOW, AlertFanoutState.FAILED, "workflow unavailable"),
+                AlertFanoutOutcome(AlertFanoutArm.ROUTE, AlertFanoutState.FAILED, "route unavailable"),
+            )
             coEvery {
                 alertOrchestrator.process(
                     match { it.status == AlertStatus.RESOLVED && it.deduplicationKey == deduplicationKey },
                     AlertFanoutPlan.FULL,
                 )
-            } returnsMany listOf(failedResult, succeededResult)
+            } returnsMany listOf(failedResult, nonIncidentFailureResult)
 
             callPrivateSuspend("checkHostStatuses")
 
