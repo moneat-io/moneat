@@ -51,8 +51,36 @@ class IncidentProviderRegistryTest {
             }
 
         IncidentProviderRegistry.register(provider)
+        try {
+            assertEquals(provider, IncidentProviderRegistry.getProvider(provider.providerType))
+            assertTrue(provider.providerType in IncidentProviderRegistry.getProviderTypes())
+        } finally {
+            IncidentProviderRegistry.unregister(provider)
+        }
+    }
 
-        assertEquals(provider, IncidentProviderRegistry.getProvider(provider.providerType))
-        assertTrue(provider.providerType in IncidentProviderRegistry.getProviderTypes())
+    @Test
+    fun `unregister removes only the provider instance that is still registered`() {
+        val providerType = "test-provider-${System.nanoTime()}"
+        val first = TestIncidentProvider(providerType)
+        val replacement = TestIncidentProvider(providerType)
+        IncidentProviderRegistry.register(first)
+        IncidentProviderRegistry.register(replacement)
+
+        IncidentProviderRegistry.unregister(first)
+        assertEquals(replacement, IncidentProviderRegistry.getProvider(providerType))
+
+        IncidentProviderRegistry.unregister(replacement)
+        assertEquals(null, IncidentProviderRegistry.getProvider(providerType))
+    }
+
+    private class TestIncidentProvider(override val providerType: String) : IncidentProvider {
+        override suspend fun sendAlert(event: AlertLifecycleEvent, config: ProviderConfig): Result<String> =
+            Result.success("ok")
+
+        override suspend fun resolveAlert(deduplicationKey: String, config: ProviderConfig): Result<String> =
+            Result.success("ok")
+
+        override suspend fun testConnection(config: ProviderConfig): Result<Boolean> = Result.success(true)
     }
 }

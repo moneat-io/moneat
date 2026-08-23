@@ -9,6 +9,7 @@ import com.moneat.alerts.services.AlertEpisodeContext
 import com.moneat.enterprise.alertroutes.models.AlertRouteContextField
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlin.uuid.Uuid
 
 /**
@@ -185,7 +186,7 @@ object AlertRouteMetadataPolicy {
         return ApprovedMetadata(approved, dropped.sorted())
     }
 
-    private fun JsonElement.asPlainText(): String? = (this as? JsonPrimitive)?.content
+    private fun JsonElement.asPlainText(): String? = (this as? JsonPrimitive)?.contentOrNull
 }
 
 /** A hand-supplied alert used to preview routes without waiting for a real alert. */

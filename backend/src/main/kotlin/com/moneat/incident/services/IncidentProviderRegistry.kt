@@ -32,6 +32,11 @@ object IncidentProviderRegistry {
         providers[provider.providerType] = provider
     }
 
+    /** Remove this provider only if it is still the registered instance for its type. */
+    fun unregister(provider: IncidentProvider) {
+        providers.remove(provider.providerType, provider)
+    }
+
     /**
      * Get a provider by type.
      * @return The provider implementation, or null if not registered

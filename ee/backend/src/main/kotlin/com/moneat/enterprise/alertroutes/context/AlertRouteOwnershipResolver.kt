@@ -31,9 +31,9 @@ fun interface AlertRouteOwnershipResolver {
  */
 class DatabaseAlertRouteOwnershipResolver : AlertRouteOwnershipResolver {
     override fun resolve(organizationId: Int, metadata: Map<String, String>): AlertRouteOwnership {
-        val catalogResourceId = metadata[CATALOG_RESOURCE_KEY]
-        val serviceName = metadata[SERVICE_KEY] ?: metadata[SERVICE_NAME_KEY]
-        val teamHint = metadata[TEAM_KEY]
+        val catalogResourceId = metadata.nonBlankValue(CATALOG_RESOURCE_KEY)
+        val serviceName = metadata.nonBlankValue(SERVICE_KEY, SERVICE_NAME_KEY)
+        val teamHint = metadata.nonBlankValue(TEAM_KEY)
         if (catalogResourceId == null && teamHint == null && serviceName == null) {
             return AlertRouteOwnership.NONE
         }
@@ -93,6 +93,9 @@ class DatabaseAlertRouteOwnershipResolver : AlertRouteOwnershipResolver {
                     row[OrganizationTeams.slug].equals(normalized, ignoreCase = true)
             }
     }
+
+    private fun Map<String, String>.nonBlankValue(vararg keys: String): String? =
+        keys.firstNotNullOfOrNull { key -> get(key)?.trim()?.takeIf(String::isNotEmpty) }
 
     private companion object {
         const val CATALOG_RESOURCE_KEY = "catalog_resource_id"

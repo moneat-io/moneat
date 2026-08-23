@@ -30,6 +30,7 @@ import com.moneat.enterprise.alertroutes.models.AlertRouteTargetDefinition
 import com.moneat.enterprise.alertroutes.models.AlertRouteTargetKind
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -391,13 +392,17 @@ class AlertRouteEvaluatorTest {
                 source = AlertSource.DASHBOARD_ALERT,
                 deduplicationKey = "moneat-dashboard-alert-42",
                 organizationId = organizationId,
-                metadata = mapOf("service" to JsonArray(listOf(JsonPrimitive("checkout")))),
+                metadata =
+                    mapOf(
+                        "environment" to JsonArray(listOf(JsonPrimitive("production"))),
+                        "service" to JsonNull,
+                    ),
                 moneatUrl = "https://moneat.example/alerts/42",
             )
 
         val routeContext = AlertRouteContextFactory.fromLifecycleEvent(event)
 
         assertTrue(routeContext.metadata.isEmpty())
-        assertEquals(listOf("service"), routeContext.droppedMetadataKeys)
+        assertEquals(listOf("environment", "service"), routeContext.droppedMetadataKeys)
     }
 }

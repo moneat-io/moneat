@@ -113,8 +113,10 @@ internal object AlertRouteValidator {
             require(condition.values.isEmpty()) { "Operator ${condition.operator.wire} does not take values" }
         }
         if (condition.operator == AlertRouteConditionOperator.AT_LEAST_AS_SEVERE_AS) {
-            require(AlertPriority.fromString(condition.values.first()) != null) {
-                "Invalid alert priority: ${condition.values.first()}"
+            condition.values.forEach { value ->
+                require(AlertPriority.fromString(value) != null) {
+                    "Invalid alert priority: $value"
+                }
             }
         }
     }

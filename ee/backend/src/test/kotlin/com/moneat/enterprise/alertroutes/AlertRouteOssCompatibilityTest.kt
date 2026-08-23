@@ -62,6 +62,7 @@ class AlertRouteOssCompatibilityTest {
 
     @AfterEach
     fun tearDown() {
+        IncidentProviderRegistry.unregister(provider)
         AlertRouteTestDatabase.clearReference()
     }
 

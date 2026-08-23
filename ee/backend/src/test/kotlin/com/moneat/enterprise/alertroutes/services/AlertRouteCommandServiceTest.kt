@@ -566,6 +566,29 @@ class AlertRouteCommandServiceTest {
         assertFailsWith<IllegalArgumentException> {
             service.execute(
                 CreateAlertRouteCommand(
+                    commandKey = "bad-priority-list",
+                    actor = admin(),
+                    specification =
+                        specification().copy(
+                            conditionGroups =
+                                listOf(
+                                    AlertRouteConditionGroupInput(
+                                        listOf(
+                                            AlertRouteConditionInput(
+                                                field = AlertRouteContextField.PRIORITY,
+                                                operator = AlertRouteConditionOperator.AT_LEAST_AS_SEVERE_AS,
+                                                values = listOf("P1", "not-a-priority"),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                        ),
+                ),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.execute(
+                CreateAlertRouteCommand(
                     commandKey = "bad-incident",
                     actor = admin(),
                     specification =

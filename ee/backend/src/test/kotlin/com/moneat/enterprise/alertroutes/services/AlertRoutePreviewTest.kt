@@ -132,6 +132,40 @@ class AlertRoutePreviewTest {
     }
 
     @Test
+    fun `preview treats blank ownership metadata the same as live evaluation`() {
+        commandService.execute(
+            CreateAlertRouteCommand(
+                commandKey = "create-service-ownership-route",
+                actor = AlertRouteActor(organization.organizationId, organization.adminUserId, "TEST"),
+                specification =
+                    AlertRouteSpecification(
+                        key = "service-ownership",
+                        name = "Service ownership",
+                        paging =
+                            AlertRoutePagingInput(
+                                mode = AlertRoutePagingMode.EVERY_EPISODE,
+                                targets =
+                                    listOf(
+                                        AlertRouteTargetInput(
+                                            kind = AlertRouteTargetKind.OWNERSHIP_DERIVED,
+                                            ownershipSource = AlertRouteOwnershipSource.SERVICE,
+                                        ),
+                                    ),
+                            ),
+                    ),
+            ),
+        )
+
+        val result =
+            evaluationService.preview(
+                organization.organizationId,
+                AlertRouteSampleInput(source = "DASHBOARD_ALERT", metadata = mapOf("service" to "")),
+            )
+
+        assertEquals(listOf("OWNERSHIP_DERIVED:SERVICE"), result.decision!!.paging.unresolvedTargets)
+    }
+
+    @Test
     fun `preview explains non-matching routes without selecting one`() {
         seedOwnedCatalogResource()
         createCatalogRoute()
