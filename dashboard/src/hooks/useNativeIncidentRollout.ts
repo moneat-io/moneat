@@ -16,9 +16,11 @@
 
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
+import {API_BASE} from '@/lib/api/client'
 import type {NativeIncidentCapabilities, NativeIncidentRolloutState} from '@/lib/api/types'
 
-export const NATIVE_INCIDENT_ROLLOUT_QUERY_KEY = ['native-incident-rollout'] as const
+export const nativeIncidentRolloutQueryKey = (organizationId: string) =>
+  ['native-incident-rollout', API_BASE, organizationId] as const
 
 export interface NativeIncidentRollout {
   /** True once the capability has loaded and native incident response is enabled. */
@@ -41,18 +43,26 @@ export interface NativeIncidentRollout {
  * The 30s stale window matches the backend's cached rollout convergence window.
  */
 export function useNativeIncidentRollout(): NativeIncidentRollout {
-  const {data, isLoading, isError} = useQuery({
-    queryKey: NATIVE_INCIDENT_ROLLOUT_QUERY_KEY,
+  const currentUser = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: () => api.getCurrentUser(),
+  })
+  const organizationId = currentUser.data?.orgId
+  const capability = useQuery({
+    queryKey: nativeIncidentRolloutQueryKey(organizationId ?? 'unresolved'),
     queryFn: () => api.getNativeIncidentCapabilities(),
+    enabled: organizationId !== undefined && !currentUser.isFetching,
     staleTime: 30_000,
   })
+  const isLoading = currentUser.isLoading || currentUser.isFetching || capability.isLoading
+  const isError = currentUser.isError || capability.isError
   return {
-    enabled: data?.enabled === true,
+    enabled: capability.data?.enabled === true,
     isLoading,
     isError,
-    state: data?.state,
-    environment: data?.environment,
-    data,
+    state: capability.data?.state,
+    environment: capability.data?.environment,
+    data: capability.data,
   }
 }
 

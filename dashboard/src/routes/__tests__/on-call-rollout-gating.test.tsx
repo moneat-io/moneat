@@ -24,6 +24,7 @@ const INCIDENT_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 
 const {mockApi, mockCapabilities, mockPathname, mockParams, mockNavigate} = vi.hoisted(() => ({
   mockApi: {
+    getCurrentUser: vi.fn(),
     getNativeIncidentCapabilities: vi.fn(),
     getOnCallIncidents: vi.fn(),
     getOnCallIncident: vi.fn(),
@@ -89,6 +90,7 @@ describe('native incident rollout gating', () => {
     mockCapabilities.current = DISABLED
     mockPathname.current = '/on-call'
     mockParams.current = {}
+    mockApi.getCurrentUser.mockResolvedValue({orgId: 'organization-one'})
     mockApi.getNativeIncidentCapabilities.mockImplementation(() =>
       Promise.resolve(mockCapabilities.current)
     )

@@ -12,6 +12,7 @@ const {
   mockNavigate,
 } = vi.hoisted(() => ({
   mockApi: {
+    getCurrentUser: vi.fn(),
     isAuthenticated: vi.fn(),
     checkAuth: vi.fn(),
     getProjects: vi.fn(),
@@ -414,6 +415,7 @@ describe('overview alert and incident dashboard', () => {
     mockRoutePathname.current = '/'
     mockApi.isAuthenticated.mockReturnValue(true)
     mockApi.checkAuth.mockResolvedValue(true)
+    mockApi.getCurrentUser.mockResolvedValue({orgId: 'organization-one'})
     mockApi.getProjects.mockResolvedValue([project])
     mockApi.getProjectStats.mockResolvedValue(projectStats)
     mockApi.getOrganizationIssues.mockResolvedValue([issue])

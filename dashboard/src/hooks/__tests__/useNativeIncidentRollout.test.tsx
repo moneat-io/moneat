@@ -20,7 +20,7 @@ import {renderHook, waitFor} from '@testing-library/react'
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
 
 const {mockApi} = vi.hoisted(() => ({
-  mockApi: {getNativeIncidentCapabilities: vi.fn()},
+  mockApi: {getCurrentUser: vi.fn(), getNativeIncidentCapabilities: vi.fn()},
 }))
 
 vi.mock('@/lib/api', () => ({api: mockApi}))
@@ -38,6 +38,7 @@ function createWrapper() {
 describe('useNativeIncidentRollout', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockApi.getCurrentUser.mockResolvedValue({orgId: 'organization-one'})
   })
 
   it('reports enabled with state and environment when the capability is on', async () => {

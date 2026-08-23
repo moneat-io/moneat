@@ -21,6 +21,7 @@ import {renderRoute} from '@/test/utils'
 
 const {mockApi} = vi.hoisted(() => ({
   mockApi: {
+    getCurrentUser: vi.fn(),
     getIncidentTypes: vi.fn(),
     getIncidentCustomFields: vi.fn(),
     getIncidentForms: vi.fn(),
@@ -171,6 +172,7 @@ describe('IncidentConfiguration', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mockApi.getCurrentUser.mockResolvedValue({orgId: 'organization-one'})
     // Native incident rollout enabled so the configuration surface renders.
     mockApi.getNativeIncidentCapabilities.mockResolvedValue({
       enabled: true,

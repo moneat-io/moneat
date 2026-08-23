@@ -23,6 +23,7 @@ const NEW_INCIDENT_ID = 'f0000000-0000-4000-8000-000000000001'
 
 const {mockApi, mockNavigate} = vi.hoisted(() => ({
   mockApi: {
+    getCurrentUser: vi.fn(),
     getOnCallIncidents: vi.fn(),
     declareOnCallIncident: vi.fn(),
     getIncidentTypes: vi.fn(),
@@ -47,6 +48,7 @@ import {Route} from '../on-call.incidents'
 describe('standalone incident declaration', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockApi.getCurrentUser.mockResolvedValue({orgId: 'organization-one'})
     mockApi.getOnCallIncidents.mockResolvedValue([])
     mockApi.getIncidentTypes.mockResolvedValue([])
     mockApi.getIncidentForms.mockResolvedValue([])
