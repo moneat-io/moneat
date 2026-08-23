@@ -10,6 +10,7 @@ import com.moneat.enterprise.alertroutes.context.AlertRouteContext
 import com.moneat.enterprise.alertroutes.evaluation.AlertRouteDecision
 import com.moneat.enterprise.alertroutes.evaluation.CanonicalAlertGrouping
 import com.moneat.enterprise.alertroutes.models.AlertGroupDecisionType
+import com.moneat.enterprise.alertroutes.models.AlertGroupEscalationState
 import com.moneat.enterprise.alertroutes.models.AlertGroupMemberState
 import com.moneat.enterprise.alertroutes.models.AlertGroupPagingState
 import com.moneat.enterprise.alertroutes.models.AlertGroupState
@@ -31,19 +32,27 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.EscalationPolicies
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
+import org.jetbrains.exposed.v1.core.Exists
+import org.jetbrains.exposed.v1.core.JoinType
+import org.jetbrains.exposed.v1.core.NotExists
 import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.lessEq
+import org.jetbrains.exposed.v1.core.like
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
@@ -57,6 +66,36 @@ private const val MAX_GROUP_PAGE_SIZE = 200
 
 /** Transactional grouping persistence used by route execution and responder commands. */
 class AlertGroupService(private val policy: AlertGroupPolicy = AlertGroupPolicy()) {
+    fun findCandidateIncident(
+        organizationId: Int,
+        routeId: Uuid,
+        identityHash: String,
+    ): Uuid? {
+        policy.requireEnabled(organizationId)
+        return transaction {
+            EnterpriseAlertGroups
+                .selectAll()
+                .where {
+                    (EnterpriseAlertGroups.organizationId eq organizationId) and
+                        (EnterpriseAlertGroups.routeResourceId eq routeId) and
+                        (EnterpriseAlertGroups.identityHash eq identityHash)
+                }.orderBy(EnterpriseAlertGroups.updatedAt to SortOrder.DESC)
+                .mapNotNull { it[EnterpriseAlertGroups.incidentId] }
+                .distinct()
+                .firstNotNullOfOrNull { incidentId ->
+                    OnCallIncidents
+                        .selectAll()
+                        .where {
+                            (OnCallIncidents.organizationId eq organizationId) and
+                                (OnCallIncidents.id eq incidentId) and
+                                (OnCallIncidents.status inList ELIGIBLE_INCIDENT_STATUSES.map { it.wire })
+                        }.limit(1)
+                        .firstOrNull()
+                        ?.get(OnCallIncidents.resourceId)
+                }
+        }
+    }
+
     fun list(
         organizationId: Int,
         limit: Int = DEFAULT_GROUP_PAGE_SIZE,
@@ -71,6 +110,68 @@ class AlertGroupService(private val policy: AlertGroupPolicy = AlertGroupPolicy(
     fun get(organizationId: Int, groupId: Uuid): AlertGroupRecord {
         policy.requireEnabled(organizationId)
         return AlertGroupReader.get(organizationId, groupId)
+    }
+
+    internal fun recoveryCandidates(limit: Int = 100): List<Pair<Int, Uuid>> = transaction {
+        val activeMembers = EnterpriseAlertGroupMembers
+            .select(EnterpriseAlertGroupMembers.id)
+            .where {
+                (EnterpriseAlertGroupMembers.groupId eq EnterpriseAlertGroups.id) and
+                    (EnterpriseAlertGroupMembers.state eq AlertGroupMemberState.ACTIVE.wire)
+            }
+        val unresolvedMembers = EnterpriseAlertGroupMembers
+            .select(EnterpriseAlertGroupMembers.id)
+            .where {
+                (EnterpriseAlertGroupMembers.groupId eq EnterpriseAlertGroups.id) and
+                    (EnterpriseAlertGroupMembers.state eq AlertGroupMemberState.ACTIVE.wire) and
+                    EnterpriseAlertGroupMembers.resolvedAt.isNull()
+            }
+        EnterpriseAlertGroups
+            .join(
+                EnterpriseAlertGroupDecisions,
+                JoinType.LEFT,
+                EnterpriseAlertGroups.id,
+                EnterpriseAlertGroupDecisions.groupId,
+                additionalConstraint = {
+                    EnterpriseAlertGroupDecisions.decisionType eq AlertGroupDecisionType.RECOVERY_COMPLETED.wire
+                },
+            )
+            .selectAll()
+            .where {
+                EnterpriseAlertGroupDecisions.id.isNull() and
+                    Exists(activeMembers) and
+                    NotExists(unresolvedMembers)
+            }
+            .orderBy(EnterpriseAlertGroups.updatedAt to SortOrder.ASC)
+            .limit(limit)
+            .map { group ->
+                val organizationId = group[EnterpriseAlertGroups.organizationId]
+                val record = AlertGroupReader.load(organizationId, group)
+                organizationId to record.id
+            }
+    }
+
+    internal fun completeRecovery(organizationId: Int, groupId: Uuid) {
+        policy.requireEnabled(organizationId)
+        transaction {
+            val group = AlertGroupReader.requireGroup(organizationId, groupId, lock = true)
+            EnterpriseAlertGroups.update({ EnterpriseAlertGroups.id eq group[EnterpriseAlertGroups.id] }) {
+                it[state] = AlertGroupState.CLOSED.wire
+                it[updatedAt] = Clock.System.now()
+            }
+            EnterpriseAlertGroupDecisions.insertIgnore {
+                it[resourceId] = Uuid.random()
+                it[EnterpriseAlertGroupDecisions.organizationId] = organizationId
+                it[EnterpriseAlertGroupDecisions.groupId] = group[EnterpriseAlertGroups.id].value
+                it[decisionType] = AlertGroupDecisionType.RECOVERY_COMPLETED.wire
+                it[alertEpisodeId] = null
+                it[incidentId] = group[EnterpriseAlertGroups.incidentId]
+                it[actorUserId] = null
+                it[commandKey] = "group-recovery:$groupId"
+                it[details] = emptyMap()
+                it[createdAt] = Clock.System.now()
+            }
+        }
     }
 
     fun recordFiring(
@@ -134,36 +235,65 @@ class AlertGroupService(private val policy: AlertGroupPolicy = AlertGroupPolicy(
         groupId: Uuid,
         episodeId: Uuid,
         commandKey: String,
-    ): Boolean {
+    ): Boolean = claimPaging(AlertGroupPagingClaim(organizationId, groupId, episodeId, commandKey))
+
+    fun claimPaging(claim: AlertGroupPagingClaim): Boolean {
+        val organizationId = claim.organizationId
+        val groupId = claim.groupId
+        val episodeId = claim.episodeId
+        val commandKey = claim.commandKey
         policy.requireEnabled(organizationId)
         return transaction {
             lockOrganization(organizationId)
             val group = AlertGroupReader.requireGroup(organizationId, groupId, lock = true)
             when (AlertRoutePagingMode.valueOf(group[EnterpriseAlertGroups.pagingMode])) {
                 AlertRoutePagingMode.NONE -> false
-                AlertRoutePagingMode.FIRST_EPISODE_PER_GROUP ->
-                    EnterpriseAlertGroups.update({
-                        (EnterpriseAlertGroups.id eq group[EnterpriseAlertGroups.id]) and
-                            (EnterpriseAlertGroups.pagingState inList retryablePagingStates)
-                    }) {
+                AlertRoutePagingMode.FIRST_EPISODE_PER_GROUP -> {
+                    val state = AlertGroupPagingState.valueOf(group[EnterpriseAlertGroups.pagingState])
+                    if (!canClaimPaging(state, group[EnterpriseAlertGroups.id].value, claim)) {
+                        return@transaction false
+                    }
+                    EnterpriseAlertGroups.update({ EnterpriseAlertGroups.id eq group[EnterpriseAlertGroups.id] }) {
                         it[pagingState] = AlertGroupPagingState.CLAIMED.wire
                         it[pagingCommandKey] = commandKey
-                        it[updatedAt] = Clock.System.now()
+                        it[updatedAt] = claim.now
                     } == 1
+                }
                 AlertRoutePagingMode.EVERY_EPISODE -> {
                     val member = requireMember(organizationId, group[EnterpriseAlertGroups.id].value, episodeId)
+                    val state = AlertGroupPagingState.valueOf(member[EnterpriseAlertGroupMembers.pagingState])
+                    if (!canClaimPaging(state, group[EnterpriseAlertGroups.id].value, claim)) {
+                        return@transaction false
+                    }
                     EnterpriseAlertGroupMembers.update({
-                        (EnterpriseAlertGroupMembers.id eq member[EnterpriseAlertGroupMembers.id]) and
-                            (EnterpriseAlertGroupMembers.pagingState inList retryablePagingStates)
+                        EnterpriseAlertGroupMembers.id eq member[EnterpriseAlertGroupMembers.id]
                     }) {
                         it[pagingState] = AlertGroupPagingState.CLAIMED.wire
                         it[pagingCommandKey] = commandKey
-                        it[updatedAt] = Clock.System.now()
+                        it[updatedAt] = claim.now
                     } == 1
                 }
             }
         }
     }
+
+    private fun canClaimPaging(
+        state: AlertGroupPagingState,
+        internalGroupId: Int,
+        claim: AlertGroupPagingClaim,
+    ): Boolean = state.wire in retryablePagingStates ||
+        (state == AlertGroupPagingState.CLAIMED && reclaimStalePaging(internalGroupId, claim))
+
+    private fun reclaimStalePaging(internalGroupId: Int, claim: AlertGroupPagingClaim): Boolean =
+        EnterpriseAlertGroupEscalations.update({
+            (EnterpriseAlertGroupEscalations.organizationId eq claim.organizationId) and
+                (EnterpriseAlertGroupEscalations.groupId eq internalGroupId) and
+                (EnterpriseAlertGroupEscalations.escalationKey like "${claim.commandKey}:%") and
+                (EnterpriseAlertGroupEscalations.state eq AlertGroupEscalationState.PENDING.wire) and
+                (EnterpriseAlertGroupEscalations.updatedAt lessEq claim.now - PAGING_CLAIM_TIMEOUT)
+        }) {
+            it[updatedAt] = claim.now
+        } > 0
 
     fun completePaging(completion: AlertGroupPagingCompletion) {
         policy.requireEnabled(completion.organizationId)
@@ -200,13 +330,12 @@ class AlertGroupService(private val policy: AlertGroupPolicy = AlertGroupPolicy(
     }
 
     /** Persist the concrete on-call alert created for one escalation target. */
-    fun recordEscalation(record: AlertGroupEscalationRecord) {
+    fun recordEscalation(record: AlertGroupEscalationRecord, now: Instant = Clock.System.now()) {
         policy.requireEnabled(record.organizationId)
         transaction {
             val group = AlertGroupReader.requireGroup(record.organizationId, record.groupId)
             requireEscalationPolicy(record.organizationId, record.escalationPolicyId)
             val alertInternalId = record.onCallAlertId?.let { requireOnCallAlert(record.organizationId, it) }
-            val now = Clock.System.now()
             EnterpriseAlertGroupEscalations.insertIgnore {
                 it[resourceId] = Uuid.random()
                 it[EnterpriseAlertGroupEscalations.organizationId] = record.organizationId
@@ -226,6 +355,29 @@ class AlertGroupService(private val policy: AlertGroupPolicy = AlertGroupPolicy(
                 it[state] = record.state.wire
                 it[updatedAt] = now
             }
+        }
+    }
+
+    fun escalations(organizationId: Int, groupId: Uuid): List<AlertGroupEscalationRecord> {
+        policy.requireEnabled(organizationId)
+        return transaction {
+            val group = AlertGroupReader.requireGroup(organizationId, groupId)
+            (EnterpriseAlertGroupEscalations leftJoin OnCallAlerts)
+                .selectAll()
+                .where {
+                    (EnterpriseAlertGroupEscalations.organizationId eq organizationId) and
+                        (EnterpriseAlertGroupEscalations.groupId eq group[EnterpriseAlertGroups.id].value)
+                }.map { row ->
+                    AlertGroupEscalationRecord(
+                        organizationId = organizationId,
+                        groupId = groupId,
+                        escalationPolicyId = row[EnterpriseAlertGroupEscalations.escalationPolicyId],
+                        escalationKey = row[EnterpriseAlertGroupEscalations.escalationKey],
+                        onCallAlertId = row.getOrNull(OnCallAlerts.resourceId),
+                        state = AlertGroupEscalationState.valueOf(row[EnterpriseAlertGroupEscalations.state]),
+                        updatedAt = row[EnterpriseAlertGroupEscalations.updatedAt],
+                    )
+                }
         }
     }
 
@@ -517,6 +669,7 @@ class AlertGroupService(private val policy: AlertGroupPolicy = AlertGroupPolicy(
 
     private companion object {
         const val MAX_COMMAND_KEY_LENGTH = 160
+        val PAGING_CLAIM_TIMEOUT = 5.minutes
         val ELIGIBLE_INCIDENT_STATUSES = setOf(NativeIncidentStatus.TRIAGE, NativeIncidentStatus.ACTIVE)
     }
 }

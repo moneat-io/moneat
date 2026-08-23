@@ -48,6 +48,7 @@ enum class AlertGroupDecisionType(val wire: String) {
     ATTACHED("ATTACHED"),
     AUTOMATICALLY_ATTACHED("AUTOMATICALLY_ATTACHED"),
     TRIAGE_CREATED("TRIAGE_CREATED"),
+    RECOVERY_COMPLETED("RECOVERY_COMPLETED"),
 }
 
 object EnterpriseAlertGroups : IntIdTable("enterprise_alert_groups") {

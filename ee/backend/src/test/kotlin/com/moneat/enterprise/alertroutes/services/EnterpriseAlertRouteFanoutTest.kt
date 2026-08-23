@@ -17,9 +17,9 @@ import kotlin.test.Test
 class EnterpriseAlertRouteFanoutTest {
     @Test
     fun `live fanout skips route evaluation when organization is not entitled`() = runBlocking {
-        val evaluationService = mockk<AlertRouteEvaluationService>()
+        val executionService = mockk<AlertRouteExecutionService>()
         val fanout = EnterpriseAlertRouteFanout(
-            evaluationService = evaluationService,
+            executionService = executionService,
             enabled = { false },
         )
 
@@ -41,6 +41,6 @@ class EnterpriseAlertRouteFanoutTest {
             ),
         )
 
-        confirmVerified(evaluationService)
+        confirmVerified(executionService)
     }
 }

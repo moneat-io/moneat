@@ -159,7 +159,10 @@ class AlertGroupCommandService(
                 title = title,
                 description = null,
                 summary = command.summary?.trim()?.takeIf(String::isNotEmpty) ?: snapshot.text("summary"),
-                initialStatus = NativeIncidentStatus.TRIAGE,
+                severity = command.severity?.trim()?.takeIf(String::isNotEmpty) ?: snapshot.text("severity"),
+                incidentType =
+                    command.incidentType?.trim()?.takeIf(String::isNotEmpty) ?: snapshot.text("incidentType"),
+                initialStatus = command.initialStatus,
             ),
         )
         val attach = AttachAlertGroupIncidentCommand(
@@ -336,6 +339,9 @@ class AlertGroupCommandService(
             is CreateAlertGroupTriageCommand -> {
                 parts.add(command.title.orEmpty())
                 parts.add(command.summary.orEmpty())
+                parts.add(command.initialStatus.wire)
+                parts.add(command.severity.orEmpty())
+                parts.add(command.incidentType.orEmpty())
             }
         }
         return sha256(parts.joinToString("\u001F"))
