@@ -28,16 +28,19 @@ import com.moneat.enterprise.alertroutes.models.AlertRouteGroupingBehavior
 import com.moneat.enterprise.alertroutes.models.AlertRouteIncidentMode
 import com.moneat.enterprise.alertroutes.models.AlertRoutePagingMode
 import com.moneat.enterprise.alertroutes.models.AlertRouteTargetKind
+import com.moneat.enterprise.incidents.commands.IncidentCommandNotFoundException
 import com.moneat.enterprise.incidents.commands.IncidentCommandPolicy
 import com.moneat.enterprise.incidents.commands.IncidentCommandService
 import com.moneat.enterprise.incidents.models.NativeIncidentStatus
 import com.moneat.enterprise.incidents.models.NativeIncidentSourceLinks
 import com.moneat.enterprise.oncall.models.OnCallIncidents
 import com.moneat.enterprise.oncall.models.OnCallAlerts
+import com.moneat.shared.models.Memberships
 import kotlinx.serialization.json.JsonObject
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -134,6 +137,28 @@ class AlertRouteExecutionServiceTest {
         val group = groupService.get(organization.organizationId, listed.id)
         assertEquals(null, group.incidentId)
         assertEquals(1, group.members.size)
+    }
+
+    @Test
+    fun `missing automation actor is explicit and does not block independent paging`() = runBlocking {
+        createRoute(
+            pagingTargets = 1,
+            incident = AlertRouteIncidentInput(create = true),
+        )
+        transaction {
+            Memberships.deleteWhere { Memberships.organization_id eq organization.organizationId }
+        }
+        val episodeId = AlertRouteTestDatabase.seedAlertEpisode(
+            organization.organizationId,
+            "HOST_ALERT",
+            "missing-actor",
+        )
+
+        assertFailsWith<IncidentCommandNotFoundException> {
+            executionService.execute(firingContext(episodeId))
+        }
+
+        assertEquals(1, gateway.triggered.size)
     }
 
     @Test

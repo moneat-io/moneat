@@ -18,6 +18,7 @@ import com.moneat.enterprise.alertroutes.models.AlertRoutePagingMode
 import com.moneat.enterprise.alertroutes.models.EnterpriseAlertRoutes
 import com.moneat.enterprise.incidents.commands.DeclineIncidentCommand
 import com.moneat.enterprise.incidents.commands.IncidentCommandActor
+import com.moneat.enterprise.incidents.commands.IncidentCommandNotFoundException
 import com.moneat.enterprise.incidents.commands.IncidentCommandService
 import com.moneat.enterprise.incidents.models.NativeIncidentStatus
 import com.moneat.enterprise.incidents.models.NativeIncidentSourceLinks
@@ -326,7 +327,11 @@ class AlertRouteExecutionService(
         } ?: Memberships.selectAll().where { Memberships.organization_id eq organizationId }
             .orderBy(Memberships.user_id to SortOrder.ASC)
             .limit(1)
-            .single()[Memberships.user_id]
+            .firstOrNull()
+            ?.get(Memberships.user_id)
+            ?: throw IncidentCommandNotFoundException(
+                "No organization member is available for alert-route automation",
+            )
         AlertGroupActor(organizationId, userId, ROUTE_AUTOMATION_ORIGIN)
     }
 

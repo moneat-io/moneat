@@ -90,5 +90,6 @@ data class AlertGroupEscalationRecord(
     val escalationKey: String,
     val onCallAlertId: Uuid?,
     val state: AlertGroupEscalationState,
+    /** Timestamp observed on the persisted record; write operations assign their own transition time. */
     val updatedAt: Instant? = null,
 )
