@@ -495,17 +495,6 @@ object OperationalMetrics {
         ).increment()
     }
 
-    fun recordNativeIncidentRolloutDecision(surface: String, outcome: String) {
-        counter(
-            NATIVE_INCIDENT_ROLLOUT_DECISIONS,
-            "Native incident operations gated by rollout state, grouped by surface and outcome.",
-            tags(
-                "surface" to surface,
-                "outcome" to outcome,
-            ),
-        ).increment()
-    }
-
     fun recordNativeIncidentQuotaDecision(quotaKey: String, outcome: String) {
         counter(
             NATIVE_INCIDENT_QUOTA_DECISIONS,
@@ -959,7 +948,6 @@ object OperationalMetrics {
     private const val WORKFLOW_EXECUTIONS = "moneat_workflow_executions"
     private const val WORKFLOW_EXECUTION_DURATION = "moneat_workflow_execution_duration"
     private const val WORKFLOW_RATE_LIMITED = "moneat_workflow_rate_limited"
-    private const val NATIVE_INCIDENT_ROLLOUT_DECISIONS = "moneat_native_incident_rollout_decisions"
     private const val NATIVE_INCIDENT_QUOTA_DECISIONS = "moneat_native_incident_quota_decisions"
     private const val NANOS_PER_SECOND = 1_000_000_000
     private const val MILLIS_PER_SECOND = 1_000

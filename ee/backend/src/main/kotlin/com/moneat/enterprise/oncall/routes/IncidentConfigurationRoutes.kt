@@ -91,7 +91,7 @@ internal fun Route.registerIncidentConfigurationRoutes(
 ) {
     route("/v1/on-call/incident-configuration") {
         authenticate("auth-jwt") {
-            installNativeIncidentRolloutGate("NativeIncidentConfigurationGate", incidentEntitlement)
+            installNativeIncidentEntitlementGate("NativeIncidentConfigurationGate", incidentEntitlement)
             route("/types") {
                 get {
                     val context = call.requireUserContext() ?: return@get

@@ -303,33 +303,15 @@ export interface OnCallContactSettings {
   onCallPhoneConsentVersion: string | null
 }
 
-/**
- * Server-authoritative rollout state for native incident response. The backend
- * decides `enabled`; the remaining states carry the reason so the dashboard can
- * show a calm, accurate unavailable message. Mirrors the backend enum returned
- * by `GET /v1/on-call/incident-response/capabilities`.
- */
-export type NativeIncidentRolloutState =
-  | 'ENABLED'
-  | 'DISABLED'
-  | 'ENVIRONMENT_NOT_FOUND'
-  | 'FLAG_NOT_FOUND'
-  | 'EVALUATION_ERROR'
-  | 'PROVIDER_UNAVAILABLE'
-  | 'MODULE_UNAVAILABLE'
-
 export interface NativeIncidentCapabilities {
   /** Whether native incident dashboard surfaces and actions may be shown. */
   enabled: boolean
-  /** Feature-flag environment the decision was evaluated in. */
-  environment: string
-  state: NativeIncidentRolloutState
-  /** Paid-plan entitlement is evaluated independently from rollout state. */
+  /** Paid-plan entitlement is the authoritative availability decision. */
   entitlementEnabled: boolean
   plan: string
   entitlementReason: string | null
   quotas: Record<string, NativeIncidentQuotaStatus>
-  /** Always false: forwarded external-provider incident passthrough is never gated by this rollout. */
+  /** Always false: forwarded external-provider incident passthrough is independent. */
   externalProviderPassthroughAffected: boolean
 }
 

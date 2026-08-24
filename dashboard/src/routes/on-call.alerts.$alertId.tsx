@@ -37,7 +37,7 @@ import {cn} from '@/lib/utils'
 import {isUuidResourceId} from '@/lib/api/utils'
 import {IncidentDeclarationForm} from '@/components/on-call/IncidentDeclarationForm'
 import type {DeclareIncidentInput} from '@/lib/api/types'
-import {useNativeIncidentRollout} from '@/hooks/useNativeIncidentRollout'
+import {useNativeIncidentCapabilities} from '@/hooks/useNativeIncidentCapabilities'
 
 export const Route = createFileRoute('/on-call/alerts/$alertId')({
   component: AlertDetailPage,
@@ -120,7 +120,7 @@ function AlertDetailPage() {
   const {toast} = useToast()
   const [note, setNote] = useState('')
   const [declareOpen, setDeclareOpen] = useState(false)
-  const nativeIncidentRollout = useNativeIncidentRollout()
+  const nativeIncidentCapabilities = useNativeIncidentCapabilities()
   const normalizedAlertId = alertId.trim()
   const hasValidAlertId = isUuidResourceId(normalizedAlertId)
   const alertQueryKey = ['alert', normalizedAlertId] as const
@@ -356,7 +356,7 @@ function AlertDetailPage() {
               I'm not available
             </Button>
 
-            {nativeIncidentRollout.enabled && (
+            {nativeIncidentCapabilities.enabled && (
               <Dialog open={declareOpen} onOpenChange={setDeclareOpen}>
                 <DialogTrigger asChild>
                   <Button variant="link" size="sm" className="h-auto p-0 text-muted-foreground hover:text-foreground text-xs">

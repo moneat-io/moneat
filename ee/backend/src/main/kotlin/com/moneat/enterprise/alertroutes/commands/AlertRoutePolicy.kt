@@ -17,15 +17,15 @@ fun interface AlertRouteQuotaAdmission {
 }
 
 /**
- * Rollout and authorization gate for alert-route mutations.
+ * Entitlement and authorization gate for alert-route mutations.
  *
- * The default entitlement combines the organization-and-environment rollout decision with the paid
- * native incident-response entitlement. Enabled-route capacity is reconciled through the canonical
+ * The default entitlement uses the paid native incident-response entitlement. Enabled-route capacity
+ * is reconciled through the canonical
  * billing quota bridge in the same transaction as the protected mutation.
  */
 class AlertRoutePolicy(
     private val entitlement: IncidentEntitlement = IncidentEntitlement {
-        FeatureRegistry.isNativeIncidentResponseEnabled(it)
+        FeatureRegistry.isNativeIncidentResponseEntitled(it)
     },
     private val quotaAdmission: AlertRouteQuotaAdmission = AlertRouteQuotaAdmission { organizationId, count, key ->
         val status = FeatureRegistry.nativeIncidentEntitlementStatus(organizationId)

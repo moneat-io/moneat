@@ -59,8 +59,8 @@ import {
 import {useToast} from '@/hooks/useToast'
 import {
   nativeIncidentUnavailableCopy,
-  useNativeIncidentRollout,
-} from '@/hooks/useNativeIncidentRollout'
+  useNativeIncidentCapabilities,
+} from '@/hooks/useNativeIncidentCapabilities'
 import {
   FIELD_VALUE_TYPES,
   FIELD_VALUE_TYPE_LABELS,
@@ -100,9 +100,9 @@ function slugify(value: string, separator: '_' | '-'): string {
 }
 
 function IncidentConfiguration() {
-  const rollout = useNativeIncidentRollout()
+  const capabilities = useNativeIncidentCapabilities()
 
-  if (rollout.isLoading) {
+  if (capabilities.isLoading) {
     return (
       <div className="flex items-center justify-center py-10">
         <div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-primary" />
@@ -110,8 +110,8 @@ function IncidentConfiguration() {
     )
   }
 
-  if (!rollout.enabled) {
-    const copy = nativeIncidentUnavailableCopy(rollout)
+  if (!capabilities.enabled) {
+    const copy = nativeIncidentUnavailableCopy(capabilities)
     return <EmptyState icon={ShieldAlert} title={copy.title} description={copy.description} />
   }
 

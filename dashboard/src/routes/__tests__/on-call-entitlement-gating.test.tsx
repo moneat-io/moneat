@@ -43,11 +43,9 @@ const {mockApi, mockCapabilities, mockPathname, mockParams, mockNavigate} = vi.h
   },
   mockCapabilities: {current: {
     enabled: false,
-    environment: 'production',
-    state: 'DISABLED',
     entitlementEnabled: true,
-    plan: 'TEAM',
-    entitlementReason: null,
+    plan: 'TEAM' as string,
+    entitlementReason: null as string | null,
     quotas: {},
     externalProviderPassthroughAffected: false,
   }},
@@ -81,8 +79,6 @@ import {Route as AlertDetailRoute} from '../on-call.alerts.$alertId'
 
 const ENABLED = {
   enabled: true,
-  environment: 'production',
-  state: 'ENABLED',
   entitlementEnabled: true,
   plan: 'TEAM',
   entitlementReason: null,
@@ -91,11 +87,9 @@ const ENABLED = {
 }
 const DISABLED = {
   enabled: false,
-  environment: 'production',
-  state: 'DISABLED',
-  entitlementEnabled: true,
-  plan: 'TEAM',
-  entitlementReason: null,
+  entitlementEnabled: false,
+  plan: 'FREE',
+  entitlementReason: 'Upgrade the plan',
   quotas: {},
   externalProviderPassthroughAffected: false,
 }
@@ -110,7 +104,7 @@ const triggeredAlert = {
   triggeredAt: '2026-06-05T12:00:00.000Z',
 }
 
-describe('native incident rollout gating', () => {
+describe('native incident entitlement gating', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     clearAuthStorage()
@@ -124,7 +118,7 @@ describe('native incident rollout gating', () => {
   })
 
   describe('on-call shell tabs', () => {
-    it('hides Incidents and Configuration when the rollout is disabled', async () => {
+    it('hides Incidents and Configuration when entitlement is disabled', async () => {
       mockCapabilities.current = DISABLED
       renderRoute(OnCallShellRoute)
 
@@ -139,7 +133,7 @@ describe('native incident rollout gating', () => {
       expect(screen.queryByText('Configuration')).toBeNull()
     })
 
-    it('shows Incidents and Configuration when the rollout is enabled', async () => {
+    it('shows Incidents and Configuration when entitlement is enabled', async () => {
       mockCapabilities.current = ENABLED
       renderRoute(OnCallShellRoute)
 
@@ -196,7 +190,7 @@ describe('native incident rollout gating', () => {
       mockApi.viewAlert.mockResolvedValue(undefined)
     })
 
-    it('hides Declare Incident when the rollout is disabled', async () => {
+    it('hides Declare Incident when entitlement is disabled', async () => {
       mockCapabilities.current = DISABLED
       renderRoute(AlertDetailRoute)
 
@@ -205,7 +199,7 @@ describe('native incident rollout gating', () => {
       expect(screen.queryByText('Declare Incident')).toBeNull()
     })
 
-    it('shows Declare Incident when the rollout is enabled', async () => {
+    it('shows Declare Incident when entitlement is enabled', async () => {
       mockCapabilities.current = ENABLED
       renderRoute(AlertDetailRoute)
 

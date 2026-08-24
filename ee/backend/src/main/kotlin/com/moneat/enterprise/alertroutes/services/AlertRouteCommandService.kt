@@ -52,7 +52,7 @@ import kotlin.uuid.Uuid
 /**
  * Organization-scoped CRUD, reorder, and revision history for enterprise Alert Routes.
  *
- * Mutations are rollout-gated, idempotent by command key, versioned by route revision, and audited
+ * Mutations are entitlement-gated, idempotent by command key, versioned by route revision, and audited
  * in `enterprise_alert_route_revisions`. Stale expected revisions are rejected as conflicts.
  */
 class AlertRouteCommandService(

@@ -130,7 +130,7 @@ class GetWeeklyReportTool : McpTool {
 }
 
 class GetIncidentContextTool(
-    private val nativeIncidentEntitlement: (Int) -> Boolean = FeatureRegistry::isNativeIncidentResponseEnabled,
+    private val nativeIncidentEntitlement: (Int) -> Boolean = FeatureRegistry::isNativeIncidentResponseEntitled,
 ) : McpTool {
     override val name = "get_incident_context"
     override val description =
@@ -150,7 +150,6 @@ class GetIncidentContextTool(
         context: McpContext
     ): ToolCallResult {
         if (!nativeIncidentEntitlement(context.organizationId)) {
-            FeatureRegistry.recordNativeIncidentRolloutDecision("ai", "denied")
             return errorResult("Native incident response is not enabled for this organization")
         }
         val incidentId = args["incident_id"]?.jsonPrimitive

@@ -27,8 +27,8 @@ import {PageHeader} from '@/components/ui/page-header'
 import {cn} from '@/lib/utils'
 import {
   nativeIncidentUnavailableCopy,
-  useNativeIncidentRollout,
-} from '@/hooks/useNativeIncidentRollout'
+  useNativeIncidentCapabilities,
+} from '@/hooks/useNativeIncidentCapabilities'
 import type {AlertGroup} from '@/lib/api/types'
 import {shortResourceId, timeAgo} from '@/components/on-call/incident-modeling'
 import {
@@ -62,7 +62,7 @@ async function loadAllAlertGroups(): Promise<AlertGroup[]> {
 
 function AlertGroupsPage() {
   const pathname = useRouterState({select: (state) => state.location.pathname})
-  const rollout = useNativeIncidentRollout()
+  const capabilities = useNativeIncidentCapabilities()
   const [stateFilter, setStateFilter] = useState<StateFilter>('open')
 
   const isDetailRoute = pathname.startsWith('/on-call/alert-groups/')
@@ -70,7 +70,7 @@ function AlertGroupsPage() {
   const {data, isError, isLoading, refetch} = useQuery({
     queryKey: ALERT_GROUPS_QUERY_KEY,
     queryFn: loadAllAlertGroups,
-    enabled: rollout.enabled && !isDetailRoute,
+    enabled: capabilities.enabled && !isDetailRoute,
     refetchInterval: 30_000,
   })
 
@@ -78,7 +78,7 @@ function AlertGroupsPage() {
     return <Outlet />
   }
 
-  if (rollout.isLoading) {
+  if (capabilities.isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted border-t-primary" />
@@ -86,8 +86,8 @@ function AlertGroupsPage() {
     )
   }
 
-  if (!rollout.enabled) {
-    const copy = nativeIncidentUnavailableCopy(rollout)
+  if (!capabilities.enabled) {
+    const copy = nativeIncidentUnavailableCopy(capabilities)
     return (
       <div className="space-y-4">
         <PageHeader icon={Boxes} title="Alert groups" description="Related alerts folded together for response" />

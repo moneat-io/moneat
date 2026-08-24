@@ -17,8 +17,6 @@
 package com.moneat.featureflags
 
 import com.moneat.config.ClickHouseClient
-import com.moneat.enterprise.NATIVE_INCIDENT_ROLLOUT_FLAG_KEY
-import com.moneat.enterprise.NativeIncidentRolloutState
 import com.moneat.featureflags.models.CreateFeatureFlagEnvironmentRequest
 import com.moneat.featureflags.models.CreateFeatureFlagRequest
 import com.moneat.featureflags.models.FeatureFlagAuditEvents
@@ -35,8 +33,6 @@ import com.moneat.featureflags.models.FeatureFlags
 import com.moneat.featureflags.models.UpdateFeatureFlagConfigRequest
 import com.moneat.featureflags.models.UpdateFeatureFlagRequest
 import com.moneat.featureflags.services.FeatureFlagService
-import com.moneat.featureflags.services.FeatureFlagEvaluator
-import com.moneat.featureflags.services.FeatureFlagNativeIncidentRolloutBridge
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
@@ -47,13 +43,11 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.update
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
@@ -101,98 +95,6 @@ class FeatureFlagServiceTest {
         createSchema()
         seedActor()
         service = FeatureFlagService()
-    }
-
-    @Test
-    fun `native incident rollout flag is provisioned disabled and only its config is mutable`() {
-        service.ensureNativeIncidentRolloutFlag(SERVICE_TEST_ORG_ID)
-
-        val flag = service.getFlag(SERVICE_TEST_ORG_ID, NATIVE_INCIDENT_ROLLOUT_FLAG_KEY)
-        assertNotNull(flag)
-        assertEquals(FeatureFlagValueType.BOOLEAN, flag.valueType)
-        assertFalse(flag.clientVisible)
-        assertEquals(listOf("disabled", "enabled"), flag.variants.map { it.key })
-        assertTrue(flag.configs.all { !it.enabled })
-        assertTrue(flag.configs.all { it.defaultVariantKey == "enabled" })
-        assertTrue(flag.configs.all { it.offVariantKey == "disabled" })
-        assertEquals("system_flag.initialized", service.listAuditEvents(SERVICE_TEST_ORG_ID).single().eventType)
-
-        val enabled =
-            service.updateConfig(
-                organizationId = SERVICE_TEST_ORG_ID,
-                actorUserId = SERVICE_TEST_USER_ID,
-                flagKey = NATIVE_INCIDENT_ROLLOUT_FLAG_KEY,
-                environmentKey = "production",
-                request = UpdateFeatureFlagConfigRequest(enabled = true),
-            )
-        assertNotNull(enabled)
-        assertTrue(enabled.enabled)
-
-        assertFailsWith<IllegalArgumentException> {
-            service.updateFlag(
-                SERVICE_TEST_ORG_ID,
-                SERVICE_TEST_USER_ID,
-                NATIVE_INCIDENT_ROLLOUT_FLAG_KEY,
-                UpdateFeatureFlagRequest(name = "Unsafe rewrite"),
-            )
-        }
-        assertFailsWith<IllegalArgumentException> {
-            service.archiveFlag(
-                SERVICE_TEST_ORG_ID,
-                SERVICE_TEST_USER_ID,
-                NATIVE_INCIDENT_ROLLOUT_FLAG_KEY,
-            )
-        }
-        assertFailsWith<IllegalArgumentException> {
-            service.updateConfig(
-                organizationId = SERVICE_TEST_ORG_ID,
-                actorUserId = SERVICE_TEST_USER_ID,
-                flagKey = NATIVE_INCIDENT_ROLLOUT_FLAG_KEY,
-                environmentKey = "production",
-                request = UpdateFeatureFlagConfigRequest(offVariantKey = "enabled"),
-            )
-        }
-    }
-
-    @Test
-    fun `native incident rollout bridge evaluates independently by environment`() {
-        val bridge = FeatureFlagNativeIncidentRolloutBridge(service, FeatureFlagEvaluator())
-
-        val initialProduction = bridge.status(SERVICE_TEST_ORG_ID, "production")
-        assertFalse(initialProduction.enabled)
-        assertEquals(NativeIncidentRolloutState.DISABLED, initialProduction.state)
-
-        service.updateConfig(
-            organizationId = SERVICE_TEST_ORG_ID,
-            actorUserId = SERVICE_TEST_USER_ID,
-            flagKey = NATIVE_INCIDENT_ROLLOUT_FLAG_KEY,
-            environmentKey = "production",
-            request = UpdateFeatureFlagConfigRequest(enabled = true),
-        )
-
-        val production = bridge.status(SERVICE_TEST_ORG_ID, "production")
-        val staging = bridge.status(SERVICE_TEST_ORG_ID, "staging")
-        assertTrue(production.enabled)
-        assertEquals(NativeIncidentRolloutState.ENABLED, production.state)
-        assertFalse(staging.enabled)
-        assertEquals(NativeIncidentRolloutState.DISABLED, staging.state)
-    }
-
-    @Test
-    fun `native incident rollout bridge fails closed for a tampered reserved variant`() {
-        service.ensureNativeIncidentRolloutFlag(SERVICE_TEST_ORG_ID)
-        transaction {
-            FeatureFlagVariants.update({ FeatureFlagVariants.key eq "disabled" }) {
-                it[valueJson] = "true"
-            }
-        }
-
-        val status =
-            FeatureFlagNativeIncidentRolloutBridge(service, FeatureFlagEvaluator())
-                .status(SERVICE_TEST_ORG_ID, "production")
-
-        assertFalse(status.enabled)
-        assertEquals(NativeIncidentRolloutState.EVALUATION_ERROR, status.state)
     }
 
     @Test

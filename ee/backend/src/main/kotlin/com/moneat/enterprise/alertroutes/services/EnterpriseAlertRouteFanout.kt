@@ -11,7 +11,7 @@ import com.moneat.enterprise.FeatureRegistry
 /** Enterprise route-evaluation arm. Action execution is added by the downstream execution task. */
 class EnterpriseAlertRouteFanout(
     private val executionService: AlertRouteExecutionService = AlertRouteExecutionService(),
-    private val enabled: (Int) -> Boolean = FeatureRegistry::isNativeIncidentResponseEnabled,
+    private val enabled: (Int) -> Boolean = FeatureRegistry::isNativeIncidentResponseEntitled,
 ) : AlertRouteFanout {
     override suspend fun process(context: AlertFanoutContext) {
         if (!enabled(context.event.organizationId)) return

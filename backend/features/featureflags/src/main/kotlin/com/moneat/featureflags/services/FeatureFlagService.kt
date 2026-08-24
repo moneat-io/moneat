@@ -18,7 +18,6 @@ package com.moneat.featureflags.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
-import com.moneat.enterprise.NATIVE_INCIDENT_ROLLOUT_FLAG_KEY
 import com.moneat.featureflags.models.CreateFeatureFlagEnvironmentRequest
 import com.moneat.featureflags.models.CreateFeatureFlagRequest
 import com.moneat.featureflags.models.CreateFeatureFlagSdkKeyResponse
@@ -78,7 +77,6 @@ import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.plus
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
@@ -99,10 +97,6 @@ private const val DEFAULT_ANALYTICS_HOURS = 24
 private const val ANALYTICS_LIMIT = 25
 private const val ETAG_HASH_LENGTH = 24
 private const val DEFAULT_RULES_JSON = """{"rules":[]}"""
-private const val NATIVE_INCIDENT_DISABLED_VARIANT = "disabled"
-private const val NATIVE_INCIDENT_ENABLED_VARIANT = "enabled"
-private val nativeIncidentInitializedAuditJson =
-    "{\"key\":\"$NATIVE_INCIDENT_ROLLOUT_FLAG_KEY\",\"default\":\"disabled\"}"
 private val FEATURE_FLAG_KEY_REGEX = Regex("^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,254}$")
 private val ENVIRONMENT_KEY_REGEX = Regex("^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$")
 
@@ -218,7 +212,6 @@ class FeatureFlagService {
         actorUserId: Int,
         request: CreateFeatureFlagRequest,
     ): FeatureFlagResponse {
-        requireUserManagedFlagKey(request.key)
         validateFlagKey(request.key)
         val variantKeys = validateVariantSet(request.valueType, request.variants)
         val defaultVariant = request.defaultVariantKey ?: request.variants.first().key
@@ -302,7 +295,6 @@ class FeatureFlagService {
         flagKey: String,
         request: UpdateFeatureFlagRequest,
     ): FeatureFlagResponse? {
-        requireUserManagedFlagKey(flagKey)
         val now = Clock.System.now()
         val environmentKeys = mutableListOf<String>()
         return transaction {
@@ -352,7 +344,6 @@ class FeatureFlagService {
     }
 
     fun archiveFlag(organizationId: Int, actorUserId: Int, flagKey: String): Boolean {
-        requireUserManagedFlagKey(flagKey)
         val now = Clock.System.now()
         val environmentKeys = mutableListOf<String>()
         val archived = transaction {
@@ -391,7 +382,6 @@ class FeatureFlagService {
         environmentKey: String,
         request: UpdateFeatureFlagConfigRequest,
     ): FeatureFlagConfigResponse? {
-        validateSystemFlagConfig(flagKey, request)
         val now = Clock.System.now()
         val response = transaction {
             val flagRow = findFlagRow(organizationId, flagKey) ?: return@transaction null
@@ -723,70 +713,6 @@ class FeatureFlagService {
         return snapshot
     }
 
-    /**
-     * Lazily provisions the reserved native incident rollout flag for organizations created after V176.
-     * Existing reserved flags are never rewritten; malformed or archived definitions therefore fail closed.
-     */
-    fun ensureNativeIncidentRolloutFlag(organizationId: Int) {
-        val environmentsToInvalidate = mutableSetOf<String>()
-        transaction {
-            val environments = ensureDefaultEnvironmentsInTransaction(organizationId)
-            val existing =
-                FeatureFlags
-                    .selectAll()
-                    .where {
-                        (FeatureFlags.organizationId eq organizationId) and
-                            (FeatureFlags.key eq NATIVE_INCIDENT_ROLLOUT_FLAG_KEY)
-                    }.singleOrNull()
-            if (existing != null) {
-                if (existing[FeatureFlags.archivedAt] != null ||
-                    existing[FeatureFlags.valueType] != FeatureFlagValueType.BOOLEAN.name
-                ) {
-                    return@transaction
-                }
-                ensureNativeIncidentConfigs(existing[FeatureFlags.id], environments, environmentsToInvalidate)
-                return@transaction
-            }
-
-            val now = Clock.System.now()
-            val inserted = insertNativeIncidentFlagIfAbsent(organizationId, now)
-            val flagRow =
-                checkNotNull(
-                    FeatureFlags
-                        .selectAll()
-                        .where {
-                            (FeatureFlags.organizationId eq organizationId) and
-                                (FeatureFlags.key eq NATIVE_INCIDENT_ROLLOUT_FLAG_KEY)
-                        }.singleOrNull(),
-                ) { "Native incident rollout flag disappeared after initialization" }
-            if (flagRow[FeatureFlags.archivedAt] != null ||
-                flagRow[FeatureFlags.valueType] != FeatureFlagValueType.BOOLEAN.name
-            ) {
-                return@transaction
-            }
-            val flagId = flagRow[FeatureFlags.id]
-            if (inserted) {
-                replaceVariants(flagId, nativeIncidentVariants(), now)
-            }
-            ensureNativeIncidentConfigs(flagId, environments, environmentsToInvalidate)
-            if (inserted) {
-                audit(
-                    FeatureFlagAuditRecord(
-                        organizationId = organizationId,
-                        environmentId = null,
-                        flagId = flagId,
-                        actorUserId = null,
-                        eventType = "system_flag.initialized",
-                        before = null,
-                        after = nativeIncidentInitializedAuditJson,
-                        now = now,
-                    ),
-                )
-            }
-        }
-        environmentsToInvalidate.forEach { environment -> invalidateEnvironment(organizationId, environment) }
-    }
-
     fun listAuditEvents(organizationId: Int, limit: Int = ANALYTICS_LIMIT): List<FeatureFlagAuditEventResponse> {
         return transaction {
             val rows = FeatureFlagAuditEvents
@@ -1035,91 +961,9 @@ class FeatureFlagService {
         }
     }
 
-    private fun ensureNativeIncidentConfigs(
-        flagId: Int,
-        environments: List<ResultRow>,
-        environmentsToInvalidate: MutableSet<String>,
-    ) {
-        val now = Clock.System.now()
-        environments.forEach { environment ->
-            val environmentId = environment[FeatureFlagEnvironments.id]
-            if (findConfigRow(flagId, environmentId) == null) {
-                val insert = FeatureFlagEnvironmentConfigs.insertIgnore {
-                    it[FeatureFlagEnvironmentConfigs.flagId] = flagId
-                    it[FeatureFlagEnvironmentConfigs.environmentId] = environmentId
-                    it[enabled] = false
-                    it[defaultVariantKey] = NATIVE_INCIDENT_ENABLED_VARIANT
-                    it[offVariantKey] = NATIVE_INCIDENT_DISABLED_VARIANT
-                    it[rulesJson] = DEFAULT_RULES_JSON
-                    it[version] = 1
-                    it[updatedBy] = null
-                    it[createdAt] = now
-                    it[updatedAt] = now
-                }
-                if (insert.insertedCount > 0) {
-                    incrementEnvironmentVersionInTransaction(environmentId, now)
-                    environmentsToInvalidate += environment[FeatureFlagEnvironments.key]
-                }
-            }
-        }
-    }
-
-    private fun insertNativeIncidentFlagIfAbsent(organizationId: Int, now: Instant): Boolean =
-        FeatureFlags
-            .insertIgnore {
-                it[FeatureFlags.organizationId] = organizationId
-                it[key] = NATIVE_INCIDENT_ROLLOUT_FLAG_KEY
-                it[name] = "Native incident response"
-                it[description] =
-                    "Controls native incident response independently of external incident-provider passthrough."
-                it[valueType] = FeatureFlagValueType.BOOLEAN.name
-                it[clientVisible] = false
-                it[tags] = json.encodeToString(listOf("system", "incident-response", "rollout"))
-                it[createdBy] = null
-                it[createdAt] = now
-                it[updatedAt] = now
-            }
-            .insertedCount > 0
-
-    private fun initialConfigVariantKeys(flagRow: ResultRow): Pair<String?, String?> =
-        if (flagRow[FeatureFlags.key] == NATIVE_INCIDENT_ROLLOUT_FLAG_KEY) {
-            NATIVE_INCIDENT_ENABLED_VARIANT to NATIVE_INCIDENT_DISABLED_VARIANT
-        } else {
-            val firstVariant = firstVariantKey(flagRow[FeatureFlags.id])
-            firstVariant to firstVariant
-        }
-
-    private fun nativeIncidentVariants(): List<FeatureFlagVariantRequest> =
-        listOf(
-            FeatureFlagVariantRequest(
-                key = NATIVE_INCIDENT_DISABLED_VARIANT,
-                name = "Disabled",
-                value = JsonPrimitive(false),
-            ),
-            FeatureFlagVariantRequest(
-                key = NATIVE_INCIDENT_ENABLED_VARIANT,
-                name = "Enabled",
-                value = JsonPrimitive(true),
-            ),
-        )
-
-    private fun requireUserManagedFlagKey(flagKey: String) {
-        require(flagKey != NATIVE_INCIDENT_ROLLOUT_FLAG_KEY) {
-            "The native incident rollout flag is system managed; update its environment config instead"
-        }
-    }
-
-    private fun validateSystemFlagConfig(flagKey: String, request: UpdateFeatureFlagConfigRequest) {
-        if (flagKey != NATIVE_INCIDENT_ROLLOUT_FLAG_KEY) return
-        require(request.defaultVariantKey == null || request.defaultVariantKey == NATIVE_INCIDENT_ENABLED_VARIANT) {
-            "The native incident rollout default variant must remain enabled"
-        }
-        require(request.offVariantKey == null || request.offVariantKey == NATIVE_INCIDENT_DISABLED_VARIANT) {
-            "The native incident rollout off variant must remain disabled"
-        }
-        require(request.rules == null || request.rules == parseElement(DEFAULT_RULES_JSON)) {
-            "The native incident rollout flag does not support targeting rules"
-        }
+    private fun initialConfigVariantKeys(flagRow: ResultRow): Pair<String?, String?> {
+        val firstVariant = firstVariantKey(flagRow[FeatureFlags.id])
+        return firstVariant to firstVariant
     }
 
     private fun ensureDefaultEnvironmentsInTransaction(organizationId: Int): List<ResultRow> {

@@ -19,8 +19,8 @@ import {ShieldAlert} from 'lucide-react'
 import {EmptyState} from '@/components/ui/empty-state'
 import {
   nativeIncidentUnavailableCopy,
-  useNativeIncidentRollout,
-} from '@/hooks/useNativeIncidentRollout'
+  useNativeIncidentCapabilities,
+} from '@/hooks/useNativeIncidentCapabilities'
 import {AlertGroupDetail} from '@/components/on-call/alert-groups/AlertGroupDetail'
 
 export const Route = createFileRoute('/on-call/alert-groups/$groupId')({
@@ -29,9 +29,9 @@ export const Route = createFileRoute('/on-call/alert-groups/$groupId')({
 
 function AlertGroupDetailPage() {
   const {groupId} = Route.useParams()
-  const rollout = useNativeIncidentRollout()
+  const capabilities = useNativeIncidentCapabilities()
 
-  if (rollout.isLoading) {
+  if (capabilities.isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted border-t-primary" />
@@ -39,8 +39,8 @@ function AlertGroupDetailPage() {
     )
   }
 
-  if (!rollout.enabled) {
-    const copy = nativeIncidentUnavailableCopy(rollout)
+  if (!capabilities.enabled) {
+    const copy = nativeIncidentUnavailableCopy(capabilities)
     return <EmptyState icon={ShieldAlert} title={copy.title} description={copy.description} />
   }
 

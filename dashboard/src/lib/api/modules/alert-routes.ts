@@ -32,8 +32,8 @@ import type {
 type MessageResponse = { message: string }
 
 // Enterprise Alert Route and Alert Group APIs. These live under the on-call
-// namespace and share the native incident rollout + entitlement gate, so callers
-// should hold their queries behind `useNativeIncidentRollout().enabled`.
+// namespace and require native incident entitlement, so callers should hold
+// their queries behind `useNativeIncidentCapabilities().enabled`.
 export function alertRoutesMethods(core: ApiClientCore) {
   const base = core.API_BASE
   const routesBase = `${base}/on-call/alert-routes`

@@ -25,7 +25,7 @@ const {mockApi} = vi.hoisted(() => ({
 
 vi.mock('@/lib/api', () => ({api: mockApi}))
 
-import {nativeIncidentUnavailableCopy, useNativeIncidentRollout} from '../useNativeIncidentRollout'
+import {nativeIncidentUnavailableCopy, useNativeIncidentCapabilities} from '../useNativeIncidentCapabilities'
 
 function createWrapper() {
   const queryClient = new QueryClient({
@@ -35,17 +35,15 @@ function createWrapper() {
     React.createElement(QueryClientProvider, {client: queryClient}, children)
 }
 
-describe('useNativeIncidentRollout', () => {
+describe('useNativeIncidentCapabilities', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockApi.getCurrentUser.mockResolvedValue({orgId: 'organization-one'})
   })
 
-  it('reports enabled with state and environment when the capability is on', async () => {
+  it('reports enabled entitlement state without rollout metadata', async () => {
     mockApi.getNativeIncidentCapabilities.mockResolvedValue({
       enabled: true,
-      environment: 'production',
-      state: 'ENABLED',
       entitlementEnabled: true,
       plan: 'TEAM',
       entitlementReason: null,
@@ -53,33 +51,34 @@ describe('useNativeIncidentRollout', () => {
       externalProviderPassthroughAffected: false,
     })
 
-    const {result} = renderHook(() => useNativeIncidentRollout(), {wrapper: createWrapper()})
+    const {result} = renderHook(() => useNativeIncidentCapabilities(), {wrapper: createWrapper()})
 
     await waitFor(() => expect(result.current.enabled).toBe(true))
-    expect(result.current.state).toBe('ENABLED')
-    expect(result.current.environment).toBe('production')
+    expect(result.current.data?.plan).toBe('TEAM')
     expect(result.current.isLoading).toBe(false)
   })
 
-  it('reports disabled while preserving the reason state', async () => {
+  it('reports disabled when the organization entitlement is unavailable', async () => {
     mockApi.getNativeIncidentCapabilities.mockResolvedValue({
       enabled: false,
-      environment: 'production',
-      state: 'DISABLED',
+      entitlementEnabled: false,
+      plan: 'FREE',
+      entitlementReason: 'Upgrade the plan',
+      quotas: {},
       externalProviderPassthroughAffected: false,
     })
 
-    const {result} = renderHook(() => useNativeIncidentRollout(), {wrapper: createWrapper()})
+    const {result} = renderHook(() => useNativeIncidentCapabilities(), {wrapper: createWrapper()})
 
     await waitFor(() => expect(result.current.isLoading).toBe(false))
     expect(result.current.enabled).toBe(false)
-    expect(result.current.state).toBe('DISABLED')
+    expect(result.current.data?.entitlementReason).toBe('Upgrade the plan')
   })
 
   it('fails closed when the capability request errors', async () => {
     mockApi.getNativeIncidentCapabilities.mockRejectedValue(new Error('boom'))
 
-    const {result} = renderHook(() => useNativeIncidentRollout(), {wrapper: createWrapper()})
+    const {result} = renderHook(() => useNativeIncidentCapabilities(), {wrapper: createWrapper()})
 
     await waitFor(() => expect(result.current.isError).toBe(true))
     expect(result.current.enabled).toBe(false)
@@ -87,21 +86,25 @@ describe('useNativeIncidentRollout', () => {
 })
 
 describe('nativeIncidentUnavailableCopy', () => {
-  it('invites a retry for transient states and query errors', () => {
-    expect(nativeIncidentUnavailableCopy({state: 'EVALUATION_ERROR', isError: false}).title).toMatch(
-      /temporarily unavailable/i
-    )
-    expect(nativeIncidentUnavailableCopy({state: 'PROVIDER_UNAVAILABLE', isError: false}).title).toMatch(
-      /temporarily unavailable/i
-    )
-    expect(nativeIncidentUnavailableCopy({state: undefined, isError: true}).title).toMatch(
+  it('invites a retry for transient request errors', () => {
+    expect(nativeIncidentUnavailableCopy({isError: true, data: undefined}).title).toMatch(
       /temporarily unavailable/i
     )
   })
 
-  it('points at the administrator for a deliberate disable', () => {
-    const copy = nativeIncidentUnavailableCopy({state: 'DISABLED', isError: false})
+  it('points at plan or license entitlement when disabled', () => {
+    const copy = nativeIncidentUnavailableCopy({
+      isError: false,
+      data: {
+        enabled: false,
+        entitlementEnabled: false,
+        plan: 'FREE',
+        entitlementReason: 'Upgrade the plan',
+        quotas: {},
+        externalProviderPassthroughAffected: false,
+      },
+    })
     expect(copy.title).toMatch(/not available/i)
-    expect(copy.description).toMatch(/administrator/i)
+    expect(copy.description).toMatch(/Upgrade the plan/i)
   })
 })

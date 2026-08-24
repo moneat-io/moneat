@@ -8,8 +8,6 @@ import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.enterprise.incidents.IncidentTestDatabase
 import com.moneat.enterprise.incidents.SeededMember
-import com.moneat.enterprise.NativeIncidentRolloutState
-import com.moneat.enterprise.NativeIncidentRolloutStatus
 import com.moneat.enterprise.NativeIncidentEntitlementStatus
 import com.moneat.enterprise.incidents.commands.IncidentCommandPolicy
 import com.moneat.enterprise.incidents.commands.IncidentCommandService
@@ -65,29 +63,19 @@ class IncidentRoutesTest {
     }
 
     @Test
-    fun `disabled rollout denies native routes and reports preserved external passthrough`() = testApplication {
-        application { installIncidentRoutes(rolloutEnabled = false) }
+    fun `capabilities report entitlement and quota state without rollout metadata`() = testApplication {
+        application { installIncidentRoutes() }
 
-        val incidents = client.get("/v1/on-call/incidents") { authorize() }
-        val configuration = client.get("/v1/on-call/incident-configuration/types") { authorize() }
-        val alertDeclaration = client.post("/v1/on-call/alerts/not-a-uuid/declare-incident") {
-            authorize()
-            header(HttpHeaders.ContentType, ContentType.Application.Json)
-            setBody("""{"title":"blocked","severity":"SEV-2"}""")
-        }
         val capabilities = client.get("/v1/on-call/incident-response/capabilities") { authorize() }
 
-        assertEquals(HttpStatusCode.Forbidden, incidents.status)
-        assertEquals(HttpStatusCode.Forbidden, configuration.status)
-        assertEquals(HttpStatusCode.Forbidden, alertDeclaration.status)
         assertEquals(HttpStatusCode.OK, capabilities.status)
         val body = capabilities.jsonObject()
-        assertEquals(false, body["enabled"]?.jsonPrimitive?.content?.toBoolean())
-        assertEquals("production", body.requiredString("environment"))
-        assertEquals("DISABLED", body.requiredString("state"))
+        assertEquals(true, body["enabled"]?.jsonPrimitive?.content?.toBoolean())
         assertEquals(true, body["entitlementEnabled"]?.jsonPrimitive?.content?.toBoolean())
         assertEquals("TEST", body.requiredString("plan"))
         assertEquals(false, body["externalProviderPassthroughAffected"]?.jsonPrimitive?.content?.toBoolean())
+        assertTrue("environment" !in body)
+        assertTrue("state" !in body)
     }
 
     @Test
@@ -101,14 +89,13 @@ class IncidentRoutesTest {
         assertEquals(HttpStatusCode.OK, capabilities.status)
         val body = capabilities.jsonObject()
         assertEquals(false, body["enabled"]?.jsonPrimitive?.content?.toBoolean())
-        assertEquals("ENABLED", body["state"]?.jsonPrimitive?.content)
         assertEquals(false, body["entitlementEnabled"]?.jsonPrimitive?.content?.toBoolean())
         assertEquals("Upgrade the plan", body.requiredString("entitlementReason"))
         assertEquals(false, body["externalProviderPassthroughAffected"]?.jsonPrimitive?.content?.toBoolean())
     }
 
     @Test
-    fun `rollout gate fails closed when organization context is missing`() = testApplication {
+    fun `native incident gate fails closed when organization context is missing`() = testApplication {
         application { installIncidentRoutes() }
 
         val response = client.get("/v1/on-call/incidents") { authorizeWithoutOrganization() }
@@ -512,7 +499,6 @@ class IncidentRoutesTest {
     }
 
     private fun Application.installIncidentRoutes(
-        rolloutEnabled: Boolean = true,
         entitlementEnabled: Boolean = true,
     ) {
         install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
@@ -534,19 +520,7 @@ class IncidentRoutesTest {
                 onCallIncidentService = OnCallIncidentService(
                     IncidentCommandService(policy = IncidentCommandPolicy.allowForTests()),
                 ),
-                incidentEntitlement = IncidentEntitlement { rolloutEnabled && entitlementEnabled },
-                rolloutStatusProvider = {
-                    NativeIncidentRolloutStatus(
-                        enabled = rolloutEnabled,
-                        environment = "production",
-                        state =
-                            if (rolloutEnabled) {
-                                NativeIncidentRolloutState.ENABLED
-                            } else {
-                                NativeIncidentRolloutState.DISABLED
-                            },
-                    )
-                },
+                incidentEntitlement = IncidentEntitlement { entitlementEnabled },
                 entitlementStatusProvider = {
                     NativeIncidentEntitlementStatus(
                         enabled = entitlementEnabled,
