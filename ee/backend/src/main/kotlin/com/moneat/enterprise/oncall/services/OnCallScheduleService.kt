@@ -99,10 +99,27 @@ class OnCallScheduleService {
 
             if (scheduleIds.isEmpty()) return@transaction 0
 
-            OnCallParticipants
-                .selectAll()
-                .where { OnCallParticipants.scheduleId inList scheduleIds }
-                .map { it[OnCallParticipants.userId] }
+            val participantUserIds =
+                OnCallParticipants
+                    .selectAll()
+                    .where { OnCallParticipants.scheduleId inList scheduleIds }
+                    .map { it[OnCallParticipants.userId] }
+            val layerIds =
+                OnCallScheduleLayers
+                    .selectAll()
+                    .where { OnCallScheduleLayers.scheduleId inList scheduleIds }
+                    .map { it[OnCallScheduleLayers.id].value }
+            val layerUserIds =
+                if (layerIds.isEmpty()) {
+                    emptyList()
+                } else {
+                    OnCallScheduleLayerParticipants
+                        .selectAll()
+                        .where { OnCallScheduleLayerParticipants.layerId inList layerIds }
+                        .map { it[OnCallScheduleLayerParticipants.userId] }
+                }
+
+            (participantUserIds + layerUserIds)
                 .distinct()
                 .count()
         }
@@ -265,6 +282,7 @@ class OnCallScheduleService {
                     .singleOrNull() ?: throw IllegalArgumentException("Schedule not found")
             ZoneId.of(definition.timezone)
             require(definition.layerOrder >= 0) { "Layer order must be non-negative" }
+            checkSeatLimit(organizationId, definition.participantIds)
             val now = Clock.System.now()
             val layerId =
                 OnCallScheduleLayers
@@ -329,6 +347,11 @@ class OnCallScheduleService {
                 it[OnCallScheduleLayers.updatedAt] = now
             }
             if (update.participantIds != null) {
+                checkSeatLimit(
+                    organizationId = organizationId,
+                    newParticipantUserIds = update.participantIds,
+                    layerIdToExclude = layerId,
+                )
                 OnCallScheduleLayerParticipants.deleteWhere {
                     OnCallScheduleLayerParticipants.layerId eq layerId
                 }
@@ -831,6 +854,7 @@ class OnCallScheduleService {
         organizationId: Int,
         newParticipantUserIds: List<Int>,
         scheduleIdToExclude: Int? = null,
+        layerIdToExclude: Int? = null,
     ) {
         val sub =
             Subscriptions
@@ -850,7 +874,7 @@ class OnCallScheduleService {
                 .map { it[OnCallSchedules.id].value }
                 .filter { it != scheduleIdToExclude }
 
-        val existingUsers =
+        val existingScheduleUsers =
             if (scheduleIds.isEmpty()) {
                 emptySet()
             } else {
@@ -861,7 +885,28 @@ class OnCallScheduleService {
                     .toSet()
             }
 
-        val allUsers = existingUsers + newParticipantUserIds
+        val layerIds =
+            if (scheduleIds.isEmpty()) {
+                emptyList()
+            } else {
+                OnCallScheduleLayers
+                    .selectAll()
+                    .where { OnCallScheduleLayers.scheduleId inList scheduleIds }
+                    .map { it[OnCallScheduleLayers.id].value }
+                    .filter { it != layerIdToExclude }
+            }
+        val existingLayerUsers =
+            if (layerIds.isEmpty()) {
+                emptySet()
+            } else {
+                OnCallScheduleLayerParticipants
+                    .selectAll()
+                    .where { OnCallScheduleLayerParticipants.layerId inList layerIds }
+                    .map { it[OnCallScheduleLayerParticipants.userId] }
+                    .toSet()
+            }
+
+        val allUsers = existingScheduleUsers + existingLayerUsers + newParticipantUserIds
         val neededSeats = allUsers.size
 
         if (neededSeats > seatsPurchased) {

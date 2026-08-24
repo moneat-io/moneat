@@ -63,10 +63,11 @@ export interface OnCallSchedule {
 
 export interface OnCallParticipant {
   id: string
-  scheduleId: string
   userId: string
   userName: string
+  userEmail: string
   position: number
+  scheduleId?: string
 }
 
 export interface OnCallOverride {

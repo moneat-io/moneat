@@ -57,8 +57,10 @@ import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 private const val WEEKLY_ROTATION_DAYS = 7L
+private const val INVALID_TOKEN_MESSAGE = "Invalid token"
 private const val SCHEDULE_NOT_FOUND_MESSAGE = "Schedule not found"
 private const val OVERRIDE_NOT_FOUND_MESSAGE = "Override not found"
+private const val LAYER_NOT_FOUND_MESSAGE = "Layer not found"
 
 @Serializable
 data class ScheduleTimelineEntry(
@@ -166,7 +168,7 @@ fun Route.onCallRoutes(
                 val organizationId = principal?.currentOrgIdOrNull()
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@get
                 }
 
@@ -178,7 +180,7 @@ fun Route.onCallRoutes(
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.currentOrgIdOrNull()
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@get
                 }
                 val rawScheduleIds =
@@ -220,7 +222,7 @@ fun Route.onCallRoutes(
                 val organizationId = principal?.currentOrgIdOrNull()
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@post
                 }
 
@@ -253,7 +255,7 @@ fun Route.onCallRoutes(
                 val scheduleId = call.resolveScheduleId(organizationId)
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@get
                 }
 
@@ -280,7 +282,7 @@ fun Route.onCallRoutes(
                 val scheduleId = call.resolveScheduleId(organizationId)
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@put
                 }
 
@@ -327,7 +329,7 @@ fun Route.onCallRoutes(
                 val scheduleId = call.resolveScheduleId(organizationId)
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@delete
                 }
 
@@ -354,7 +356,7 @@ fun Route.onCallRoutes(
                 val scheduleId = call.resolveScheduleId(organizationId)
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@get
                 }
 
@@ -381,7 +383,7 @@ fun Route.onCallRoutes(
                 val scheduleId = call.resolveScheduleId(organizationId)
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@get
                 }
                 if (scheduleId == null) return@get
@@ -408,7 +410,7 @@ fun Route.onCallRoutes(
                 val organizationId = principal?.currentOrgIdOrNull()
                 val scheduleId = call.resolveScheduleId(organizationId)
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@get
                 }
                 if (scheduleId == null) return@get
@@ -420,7 +422,7 @@ fun Route.onCallRoutes(
                 val organizationId = principal?.currentOrgIdOrNull()
                 val scheduleId = call.resolveScheduleId(organizationId)
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@post
                 }
                 if (scheduleId == null) return@post
@@ -457,7 +459,7 @@ fun Route.onCallRoutes(
                 val scheduleId = call.resolveScheduleId(organizationId)
                 val layerId = call.resolveLayerId(organizationId, scheduleId)
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@put
                 }
                 if (scheduleId == null || layerId == null) return@put
@@ -484,7 +486,7 @@ fun Route.onCallRoutes(
                                 ),
                         )
                     if (layer == null) {
-                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Layer not found"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse(LAYER_NOT_FOUND_MESSAGE))
                     } else {
                         call.respond(layer)
                     }
@@ -499,14 +501,14 @@ fun Route.onCallRoutes(
                 val scheduleId = call.resolveScheduleId(organizationId)
                 val layerId = call.resolveLayerId(organizationId, scheduleId)
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@delete
                 }
                 if (scheduleId == null || layerId == null) return@delete
                 if (scheduleService.deleteLayer(organizationId, scheduleId, layerId)) {
                     call.respond(HttpStatusCode.NoContent)
                 } else {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Layer not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(LAYER_NOT_FOUND_MESSAGE))
                 }
             }
 
@@ -518,7 +520,7 @@ fun Route.onCallRoutes(
                 val endParam = call.request.queryParameters["end"]
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@get
                 }
                 if (scheduleId == null) {
@@ -557,7 +559,7 @@ fun Route.onCallRoutes(
                 val scheduleId = call.resolveScheduleId(organizationId)
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@post
                 }
 
@@ -566,7 +568,7 @@ fun Route.onCallRoutes(
                 }
 
                 if (userId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@post
                 }
 
@@ -618,7 +620,7 @@ fun Route.onCallRoutes(
                 val overrideId = call.resolveOverrideId(organizationId)
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@delete
                 }
 
@@ -651,7 +653,7 @@ fun Route.onCallRoutes(
                 val scheduleId = call.resolveScheduleId(organizationId)
 
                 if (organizationId == null || userId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@put
                 }
 
@@ -717,7 +719,7 @@ fun Route.onCallRoutes(
                 val scheduleId = call.resolveScheduleId(organizationId)
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@delete
                 }
 
@@ -966,7 +968,7 @@ private suspend fun io.ktor.server.application.ApplicationCall.resolveLayerId(
                 ?.value
         }
     if (layerId == null) {
-        respond(HttpStatusCode.NotFound, ErrorResponse("Layer not found"))
+        respond(HttpStatusCode.NotFound, ErrorResponse(LAYER_NOT_FOUND_MESSAGE))
     }
     return layerId
 }
