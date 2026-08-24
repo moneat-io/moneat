@@ -14,9 +14,13 @@ import com.moneat.enterprise.oncall.models.OnCallOverride
 import com.moneat.enterprise.oncall.models.OnCallOverrides
 import com.moneat.enterprise.oncall.models.OnCallParticipant
 import com.moneat.enterprise.oncall.models.OnCallSchedule
+import com.moneat.enterprise.oncall.models.OnCallScheduleLayer
 import com.moneat.enterprise.oncall.models.OnCallScheduleUsergroups
+import com.moneat.enterprise.oncall.models.OnCallResponderResolution
 import com.moneat.shared.models.OnCallParticipants
 import com.moneat.shared.models.OnCallSchedules
+import com.moneat.shared.models.OnCallScheduleLayers
+import com.moneat.shared.models.OnCallScheduleLayerParticipants
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
 import org.jetbrains.exposed.v1.core.JoinType
@@ -42,6 +46,48 @@ import kotlin.time.Instant
 
 private const val WEEKLY_ROTATION_DAYS = 7
 
+data class ScheduleLayerDefinition(
+    val name: String,
+    val layerOrder: Int,
+    val rotationType: String,
+    val handoffTime: LocalTime,
+    val timezone: String,
+    val enabled: Boolean,
+    val explicitGap: Boolean,
+    val participantIds: List<Int>,
+)
+
+data class ScheduleLayerUpdate(
+    val name: String? = null,
+    val layerOrder: Int? = null,
+    val rotationType: String? = null,
+    val handoffTime: LocalTime? = null,
+    val timezone: String? = null,
+    val enabled: Boolean? = null,
+    val explicitGap: Boolean? = null,
+    val participantIds: List<Int>? = null,
+)
+
+private data class ScheduleLayerRecord(
+    val model: OnCallScheduleLayer,
+    val internalId: Int,
+)
+
+internal data class ResolvedResponder(
+    val model: OnCallResponderResolution,
+    val internalUserId: Int,
+) {
+    fun asParticipant(): OnCallParticipant =
+        OnCallParticipant(
+            id = model.userId,
+            userResourceId = model.userId,
+            userName = model.userName,
+            userEmail = model.userEmail,
+            position = -1,
+            userId = internalUserId,
+        )
+}
+
 class OnCallScheduleService {
     fun getOnCallUsedSeats(organizationId: Int): Int =
         transaction {
@@ -53,10 +99,27 @@ class OnCallScheduleService {
 
             if (scheduleIds.isEmpty()) return@transaction 0
 
-            OnCallParticipants
-                .selectAll()
-                .where { OnCallParticipants.scheduleId inList scheduleIds }
-                .map { it[OnCallParticipants.userId] }
+            val participantUserIds =
+                OnCallParticipants
+                    .selectAll()
+                    .where { OnCallParticipants.scheduleId inList scheduleIds }
+                    .map { it[OnCallParticipants.userId] }
+            val layerIds =
+                OnCallScheduleLayers
+                    .selectAll()
+                    .where { OnCallScheduleLayers.scheduleId inList scheduleIds }
+                    .map { it[OnCallScheduleLayers.id].value }
+            val layerUserIds =
+                if (layerIds.isEmpty()) {
+                    emptyList()
+                } else {
+                    OnCallScheduleLayerParticipants
+                        .selectAll()
+                        .where { OnCallScheduleLayerParticipants.layerId inList layerIds }
+                        .map { it[OnCallScheduleLayerParticipants.userId] }
+                }
+
+            (participantUserIds + layerUserIds)
                 .distinct()
                 .count()
         }
@@ -129,7 +192,13 @@ class OnCallScheduleService {
                     )
                 }
 
-        val currentOnCall = computeOnCallAt(scheduleId, Clock.System.now())
+        val currentOnCall =
+            resolveScheduleResponders(
+                organizationId = scheduleRow[OnCallSchedules.organizationId],
+                schedule = scheduleRow,
+                at = Clock.System.now(),
+            ).firstOrNull()?.asParticipant()
+        val layers = layersForSchedule(scheduleId, scheduleResourceId).map { it.model }
 
         // Fetch Slack usergroup mapping if it exists
         val usergroupMapping =
@@ -147,23 +216,370 @@ class OnCallScheduleService {
             timezone = scheduleRow[OnCallSchedules.timezone],
             participants = participantResponses,
             overrides = overrides,
+            layers = layers,
             currentOnCall = currentOnCall,
             slackUsergroupId = usergroupMapping?.get(OnCallScheduleUsergroups.slackUsergroupId),
             slackUsergroupHandle = usergroupMapping?.get(OnCallScheduleUsergroups.slackUsergroupHandle),
             createdAt = scheduleRow[OnCallSchedules.createdAt].toString(),
             updatedAt = scheduleRow[OnCallSchedules.updatedAt].toString(),
-            internalId = scheduleRow[OnCallSchedules.id].value,
-            organizationId = scheduleRow[OnCallSchedules.organizationId],
         )
     }
 
-    fun getOnCallAt(scheduleId: Int, at: Instant): OnCallParticipant? = transaction { computeOnCallAt(scheduleId, at) }
+    fun getOnCallAt(scheduleId: Int, at: Instant): OnCallParticipant? =
+        transaction {
+            val schedule =
+                OnCallSchedules
+                    .selectAll()
+                    .where { OnCallSchedules.id eq scheduleId }
+                    .singleOrNull() ?: return@transaction null
+            resolveScheduleResponders(schedule[OnCallSchedules.organizationId], schedule, at)
+                .firstOrNull()
+                ?.asParticipant()
+        }
 
     fun getCurrentOnCall(scheduleId: Int): OnCallParticipant? =
         transaction {
             val now = Clock.System.now()
-            computeOnCallAt(scheduleId, now)
+            val schedule =
+                OnCallSchedules
+                    .selectAll()
+                    .where { OnCallSchedules.id eq scheduleId }
+                    .singleOrNull() ?: return@transaction null
+            resolveScheduleResponders(schedule[OnCallSchedules.organizationId], schedule, now)
+                .firstOrNull()
+                ?.asParticipant()
         }
+
+    fun listLayers(
+        organizationId: Int,
+        scheduleId: Int,
+    ): List<OnCallScheduleLayer> =
+        transaction {
+            val schedule =
+                OnCallSchedules
+                    .selectAll()
+                    .where {
+                        (OnCallSchedules.id eq scheduleId) and
+                            (OnCallSchedules.organizationId eq organizationId)
+                    }
+                    .singleOrNull() ?: return@transaction emptyList()
+            layersForSchedule(scheduleId, schedule[OnCallSchedules.resourceId].toString()).map { it.model }
+        }
+
+    fun createLayer(
+        organizationId: Int,
+        scheduleId: Int,
+        definition: ScheduleLayerDefinition,
+    ): OnCallScheduleLayer =
+        transaction {
+            val schedule =
+                OnCallSchedules
+                    .selectAll()
+                    .where {
+                        (OnCallSchedules.id eq scheduleId) and
+                            (OnCallSchedules.organizationId eq organizationId)
+                    }
+                    .singleOrNull() ?: throw IllegalArgumentException("Schedule not found")
+            ZoneId.of(definition.timezone)
+            require(definition.layerOrder >= 0) { "Layer order must be non-negative" }
+            checkSeatLimit(organizationId, definition.participantIds)
+            val now = Clock.System.now()
+            val layerId =
+                OnCallScheduleLayers
+                    .insertAndGetId {
+                        it[OnCallScheduleLayers.organizationId] = organizationId
+                        it[OnCallScheduleLayers.scheduleId] = scheduleId
+                        it[OnCallScheduleLayers.name] = definition.name
+                        it[OnCallScheduleLayers.layerOrder] = definition.layerOrder
+                        it[OnCallScheduleLayers.rotationType] = definition.rotationType
+                        it[OnCallScheduleLayers.handoffTime] = definition.handoffTime
+                        it[OnCallScheduleLayers.timezone] = definition.timezone
+                        it[OnCallScheduleLayers.enabled] = definition.enabled
+                        it[OnCallScheduleLayers.explicitGap] = definition.explicitGap
+                        it[OnCallScheduleLayers.createdAt] = now
+                        it[OnCallScheduleLayers.updatedAt] = now
+                    }.value
+            insertLayerParticipants(layerId, organizationId, definition.participantIds, now)
+            layersForSchedule(scheduleId, schedule[OnCallSchedules.resourceId].toString())
+                .single { it.internalId == layerId }
+                .model
+        }
+
+    fun updateLayer(
+        organizationId: Int,
+        scheduleId: Int,
+        layerId: Int,
+        update: ScheduleLayerUpdate,
+    ): OnCallScheduleLayer? =
+        transaction {
+            val schedule =
+                OnCallSchedules
+                    .selectAll()
+                    .where {
+                        (OnCallSchedules.id eq scheduleId) and
+                            (OnCallSchedules.organizationId eq organizationId)
+                    }
+                    .singleOrNull() ?: return@transaction null
+            val existingLayerId =
+                OnCallScheduleLayers
+                    .selectAll()
+                    .where {
+                        (OnCallScheduleLayers.id eq layerId) and
+                            (OnCallScheduleLayers.scheduleId eq scheduleId) and
+                            (OnCallScheduleLayers.organizationId eq organizationId)
+                    }
+                    .singleOrNull()
+                    ?.get(OnCallScheduleLayers.id)
+            if (existingLayerId == null) {
+                return@transaction null
+            }
+            if (update.layerOrder != null) require(update.layerOrder >= 0) { "Layer order must be non-negative" }
+            update.timezone?.let { ZoneId.of(it) }
+            val now = Clock.System.now()
+            OnCallScheduleLayers.update({ OnCallScheduleLayers.id eq layerId }) {
+                update.name?.let { value -> it[OnCallScheduleLayers.name] = value }
+                update.layerOrder?.let { value -> it[OnCallScheduleLayers.layerOrder] = value }
+                update.rotationType?.let { value -> it[OnCallScheduleLayers.rotationType] = value }
+                update.handoffTime?.let { value -> it[OnCallScheduleLayers.handoffTime] = value }
+                update.timezone?.let { value -> it[OnCallScheduleLayers.timezone] = value }
+                update.enabled?.let { value -> it[OnCallScheduleLayers.enabled] = value }
+                update.explicitGap?.let { value -> it[OnCallScheduleLayers.explicitGap] = value }
+                it[OnCallScheduleLayers.updatedAt] = now
+            }
+            if (update.participantIds != null) {
+                checkSeatLimit(
+                    organizationId = organizationId,
+                    newParticipantUserIds = update.participantIds,
+                    layerIdToExclude = layerId,
+                )
+                OnCallScheduleLayerParticipants.deleteWhere {
+                    OnCallScheduleLayerParticipants.layerId eq layerId
+                }
+                insertLayerParticipants(layerId, organizationId, update.participantIds, now)
+            }
+            layersForSchedule(scheduleId, schedule[OnCallSchedules.resourceId].toString())
+                .single { it.internalId == layerId }
+                .model
+        }
+
+    fun deleteLayer(
+        organizationId: Int,
+        scheduleId: Int,
+        layerId: Int,
+    ): Boolean =
+        transaction {
+            OnCallScheduleLayers.deleteWhere {
+                (OnCallScheduleLayers.id eq layerId) and
+                    (OnCallScheduleLayers.scheduleId eq scheduleId) and
+                    (OnCallScheduleLayers.organizationId eq organizationId)
+            } > 0
+        }
+
+    private fun insertLayerParticipants(
+        layerId: Int,
+        organizationId: Int,
+        participantIds: List<Int>,
+        now: Instant,
+    ) {
+        participantIds.forEachIndexed { index, userId ->
+            OnCallScheduleLayerParticipants.insert {
+                it[OnCallScheduleLayerParticipants.organizationId] = organizationId
+                it[OnCallScheduleLayerParticipants.layerId] = layerId
+                it[OnCallScheduleLayerParticipants.userId] = userId
+                it[OnCallScheduleLayerParticipants.position] = index
+                it[OnCallScheduleLayerParticipants.createdAt] = now
+            }
+        }
+    }
+
+    private fun layersForSchedule(
+        scheduleId: Int,
+        scheduleResourceId: String,
+    ): List<ScheduleLayerRecord> =
+        OnCallScheduleLayers
+            .selectAll()
+            .where { OnCallScheduleLayers.scheduleId eq scheduleId }
+            .orderBy(OnCallScheduleLayers.layerOrder to SortOrder.ASC)
+            .map { layer ->
+                val participants =
+                    OnCallScheduleLayerParticipants
+                        .innerJoin(Users)
+                        .selectAll()
+                        .where { OnCallScheduleLayerParticipants.layerId eq layer[OnCallScheduleLayers.id].value }
+                        .orderBy(OnCallScheduleLayerParticipants.position to SortOrder.ASC)
+                        .map { row ->
+                            OnCallParticipant(
+                                id = row[OnCallScheduleLayerParticipants.resourceId].toString(),
+                                userResourceId = row[Users.resource_id].toString(),
+                                userName = row[Users.name] ?: row[Users.email],
+                                userEmail = row[Users.email],
+                                position = row[OnCallScheduleLayerParticipants.position],
+                                internalId = row[OnCallScheduleLayerParticipants.id].value,
+                                userId = row[OnCallScheduleLayerParticipants.userId],
+                            )
+                        }
+                ScheduleLayerRecord(
+                    model =
+                        OnCallScheduleLayer(
+                            id = layer[OnCallScheduleLayers.resourceId].toString(),
+                            scheduleResourceId = scheduleResourceId,
+                            name = layer[OnCallScheduleLayers.name],
+                            layerOrder = layer[OnCallScheduleLayers.layerOrder],
+                            rotationType = layer[OnCallScheduleLayers.rotationType],
+                            handoffTime = layer[OnCallScheduleLayers.handoffTime],
+                            timezone = layer[OnCallScheduleLayers.timezone],
+                            enabled = layer[OnCallScheduleLayers.enabled],
+                            explicitGap = layer[OnCallScheduleLayers.explicitGap],
+                            participants = participants,
+                            createdAt = layer[OnCallScheduleLayers.createdAt].toString(),
+                            updatedAt = layer[OnCallScheduleLayers.updatedAt].toString(),
+                        ),
+                    internalId = layer[OnCallScheduleLayers.id].value,
+                )
+            }
+
+    fun resolveCurrentResponders(
+        organizationId: Int,
+        scheduleIds: Collection<Int>,
+        at: Instant = Clock.System.now(),
+        all: Boolean = true,
+    ): List<OnCallResponderResolution> =
+        resolveCurrentResponderRecords(organizationId, scheduleIds, at, all).map { it.model }
+
+    internal fun resolveCurrentResponderRecords(
+        organizationId: Int,
+        scheduleIds: Collection<Int>,
+        at: Instant = Clock.System.now(),
+        all: Boolean = true,
+    ): List<ResolvedResponder> = transaction {
+        if (scheduleIds.isEmpty()) return@transaction emptyList()
+        val schedules =
+            OnCallSchedules
+                .selectAll()
+                .where {
+                    (OnCallSchedules.organizationId eq organizationId) and
+                        (OnCallSchedules.id inList scheduleIds.distinct())
+                }
+                .orderBy(OnCallSchedules.id to SortOrder.ASC)
+                .toList()
+        val resolved = linkedMapOf<Int, ResolvedResponder>()
+        schedules.forEach { schedule ->
+            resolveScheduleResponders(organizationId, schedule, at).forEach { response ->
+                resolved.putIfAbsent(response.internalUserId, response)
+            }
+            if (!all && resolved.isNotEmpty()) return@transaction resolved.values.take(1)
+        }
+        resolved.values.toList()
+    }
+
+    private fun resolveScheduleResponders(
+        organizationId: Int,
+        schedule: ResultRow,
+        at: Instant,
+    ): List<ResolvedResponder> {
+        val scheduleId = schedule[OnCallSchedules.id].value
+        val scheduleResourceId = schedule[OnCallSchedules.resourceId].toString()
+        val override =
+            OnCallOverrides
+                .join(Users, JoinType.INNER, onColumn = OnCallOverrides.userId, otherColumn = Users.id)
+                .selectAll()
+                .where {
+                    (OnCallOverrides.scheduleId eq scheduleId) and
+                        (OnCallOverrides.startAt lessEq at) and
+                        (OnCallOverrides.endAt greater at)
+                }
+                .orderBy(OnCallOverrides.startAt to SortOrder.DESC)
+                .limit(1)
+                .singleOrNull()
+        if (override != null) {
+            return listOf(
+                ResolvedResponder(
+                    model =
+                        OnCallResponderResolution(
+                            userId = override[Users.resource_id].toString(),
+                            userName = override[Users.name] ?: override[Users.email],
+                            userEmail = override[Users.email],
+                            scheduleResourceId = scheduleResourceId,
+                            source = "OVERRIDE",
+                            activeUntil = override[OnCallOverrides.endAt].toString(),
+                        ),
+                    internalUserId = override[OnCallOverrides.userId],
+                ),
+            )
+        }
+
+        val layers =
+            OnCallScheduleLayers
+                .selectAll()
+                .where {
+                    (OnCallScheduleLayers.organizationId eq organizationId) and
+                        (OnCallScheduleLayers.scheduleId eq scheduleId) and
+                        (OnCallScheduleLayers.enabled eq true)
+                }
+                .orderBy(OnCallScheduleLayers.layerOrder to SortOrder.ASC)
+                .toList()
+        if (layers.isNotEmpty()) {
+            return layers.flatMap { layer ->
+                resolveLayerParticipant(layer, scheduleResourceId, at)
+            }
+        }
+
+        return computeOnCallAt(scheduleId, at)?.let { participant ->
+            listOf(
+                ResolvedResponder(
+                    model =
+                        OnCallResponderResolution(
+                            userId = participant.userResourceId,
+                            userName = participant.userName,
+                            userEmail = participant.userEmail,
+                            scheduleResourceId = scheduleResourceId,
+                            source = "ROTATION",
+                        ),
+                    internalUserId = participant.userId,
+                ),
+            )
+        } ?: emptyList()
+    }
+
+    private fun resolveLayerParticipant(
+        layer: ResultRow,
+        scheduleResourceId: String,
+        at: Instant,
+    ): List<ResolvedResponder> {
+        val participants =
+            OnCallScheduleLayerParticipants
+                .innerJoin(Users)
+                .selectAll()
+                .where { OnCallScheduleLayerParticipants.layerId eq layer[OnCallScheduleLayers.id].value }
+                .orderBy(OnCallScheduleLayerParticipants.position to SortOrder.ASC)
+                .toList()
+        val index =
+            ScheduleRotationResolver.participantIndex(
+                RotationDefinition(
+                    rotationType = layer[OnCallScheduleLayers.rotationType],
+                    handoffTime = layer[OnCallScheduleLayers.handoffTime],
+                    timezone = layer[OnCallScheduleLayers.timezone],
+                    explicitGap = layer[OnCallScheduleLayers.explicitGap],
+                ),
+                participants.size,
+                at,
+            ) ?: return emptyList()
+        val participant = participants.getOrNull(index) ?: return emptyList()
+        return listOf(
+            ResolvedResponder(
+                model =
+                    OnCallResponderResolution(
+                        userId = participant[Users.resource_id].toString(),
+                        userName = participant[Users.name] ?: participant[Users.email],
+                        userEmail = participant[Users.email],
+                        scheduleResourceId = scheduleResourceId,
+                        layerId = layer[OnCallScheduleLayers.resourceId].toString(),
+                        source = "LAYER",
+                    ),
+                internalUserId = participant[OnCallScheduleLayerParticipants.userId],
+            ),
+        )
+    }
 
     // Extracted so both getCurrentOnCall and getOnCallAt share logic within an open transaction
     private fun computeOnCallAt(scheduleId: Int, now: Instant): OnCallParticipant? {
@@ -438,6 +854,7 @@ class OnCallScheduleService {
         organizationId: Int,
         newParticipantUserIds: List<Int>,
         scheduleIdToExclude: Int? = null,
+        layerIdToExclude: Int? = null,
     ) {
         val sub =
             Subscriptions
@@ -457,7 +874,7 @@ class OnCallScheduleService {
                 .map { it[OnCallSchedules.id].value }
                 .filter { it != scheduleIdToExclude }
 
-        val existingUsers =
+        val existingScheduleUsers =
             if (scheduleIds.isEmpty()) {
                 emptySet()
             } else {
@@ -468,7 +885,28 @@ class OnCallScheduleService {
                     .toSet()
             }
 
-        val allUsers = existingUsers + newParticipantUserIds
+        val layerIds =
+            if (scheduleIds.isEmpty()) {
+                emptyList()
+            } else {
+                OnCallScheduleLayers
+                    .selectAll()
+                    .where { OnCallScheduleLayers.scheduleId inList scheduleIds }
+                    .map { it[OnCallScheduleLayers.id].value }
+                    .filter { it != layerIdToExclude }
+            }
+        val existingLayerUsers =
+            if (layerIds.isEmpty()) {
+                emptySet()
+            } else {
+                OnCallScheduleLayerParticipants
+                    .selectAll()
+                    .where { OnCallScheduleLayerParticipants.layerId inList layerIds }
+                    .map { it[OnCallScheduleLayerParticipants.userId] }
+                    .toSet()
+            }
+
+        val allUsers = existingScheduleUsers + existingLayerUsers + newParticipantUserIds
         val neededSeats = allUsers.size
 
         if (neededSeats > seatsPurchased) {
