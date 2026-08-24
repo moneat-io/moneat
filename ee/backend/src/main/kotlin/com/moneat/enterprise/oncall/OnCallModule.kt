@@ -21,7 +21,12 @@ import com.moneat.enterprise.incidents.commands.DeclareIncidentCommand
 import com.moneat.enterprise.incidents.commands.IncidentCommandActor
 import com.moneat.enterprise.incidents.events.IncidentOutboxService
 import com.moneat.enterprise.incidents.events.IncidentOutboxWorker
+import com.moneat.enterprise.incidents.events.IncidentResponseEventConsumer
 import com.moneat.enterprise.incidents.events.WorkflowIncidentEventConsumer
+import com.moneat.enterprise.incidents.response.IncidentResponseActivationService
+import com.moneat.enterprise.incidents.response.IncidentResponsePager
+import com.moneat.enterprise.incidents.response.IncidentResponsePageRequest
+import com.moneat.enterprise.incidents.response.IncidentResponsePolicyService
 import com.moneat.enterprise.oncall.routes.deviceRoutes
 import com.moneat.enterprise.oncall.routes.escalationRoutes
 import com.moneat.enterprise.oncall.routes.incidentRoutes
@@ -84,7 +89,30 @@ class OnCallModule :
             )
         }
     private val escalationEngine by escalationEngineDelegate
-    private val onCallAlertService by lazy { OnCallAlertService(escalationEngine = escalationEngine) }
+    private val incidentResponsePolicyService = IncidentResponsePolicyService()
+    private val incidentResponseActivationService by lazy {
+        IncidentResponseActivationService(
+            policyService = incidentResponsePolicyService,
+            pager = IncidentResponsePager { request: IncidentResponsePageRequest ->
+                escalationEngine.triggerEscalation(
+                    organizationId = request.organizationId,
+                    escalationPolicyId = request.escalationPolicyId,
+                    title = request.title,
+                    description = "Incident response activation",
+                    priority = request.severity,
+                    alertSource = "incident-response",
+                    deduplicationKey = request.deduplicationKey,
+                    metadata = request.metadata,
+                )?.internalId
+            },
+        )
+    }
+    private val onCallAlertService by lazy {
+        OnCallAlertService(
+            escalationEngine = escalationEngine,
+            responseActivationService = incidentResponseActivationService,
+        )
+    }
     private val slackUserGroupSyncServiceDelegate =
         lazy {
             SlackUserGroupSyncService(
@@ -115,7 +143,10 @@ class OnCallModule :
         lazy {
             IncidentOutboxWorker(
                 IncidentOutboxService(
-                    consumers = listOf(WorkflowIncidentEventConsumer()),
+                    consumers = listOf(
+                        WorkflowIncidentEventConsumer(),
+                        IncidentResponseEventConsumer(incidentResponseActivationService),
+                    ),
                 ),
             )
         }
@@ -143,7 +174,10 @@ class OnCallModule :
             escalationRoutes()
             priorityRoutes()
             deviceRoutes()
-            incidentRoutes({ onCallAlertService })
+            incidentRoutes(
+                alertServiceProvider = { onCallAlertService },
+                incidentResponseActivationService = incidentResponseActivationService,
+            )
             alertRouteRoutes()
             alertGroupRoutes()
             twilioWebhookRoutes()

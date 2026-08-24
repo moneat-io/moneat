@@ -5,6 +5,18 @@
 package com.moneat.enterprise.incidents
 
 import com.moneat.alerts.models.AlertEpisodes
+import com.moneat.enterprise.alertroutes.models.EnterpriseAlertGroupCommands
+import com.moneat.enterprise.alertroutes.models.EnterpriseAlertGroupDecisions
+import com.moneat.enterprise.alertroutes.models.EnterpriseAlertGroupEscalations
+import com.moneat.enterprise.alertroutes.models.EnterpriseAlertGroupMembers
+import com.moneat.enterprise.alertroutes.models.EnterpriseAlertGroups
+import com.moneat.enterprise.alertroutes.models.EnterpriseAlertRouteActions
+import com.moneat.enterprise.alertroutes.models.EnterpriseAlertRouteCommands
+import com.moneat.enterprise.alertroutes.models.EnterpriseAlertRouteConditionGroups
+import com.moneat.enterprise.alertroutes.models.EnterpriseAlertRouteConditions
+import com.moneat.enterprise.alertroutes.models.EnterpriseAlertRouteRevisions
+import com.moneat.enterprise.alertroutes.models.EnterpriseAlertRouteTargets
+import com.moneat.enterprise.alertroutes.models.EnterpriseAlertRoutes
 import com.moneat.enterprise.incidents.models.NativeIncidentAlertEpisodeLinks
 import com.moneat.enterprise.incidents.models.NativeIncidentCommands
 import com.moneat.enterprise.incidents.models.NativeIncidentCustomFieldOptions
@@ -15,6 +27,9 @@ import com.moneat.enterprise.incidents.models.NativeIncidentFormSubmissions
 import com.moneat.enterprise.incidents.models.NativeIncidentHandovers
 import com.moneat.enterprise.incidents.models.NativeIncidentOutboxDeliveries
 import com.moneat.enterprise.incidents.models.NativeIncidentOutboxEvents
+import com.moneat.enterprise.incidents.response.NativeIncidentResponseActivations
+import com.moneat.enterprise.incidents.response.NativeIncidentResponsePolicies
+import com.moneat.enterprise.incidents.response.NativeIncidentResponseTargets
 import com.moneat.enterprise.incidents.models.NativeIncidentParticipants
 import com.moneat.enterprise.incidents.models.NativeIncidentRoleAssignments
 import com.moneat.enterprise.incidents.models.NativeIncidentRoleDefinitions
@@ -28,7 +43,10 @@ import com.moneat.enterprise.oncall.models.OnCallIncidents
 import com.moneat.enterprise.sso.support.EnterpriseTestDatabaseHelper
 import com.moneat.shared.models.EscalationPolicies
 import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.OnCallSchedules
+import com.moneat.shared.models.OrganizationTeams
 import com.moneat.shared.models.Organizations
+import com.moneat.monitor.repositories.ResourceOwnership
 import com.moneat.shared.models.Users
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -51,7 +69,10 @@ object IncidentTestDatabase {
             Users,
             Organizations,
             Memberships,
+            OnCallSchedules,
             EscalationPolicies,
+            OrganizationTeams,
+            ResourceOwnership,
             AlertEpisodes,
             NativeIncidentTypes,
             NativeIncidentCustomFields,
@@ -73,6 +94,21 @@ object IncidentTestDatabase {
             NativeIncidentCommands,
             NativeIncidentOutboxEvents,
             NativeIncidentOutboxDeliveries,
+            NativeIncidentResponsePolicies,
+            NativeIncidentResponseActivations,
+            NativeIncidentResponseTargets,
+            EnterpriseAlertRoutes,
+            EnterpriseAlertRouteConditionGroups,
+            EnterpriseAlertRouteConditions,
+            EnterpriseAlertRouteActions,
+            EnterpriseAlertRouteTargets,
+            EnterpriseAlertRouteRevisions,
+            EnterpriseAlertRouteCommands,
+            EnterpriseAlertGroups,
+            EnterpriseAlertGroupMembers,
+            EnterpriseAlertGroupDecisions,
+            EnterpriseAlertGroupEscalations,
+            EnterpriseAlertGroupCommands,
         )
     }
 
