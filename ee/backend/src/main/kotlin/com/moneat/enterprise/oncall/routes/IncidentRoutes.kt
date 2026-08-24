@@ -27,6 +27,8 @@ import com.moneat.enterprise.incidents.commands.LinkIncidentSourceCommand
 import com.moneat.enterprise.incidents.commands.UnlinkIncidentSourceCommand
 import com.moneat.enterprise.incidents.config.IncidentConfigurationService
 import com.moneat.enterprise.incidents.responders.IncidentResponderService
+import com.moneat.enterprise.incidents.response.IncidentResponseActivationService
+import com.moneat.enterprise.incidents.response.IncidentResponsePolicyInput
 import com.moneat.enterprise.incidents.timeline.IncidentTimelineService
 import com.moneat.enterprise.incidents.models.IncidentFormStage
 import com.moneat.enterprise.incidents.models.IncidentParticipationType
@@ -206,12 +208,22 @@ data class MergeIncidentRequest(
     val expectedVersion: Int? = null,
 )
 
+@Serializable
+data class IncidentResponsePolicyRequest(
+    val commanderPolicyId: String? = null,
+    val ownershipPolicyId: String? = null,
+    val pageOwnership: Boolean = true,
+    val pageTestIncidents: Boolean = false,
+    val pageRetrospectiveIncidents: Boolean = false,
+)
+
 private data class IncidentRouteServices(
     val alertServiceProvider: () -> OnCallAlertService,
     val incidentService: OnCallIncidentService,
     val configurationService: IncidentConfigurationService,
     val responderService: IncidentResponderService,
     val timelineService: IncidentTimelineService,
+    val responseService: IncidentResponseActivationService?,
 )
 
 fun Route.incidentRoutes(
@@ -222,6 +234,7 @@ fun Route.incidentRoutes(
     },
     entitlementStatusProvider: (Int) -> NativeIncidentEntitlementStatus =
         FeatureRegistry::nativeIncidentEntitlementStatus,
+    incidentResponseActivationService: IncidentResponseActivationService? = null,
 ) {
     val services =
         IncidentRouteServices(
@@ -230,8 +243,10 @@ fun Route.incidentRoutes(
             configurationService = IncidentConfigurationService(),
             responderService = IncidentResponderService(),
             timelineService = IncidentTimelineService(),
+            responseService = incidentResponseActivationService,
         )
     registerIncidentCapabilitiesRoute(entitlementStatusProvider)
+    incidentResponseActivationService?.let { registerIncidentResponseRoutes(it) }
     registerAlertRoutes(services.alertServiceProvider, services.incidentService, incidentEntitlement)
     registerDeclaredIncidentRoutes(services, incidentEntitlement)
     registerIncidentConfigurationRoutes(
@@ -311,9 +326,57 @@ private fun Route.registerDeclaredIncidentRoutes(
             registerAddAlertToIncidentRoute(services.alertServiceProvider, services.incidentService)
             registerIncidentSourceRoutes(services.incidentService)
             registerIncidentResponderRoutes(services.incidentService, services.responderService)
+            services.responseService?.let { registerIncidentResponseIncidentRoutes(it) }
             registerIncidentTimelineRoutes(services.timelineService)
             registerAddIncidentNoteRoute(services.incidentService)
         }
+    }
+}
+
+private fun Route.registerIncidentResponseRoutes(
+    responseService: IncidentResponseActivationService,
+) {
+    route("/v1/on-call/incident-response/settings") {
+        authenticate(JWT_AUTH_PROVIDER) {
+            get {
+                val context = call.requireUserContext() ?: return@get
+                call.respond(responseService.policy(context.organizationId))
+            }
+            post {
+                val context = call.requireIncidentAdminContext() ?: return@post
+                val request = call.receive<IncidentResponsePolicyRequest>()
+                call.respond(
+                    responseService.updatePolicy(
+                        context.organizationId,
+                        context.userId,
+                        IncidentResponsePolicyInput(
+                            commanderPolicyResourceId = request.commanderPolicyId,
+                            ownershipPolicyResourceId = request.ownershipPolicyId,
+                            pageOwnership = request.pageOwnership,
+                            pageTestIncidents = request.pageTestIncidents,
+                            pageRetrospectiveIncidents = request.pageRetrospectiveIncidents,
+                        ),
+                    ),
+                )
+            }
+        }
+    }
+}
+
+private fun Route.registerIncidentResponseIncidentRoutes(
+    responseService: IncidentResponseActivationService,
+) {
+    get("/{id}/response") {
+        val context = call.requireUserContext() ?: return@get
+        val incidentId = call.requireIncidentId(context.organizationId) ?: return@get
+        call.respond(responseService.incidentResponseById(context.organizationId, incidentId))
+    }
+    post("/{id}/response/{activationId}/retry") {
+        val context = call.requireUserContext() ?: return@post
+        val incidentId = call.requireIncidentId(context.organizationId) ?: return@post
+        val activationId = call.parameters["activationId"] ?: return@post
+        val response = responseService.retry(context.organizationId, activationId, context.userId, incidentId)
+        call.respond(response)
     }
 }
 

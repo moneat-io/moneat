@@ -11,6 +11,7 @@ import com.moneat.enterprise.oncall.organizationResourceId
 import com.moneat.enterprise.oncall.requireValue
 import com.moneat.enterprise.oncall.userResourceIds
 import com.moneat.enterprise.oncall.userResourceIdOrNull
+import com.moneat.enterprise.incidents.response.IncidentResponseActivationService
 import com.moneat.enterprise.oncall.models.OnCallAlert
 import com.moneat.enterprise.oncall.models.OnCallAlertTimeline
 import com.moneat.enterprise.oncall.models.OnCallAlerts
@@ -33,6 +34,7 @@ import kotlin.time.Clock
 
 class OnCallAlertService(
     private val escalationEngine: EscalationEngine,
+    private val responseActivationService: IncidentResponseActivationService? = null,
 ) {
     private data class AlertResponseResourceIds(
         val organizationResourceId: String,
@@ -239,7 +241,11 @@ class OnCallAlertService(
     fun acknowledge(
         alertId: Int,
         userId: Int,
-    ): Boolean = escalationEngine.acknowledgeAlert(alertId, userId)
+    ): Boolean {
+        val acknowledged = escalationEngine.acknowledgeAlert(alertId, userId)
+        if (acknowledged) responseActivationService?.markAcknowledged(alertId, userId)
+        return acknowledged
+    }
 
     fun resolve(
         alertId: Int,
