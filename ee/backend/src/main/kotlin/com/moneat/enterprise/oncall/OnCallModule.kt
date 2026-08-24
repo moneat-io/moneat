@@ -40,6 +40,7 @@ import com.moneat.enterprise.oncall.mcp.ListSchedulesTool
 import com.moneat.enterprise.oncall.services.BusinessHoursService
 import com.moneat.enterprise.oncall.services.EscalationEngine
 import com.moneat.enterprise.oncall.services.EscalationPolicyService
+import com.moneat.enterprise.oncall.services.EscalationPathService
 import com.moneat.enterprise.oncall.services.OnCallHandoffService
 import com.moneat.enterprise.oncall.services.OnCallAlertService
 import com.moneat.enterprise.oncall.services.OnCallIncidentService
@@ -73,6 +74,7 @@ class OnCallModule :
     private val priorityService = PriorityService()
     private val businessHoursService = BusinessHoursService()
     private val escalationPolicyService = EscalationPolicyService()
+    private val escalationPathService = EscalationPathService()
     private val onCallScheduleService = OnCallScheduleService()
     private val onCallIncidentService = OnCallIncidentService()
     private val pushNotificationService by lazy { PushNotificationService() }
@@ -86,6 +88,7 @@ class OnCallModule :
                 pushNotificationService = pushNotificationService,
                 slackService = slackService,
                 redisClient = redisClient,
+                escalationPathService = escalationPathService,
             )
         }
     private val escalationEngine by escalationEngineDelegate

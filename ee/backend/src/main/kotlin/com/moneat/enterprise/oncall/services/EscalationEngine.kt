@@ -56,6 +56,7 @@ class EscalationEngine(
     private val pushNotificationService: PushNotificationService,
     private val slackService: SlackService,
     private val redisClient: RedisClient,
+    private val escalationPathService: EscalationPathService = EscalationPathService(),
 ) {
     private val logger = LoggerFactory.getLogger(EscalationEngine::class.java)
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -142,6 +143,7 @@ class EscalationEngine(
         deduplicationKey: String?,
         metadata: Map<String, JsonElement>? = null,
     ): OnCallAlert? {
+        val publishedPath = escalationPathService.getPublishedVersion(escalationPolicyId)
         val alertId =
             transaction {
                 val now = Clock.System.now()
@@ -168,6 +170,7 @@ class EscalationEngine(
                         .insertAndGetId {
                             it[OnCallAlerts.organizationId] = organizationId
                             it[OnCallAlerts.escalationPolicyId] = escalationPolicyId
+                            it[OnCallAlerts.escalationPolicyVersionId] = publishedPath?.internalId
                             it[OnCallAlerts.title] = title
                             it[OnCallAlerts.description] = description
                             it[OnCallAlerts.priority] = priority
@@ -186,6 +189,15 @@ class EscalationEngine(
 
                 alertId
             } ?: return null
+
+        publishedPath?.let { pathVersion ->
+            escalationPathService.createExecution(
+                organizationId = organizationId,
+                alertId = alertId,
+                policyVersionId = pathVersion.internalId,
+                startNodeId = pathVersion.path.startNodeId,
+            )
+        }
 
         processEscalationStep(alertId, 0, 0)
         return getAlert(alertId)
