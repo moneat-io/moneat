@@ -17,6 +17,7 @@ import com.moneat.enterprise.alertroutes.commands.AlertGroupPolicy
 import com.moneat.enterprise.alertroutes.commands.AlertRouteActor
 import com.moneat.enterprise.alertroutes.commands.AlertRouteGroupingInput
 import com.moneat.enterprise.alertroutes.commands.AlertRouteIncidentInput
+import com.moneat.enterprise.alertroutes.commands.ALERT_PRIORITY_SEVERITY
 import com.moneat.enterprise.alertroutes.commands.AlertRoutePagingInput
 import com.moneat.enterprise.alertroutes.commands.AlertRoutePolicy
 import com.moneat.enterprise.alertroutes.commands.AlertRouteRecoveryInput
@@ -120,6 +121,46 @@ class AlertRouteExecutionServiceTest {
             assertEquals(NativeIncidentStatus.ACTIVE.wire, incident[OnCallIncidents.status])
             assertEquals("Checkout latency incident", incident[OnCallIncidents.title])
         }
+    }
+
+    @Test
+    fun `priority-derived triage severity maps P0 without changing fixed severity routes`() = runBlocking {
+        createRoute(
+            pagingTargets = 0,
+            incident = AlertRouteIncidentInput(create = true, severity = ALERT_PRIORITY_SEVERITY),
+        )
+        val episodeId = AlertRouteTestDatabase.seedAlertEpisode(
+            organization.organizationId,
+            "HOST_ALERT",
+            "priority-derived",
+            priority = "P0",
+        )
+
+        executionService.execute(firingContext(episodeId))
+
+        transaction {
+            val incident = OnCallIncidents.selectAll().single()
+            assertEquals(NativeIncidentStatus.TRIAGE.wire, incident[OnCallIncidents.status])
+            assertEquals("SEV-0", incident[OnCallIncidents.severity])
+        }
+    }
+
+    @Test
+    fun `on-call alert details expose route revision and independent action outcomes`() = runBlocking {
+        createRoute(
+            pagingTargets = 1,
+            incident = AlertRouteIncidentInput(create = true),
+        )
+        val episodeId = AlertRouteTestDatabase.seedAlertEpisode(organization.organizationId, "HOST_ALERT", "detail")
+        executionService.execute(firingContext(episodeId))
+
+        val alertId = transaction { OnCallAlerts.selectAll().single()[OnCallAlerts.id].value }
+        val outcome = AlertRouteOutcomeReader.findForOnCallAlert(organization.organizationId, alertId)
+        assertNotNull(outcome)
+        assertEquals(1, outcome.matchedRouteRevision)
+        assertEquals("SUCCEEDED", outcome.grouping.state)
+        assertEquals("SUCCEEDED", outcome.paging.state)
+        assertEquals("SUCCEEDED", outcome.incident.state)
     }
 
     @Test
@@ -544,7 +585,7 @@ class AlertRouteExecutionServiceTest {
         val event = AlertLifecycleEvent(
             title = "Checkout latency",
             description = "Latency above threshold",
-            priority = AlertPriority.P1,
+            priority = AlertPriority.fromString(episode.priority) ?: AlertPriority.P1,
             status = status,
             source = AlertSource.valueOf(episode.source),
             deduplicationKey = episode.deduplicationKey,

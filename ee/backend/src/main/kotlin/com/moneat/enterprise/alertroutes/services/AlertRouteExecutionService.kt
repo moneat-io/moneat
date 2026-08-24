@@ -5,6 +5,7 @@
 package com.moneat.enterprise.alertroutes.services
 
 import com.moneat.alerts.models.AlertStatus
+import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.services.AlertRouteActionOutcome
 import com.moneat.alerts.services.AlertRouteActionState
 import com.moneat.alerts.services.AlertFanoutContext
@@ -12,6 +13,7 @@ import com.moneat.alerts.services.AlertRouteExecutionOutcome
 import com.moneat.alerts.services.AlertRouteExecutionState
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.enterprise.alertroutes.commands.AlertGroupActor
+import com.moneat.enterprise.alertroutes.commands.ALERT_PRIORITY_SEVERITY
 import com.moneat.enterprise.alertroutes.commands.AttachAlertGroupIncidentCommand
 import com.moneat.enterprise.alertroutes.commands.CreateAlertGroupTriageCommand
 import com.moneat.enterprise.alertroutes.models.AlertGroupEscalationState
@@ -35,6 +37,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -208,10 +211,11 @@ class AlertRouteExecutionService(
                         CreateAlertGroupTriageCommand(
                             commandKey = "route-create-incident:${group.id}",
                             actor = actor,
-                            groupId = group.id,
-                            expectedVersion = group.version,
-                            initialStatus = group.incidentTemplateSnapshot.incidentStatus(),
-                        ),
+                    groupId = group.id,
+                    expectedVersion = group.version,
+                    initialStatus = group.incidentTemplateSnapshot.incidentStatus(),
+                    severity = derivedIncidentSeverity(context.event.priority, group),
+                ),
                     ).group
                 else -> group
             }
@@ -231,6 +235,17 @@ class AlertRouteExecutionService(
             ).group
         }
         return group
+    }
+
+    private fun derivedIncidentSeverity(priority: AlertPriority, group: AlertGroupRecord): String? {
+        val configured = group.incidentTemplateSnapshot.text("severity") ?: return null
+        if (configured != ALERT_PRIORITY_SEVERITY) return configured
+        return when (priority) {
+            AlertPriority.P0 -> "SEV-0"
+            AlertPriority.P1 -> "SEV-1"
+            AlertPriority.P2 -> "SEV-2"
+            else -> null
+        }
     }
 
     suspend fun recoverDue(enabled: (Int) -> Boolean = FeatureRegistry::isNativeIncidentResponseEntitled) {
@@ -465,6 +480,9 @@ class AlertRouteExecutionService(
 
     private fun Map<String, kotlinx.serialization.json.JsonElement>.boolean(key: String): Boolean? =
         get(key)?.jsonPrimitive?.booleanOrNull
+
+    private fun Map<String, kotlinx.serialization.json.JsonElement>.text(key: String): String? =
+        get(key)?.jsonPrimitive?.contentOrNull
 
     private fun Map<String, kotlinx.serialization.json.JsonElement>.incidentStatus(): NativeIncidentStatus =
         when (get("mode")?.jsonPrimitive?.content) {

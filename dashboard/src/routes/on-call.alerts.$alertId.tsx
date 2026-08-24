@@ -16,7 +16,7 @@
 
 import {createFileRoute, useNavigate} from '@tanstack/react-router'
 import {useQuery, useMutation, useQueryClient} from '@tanstack/react-query'
-import {api, type OnCallTimelineEvent} from '@/lib/api'
+import {api, type AlertRouteOutcomeSummary, type OnCallTimelineEvent} from '@/lib/api'
 import {Button} from '@/components/ui/button'
 import {Badge, type BadgeProps} from '@/components/ui/badge'
 import {SectionCard} from '@/components/ui/section-card'
@@ -400,6 +400,8 @@ function AlertDetailPage() {
             </SectionCard>
           )}
 
+          {alert.routeOutcome && <AlertRouteOutcomeCard outcome={alert.routeOutcome} />}
+
           {/* Timeline */}
           <SectionCard title="Timeline" icon={Clock} iconTone="muted">
             <p className="-mt-1 mb-3 text-xs text-muted-foreground">Alert history and updates</p>
@@ -527,5 +529,36 @@ function AlertDetailPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+function AlertRouteOutcomeCard({
+  outcome,
+}: Readonly<{outcome: AlertRouteOutcomeSummary}>) {
+  const action = (label: string, result: AlertRouteOutcomeSummary['grouping']) => (
+    <div className="rounded-lg border bg-muted/20 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-medium">{label}</p>
+        <Badge variant={result.state === 'SUCCEEDED' ? 'success' : result.state === 'FAILED' ? 'danger' : 'neutral'}>
+          {result.state === 'SUCCEEDED' ? 'Completed' : result.state === 'FAILED' ? 'Failed' : 'Skipped'}
+        </Badge>
+      </div>
+      <p className="mt-1 text-xs text-muted-foreground">{result.reason}</p>
+    </div>
+  )
+
+  return (
+    <SectionCard title="Alert Route outcome" icon={Zap} iconTone="accent" bodyClassName="space-y-3">
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <span>Route revision {outcome.matchedRouteRevision}</span>
+        <span className="font-mono">Group {outcome.groupId}</span>
+        {outcome.incidentId && <span className="font-mono">Incident {outcome.incidentId}</span>}
+      </div>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {action('Grouping', outcome.grouping)}
+        {action('Paging', outcome.paging)}
+        {action('Incident', outcome.incident)}
+      </div>
+    </SectionCard>
   )
 }

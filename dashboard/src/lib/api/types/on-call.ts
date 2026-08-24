@@ -109,6 +109,21 @@ export interface EscalationPolicy {
 
 export type OnCallAlertStatus = 'TRIGGERED' | 'ACKNOWLEDGED' | 'RESOLVED'
 
+export interface AlertRouteActionSummary {
+  state: 'SUCCEEDED' | 'SKIPPED' | 'FAILED'
+  reason: string
+}
+
+export interface AlertRouteOutcomeSummary {
+  matchedRouteId: string
+  matchedRouteRevision: number
+  groupId: string
+  incidentId?: string
+  grouping: AlertRouteActionSummary
+  paging: AlertRouteActionSummary
+  incident: AlertRouteActionSummary
+}
+
 export interface OnCallAlert {
   id: string
   organizationId: string
@@ -129,6 +144,7 @@ export interface OnCallAlert {
   metadata?: Record<string, unknown>
   nextEscalationAt?: string
   viewedByCurrentUser?: boolean
+  routeOutcome?: AlertRouteOutcomeSummary
 }
 
 export interface OnCallTimelineEvent {

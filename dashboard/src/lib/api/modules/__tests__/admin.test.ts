@@ -541,12 +541,19 @@ describe('adminMethods', () => {
         http.post(`${API_BASE}/v1/admin/incidents/trigger`, async ({ request }) => {
           const body = await request.json()
           expect(body).toEqual(incident)
-          return HttpResponse.json({ success: true })
+          return HttpResponse.json({
+            success: true,
+            incidentTriggered: true,
+            routeState: 'MATCHED',
+            grouping: {state: 'SUCCEEDED', reason: 'Alert grouped'},
+            paging: {state: 'SUCCEEDED', reason: 'Paged one target'},
+            incident: {state: 'SUCCEEDED', reason: 'Incident created'},
+          })
         })
       )
 
       const result = await api.triggerIncident(incident)
-      expect(result).toEqual({ success: true })
+      expect(result).toMatchObject({success: true, incidentTriggered: true, routeState: 'MATCHED'})
     })
   })
 

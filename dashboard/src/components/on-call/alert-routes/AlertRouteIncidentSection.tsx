@@ -30,7 +30,7 @@ import type {
   AlertRouteIncidentMode,
   AlertRouteRecovery,
 } from '@/lib/api/types'
-import {INCIDENT_MODE_OPTIONS, SEVERITY_OPTIONS} from './alertRouteModel'
+import {ALERT_PRIORITY_SEVERITY, INCIDENT_MODE_OPTIONS, SEVERITY_OPTIONS} from './alertRouteModel'
 import {DurationField} from './DurationField'
 
 const NONE_VALUE = '__none__'
@@ -121,14 +121,19 @@ export function AlertRouteIncidentSection({
                 <SelectContent>
                   {!activeRequiresSeverity && <SelectItem value={NONE_VALUE}>Leave unclassified</SelectItem>}
                   {SEVERITY_OPTIONS.map((option) => (
-                    <SelectItem key={option} value={option}>
-                      {option}
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               {activeRequiresSeverity && (
                 <p className="text-xs text-muted-foreground">Active incidents require a severity.</p>
+              )}
+              {incident.severity === ALERT_PRIORITY_SEVERITY && (
+                <p className="text-xs text-muted-foreground">
+                  P0, P1, and P2 alerts become SEV-0, SEV-1, and SEV-2 triage incidents. Other priorities stay unclassified.
+                </p>
               )}
             </div>
 

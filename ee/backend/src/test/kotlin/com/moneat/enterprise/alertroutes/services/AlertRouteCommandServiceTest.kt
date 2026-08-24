@@ -11,6 +11,7 @@ import com.moneat.enterprise.alertroutes.commands.AlertRouteConditionGroupInput
 import com.moneat.enterprise.alertroutes.commands.AlertRouteConditionInput
 import com.moneat.enterprise.alertroutes.commands.AlertRouteGroupingInput
 import com.moneat.enterprise.alertroutes.commands.AlertRouteIncidentInput
+import com.moneat.enterprise.alertroutes.commands.ALERT_PRIORITY_SEVERITY
 import com.moneat.enterprise.alertroutes.commands.AlertRoutePagingInput
 import com.moneat.enterprise.alertroutes.commands.AlertRoutePolicy
 import com.moneat.enterprise.alertroutes.commands.AlertRouteQuotaAdmission
@@ -629,6 +630,37 @@ class AlertRouteCommandServiceTest {
             ).route!!
         assertEquals(AlertRouteIncidentMode.TRIAGE, triage.incident.mode)
         assertEquals(null, triage.incident.severity)
+
+        val priorityTriage =
+            service.execute(
+                CreateAlertRouteCommand(
+                    commandKey = "priority-triage",
+                    actor = admin(),
+                    specification = specification(key = "priority-triage", name = "Priority triage").copy(
+                        incident = AlertRouteIncidentInput(
+                            create = true,
+                            severity = ALERT_PRIORITY_SEVERITY,
+                        ),
+                    ),
+                ),
+            ).route!!
+        assertEquals(ALERT_PRIORITY_SEVERITY, priorityTriage.incident.severity)
+
+        assertFailsWith<IllegalArgumentException> {
+            service.execute(
+                CreateAlertRouteCommand(
+                    commandKey = "priority-active",
+                    actor = admin(),
+                    specification = specification(key = "priority-active", name = "Priority active").copy(
+                        incident = AlertRouteIncidentInput(
+                            create = true,
+                            mode = AlertRouteIncidentMode.ACTIVE,
+                            severity = ALERT_PRIORITY_SEVERITY,
+                        ),
+                    ),
+                ),
+            )
+        }
     }
 
     @Test

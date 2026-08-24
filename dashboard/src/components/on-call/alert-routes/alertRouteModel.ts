@@ -182,7 +182,15 @@ export const INCIDENT_MODE_OPTIONS: ReadonlyArray<Option<AlertRouteIncidentMode>
 ]
 
 export const PRIORITY_OPTIONS: readonly string[] = ['P0', 'P1', 'P2', 'P3', 'P4', 'P5']
-export const SEVERITY_OPTIONS: readonly string[] = ['SEV-0', 'SEV-1', 'SEV-2', 'SEV-3', 'SEV-4']
+export const ALERT_PRIORITY_SEVERITY = 'ALERT_PRIORITY'
+export const SEVERITY_OPTIONS: ReadonlyArray<Option<string>> = [
+  {value: 'SEV-0', label: 'SEV-0'},
+  {value: 'SEV-1', label: 'SEV-1'},
+  {value: 'SEV-2', label: 'SEV-2'},
+  {value: 'SEV-3', label: 'SEV-3'},
+  {value: 'SEV-4', label: 'SEV-4'},
+  {value: ALERT_PRIORITY_SEVERITY, label: 'From alert priority (P0–P2)'},
+]
 export const ALERT_STATUS_OPTIONS: readonly string[] = ['FIRING', 'RESOLVED']
 export const ALERT_SOURCE_OPTIONS: readonly string[] = [
   'HOST_ALERT',
@@ -269,6 +277,38 @@ export function createEmptyAlertRouteForm(): AlertRouteFormState {
     grouping: { behavior: 'SUGGESTED', keys: [], windowKind: 'ROLLING', windowSeconds: DEFAULT_WINDOW_SECONDS },
     incident: { create: false, mode: 'TRIAGE' },
     recovery: { cancelEscalations: false, declineUnacceptedTriage: false, graceSeconds: 0 },
+  }
+}
+
+/** Apply the opt-in route shape for paging and triaging P0–P2 alerts. */
+export function applyP0P2TriagePreset(form: AlertRouteFormState): AlertRouteFormState {
+  return {
+    ...form,
+    conditionGroups: [{
+      clientKey: createEditorKey('condition-group'),
+      conditions: [{
+        clientKey: createEditorKey('condition'),
+        field: 'priority',
+        operator: 'AT_LEAST_AS_SEVERE_AS',
+        values: ['P2'],
+      }],
+    }],
+    paging: {
+      ...form.paging,
+      mode: 'FIRST_EPISODE_PER_GROUP',
+    },
+    grouping: {
+      ...form.grouping,
+      behavior: 'AUTOMATIC',
+      windowKind: 'ROLLING',
+      windowSeconds: form.grouping.windowSeconds > 0 ? form.grouping.windowSeconds : DEFAULT_WINDOW_SECONDS,
+    },
+    incident: {
+      ...form.incident,
+      create: true,
+      mode: 'TRIAGE',
+      severity: ALERT_PRIORITY_SEVERITY,
+    },
   }
 }
 

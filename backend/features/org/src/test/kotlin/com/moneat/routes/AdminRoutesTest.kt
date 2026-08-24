@@ -20,6 +20,14 @@ import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.services.AlertFanoutPlan
+import com.moneat.alerts.services.AlertFanoutArm
+import com.moneat.alerts.services.AlertFanoutOutcome
+import com.moneat.alerts.services.AlertFanoutState
+import com.moneat.alerts.services.AlertOrchestrationResult
+import com.moneat.alerts.services.AlertRouteActionOutcome
+import com.moneat.alerts.services.AlertRouteActionState
+import com.moneat.alerts.services.AlertRouteExecutionOutcome
+import com.moneat.alerts.services.AlertRouteExecutionState
 import com.moneat.alerts.services.AlertLifecycleOrchestrator
 import com.moneat.org.routes.adminRoutes
 import com.moneat.shared.models.Memberships
@@ -58,6 +66,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import io.mockk.every
 
 class AdminRoutesTest {
     private val jwtSecret = "test-secret-for-admin-routes"
@@ -190,7 +199,25 @@ class AdminRoutesTest {
     @Test
     fun `admin incident trigger delegates one full lifecycle event`() = testApplication {
         val orchestrator = mockk<AlertLifecycleOrchestrator>()
-        coEvery { orchestrator.process(any(), any()) } returns mockk(relaxed = true)
+        val routeOutcome = AlertRouteExecutionOutcome(
+            state = AlertRouteExecutionState.MATCHED,
+            matchedRouteId = "route-id",
+            matchedRouteRevision = 3,
+            groupId = "group-id",
+            incidentId = "incident-id",
+            grouping = AlertRouteActionOutcome(AlertRouteActionState.SUCCEEDED, "Alert grouped"),
+            paging = AlertRouteActionOutcome(AlertRouteActionState.SUCCEEDED, "Paged one target"),
+            incident = AlertRouteActionOutcome(AlertRouteActionState.SUCCEEDED, "Incident created"),
+        )
+        val orchestration = mockk<AlertOrchestrationResult>()
+        every { orchestration.outcomes } returns listOf(
+            AlertFanoutOutcome(
+                AlertFanoutArm.ROUTE,
+                AlertFanoutState.SUCCEEDED,
+                route = routeOutcome,
+            ),
+        )
+        coEvery { orchestrator.process(any(), any()) } returns orchestration
         GlobalContext.get().declare(orchestrator, allowOverride = true)
         application {
             install(ContentNegotiation) { json() }
@@ -219,6 +246,8 @@ class AdminRoutesTest {
         }
 
         assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("\"incidentTriggered\":true"))
+        assertTrue(response.bodyAsText().contains("\"matchedRouteRevision\":3"))
         coVerify(exactly = 1) {
             orchestrator.process(
                 match { it.source == AlertSource.DASHBOARD_ALERT && it.organizationId > 0 },
