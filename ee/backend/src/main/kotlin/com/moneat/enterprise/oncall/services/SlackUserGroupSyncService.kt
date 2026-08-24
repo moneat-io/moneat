@@ -30,7 +30,7 @@ private const val ONE_HOUR_SECONDS = 3600L
 /**
  * Background service that syncs on-call schedules to Slack user groups.
  * Runs every 60 seconds and updates Slack user groups to contain:
- * - The current on-call user (if they have a Slack mapping)
+ * - Every current responder (if they have a Slack mapping)
  * - The Moneat bot user
  *
  * Uses Redis caching to avoid redundant API calls when membership hasn't changed.
@@ -122,24 +122,29 @@ class SlackUserGroupSyncService(
         schedule: ScheduleUsergroupMapping,
         slackConfig: SlackConfig,
     ) {
-        // Get current on-call user
-        val currentOnCall = onCallScheduleService.getCurrentOnCall(schedule.scheduleId)
+        val responders =
+            onCallScheduleService.resolveCurrentResponders(
+                organizationId = schedule.organizationId,
+                scheduleIds = listOf(schedule.scheduleId),
+                all = true,
+            )
 
-        // Resolve on-call user's Slack ID (if mapped)
-        val onCallSlackId = currentOnCall?.let { getSlackUserId(it.userId) }
-
-        // Build target member list: bot + on-call user (if mapped)
+        // Build target member list: bot + every current responder (if mapped)
         val targetMembers =
             buildList {
                 add(slackConfig.botUserId)
-                if (onCallSlackId != null) {
-                    add(onCallSlackId)
-                } else if (currentOnCall != null) {
-                    logger.warn(
-                        "On-call user ${currentOnCall.userId} (${currentOnCall.userName}) has no Slack " +
-                            "mapping for schedule ${schedule.scheduleName}",
-                    )
-                } else {
+                responders.forEach { responder ->
+                    val slackId = getSlackUserId(responder.internalUserId)
+                    if (slackId != null) {
+                        add(slackId)
+                    } else {
+                        logger.warn(
+                            "On-call user ${responder.userId} (${responder.userName}) has no Slack mapping " +
+                                "for schedule ${schedule.scheduleName}",
+                        )
+                    }
+                }
+                if (responders.isEmpty()) {
                     logger.warn("Schedule ${schedule.scheduleName} has no current on-call user")
                 }
             }.distinct().sorted() // Sort for consistent comparison

@@ -114,6 +114,30 @@ object OnCallParticipants : IntIdTable("on_call_participants") {
     val createdAt = timestamp("created_at")
 }
 
+object OnCallScheduleLayers : IntIdTable("on_call_schedule_layers") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
+    val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
+    val scheduleId = integer("schedule_id").references(OnCallSchedules.id, onDelete = ReferenceOption.CASCADE)
+    val layerOrder = integer("layer_order")
+    val name = varchar("name", 255)
+    val rotationType = varchar("rotation_type", 20)
+    val handoffTime = time("handoff_time")
+    val timezone = varchar("timezone", 100)
+    val enabled = bool("enabled").default(true)
+    val explicitGap = bool("explicit_gap").default(false)
+    val createdAt = timestamp("created_at")
+    val updatedAt = timestamp("updated_at")
+}
+
+object OnCallScheduleLayerParticipants : IntIdTable("on_call_schedule_layer_participants") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
+    val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
+    val layerId = integer("layer_id").references(OnCallScheduleLayers.id, onDelete = ReferenceOption.CASCADE)
+    val userId = integer("user_id").references(Users.id, onDelete = ReferenceOption.CASCADE)
+    val position = integer("position")
+    val createdAt = timestamp("created_at")
+}
+
 object OnCallIncidents : IntIdTable("on_call_incidents") {
     val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)

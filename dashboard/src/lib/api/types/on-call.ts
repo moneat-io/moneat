@@ -52,6 +52,7 @@ export interface OnCallSchedule {
   updatedAt: string
   participants: OnCallParticipant[]
   overrides: OnCallOverride[]
+  layers?: OnCallScheduleLayer[]
   currentOnCall?: {
     userId: string
     userName: string
@@ -76,6 +77,31 @@ export interface OnCallOverride {
   startAt: string
   endAt: string
   createdBy: string
+}
+
+export interface OnCallScheduleLayer {
+  id: string
+  scheduleId: string
+  name: string
+  layerOrder: number
+  rotationType: OnCallRotationType
+  handoffTime: string
+  timezone: string
+  enabled: boolean
+  explicitGap: boolean
+  participants: OnCallParticipant[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface OnCallResponderResolution {
+  userId: string
+  userName: string
+  userEmail: string
+  scheduleId: string
+  layerId?: string
+  source: 'OVERRIDE' | 'LAYER' | 'ROTATION'
+  activeUntil?: string
 }
 
 export interface EscalationTarget {
@@ -248,6 +274,28 @@ export interface CreateOverrideRequest {
   userId: string
   startAt: string
   endAt: string
+}
+
+export interface CreateScheduleLayerRequest {
+  name: string
+  layerOrder: number
+  rotationType: OnCallRotationType
+  handoffTime: string
+  timezone: string
+  enabled?: boolean
+  explicitGap?: boolean
+  participants?: { userId: string; position: number }[]
+}
+
+export interface UpdateScheduleLayerRequest {
+  name?: string
+  layerOrder?: number
+  rotationType?: OnCallRotationType
+  handoffTime?: string
+  timezone?: string
+  enabled?: boolean
+  explicitGap?: boolean
+  participants?: { userId: string; position: number }[]
 }
 
 export interface CreateEscalationPolicyRequest {
