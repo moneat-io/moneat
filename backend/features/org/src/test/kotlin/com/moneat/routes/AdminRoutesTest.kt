@@ -256,6 +256,51 @@ class AdminRoutesTest {
         }
     }
 
+    @Test
+    fun `admin incident trigger reports unavailable route without claiming an incident`() = testApplication {
+        val orchestrator = mockk<AlertLifecycleOrchestrator>()
+        val orchestration = mockk<AlertOrchestrationResult>()
+        every { orchestration.outcomes } returns listOf(
+            AlertFanoutOutcome(
+                arm = AlertFanoutArm.ROUTE,
+                state = AlertFanoutState.UNAVAILABLE,
+                error = "Alert Route execution is unavailable",
+            ),
+        )
+        coEvery { orchestrator.process(any(), any()) } returns orchestration
+        GlobalContext.get().declare(orchestrator, allowOverride = true)
+        application {
+            install(ContentNegotiation) { json() }
+            installAuth()
+            routing { adminRoutes() }
+        }
+        val userId = seedUser(isAdmin = true)
+        transaction {
+            val organizationId = Organizations.insert {
+                it[name] = "Unavailable Route Organization"
+                it[slug] = "unavailable-route-organization"
+            } get Organizations.id
+            Memberships.insert {
+                it[user_id] = userId
+                it[organization_id] = organizationId
+                it[role] = "admin"
+            }
+        }
+
+        val response = client.post("/v1/admin/incidents/trigger") {
+            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            contentType(ContentType.Application.Json)
+            setBody(
+                """{"source":"DASHBOARD_ALERT","severity":"P1","title":"Latency","description":"High"}""",
+            )
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("\"success\":false"))
+        assertTrue(response.bodyAsText().contains("\"routeState\":\"UNAVAILABLE\""))
+        assertTrue(response.bodyAsText().contains("\"incident\":{\"state\":\"SKIPPED\""))
+    }
+
     @AfterTest
     fun teardownKoin() {
         stopTestKoin()
