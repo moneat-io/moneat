@@ -16,7 +16,7 @@
 
 import {createFileRoute, useNavigate} from '@tanstack/react-router'
 import {useQuery, useMutation, useQueryClient} from '@tanstack/react-query'
-import {api, type AlertRouteOutcomeSummary, type OnCallTimelineEvent} from '@/lib/api'
+import {api, type AlertRouteActionSummary, type AlertRouteOutcomeSummary, type OnCallTimelineEvent} from '@/lib/api'
 import {Button} from '@/components/ui/button'
 import {Badge, type BadgeProps} from '@/components/ui/badge'
 import {SectionCard} from '@/components/ui/section-card'
@@ -535,13 +535,21 @@ function AlertDetailPage() {
 function AlertRouteOutcomeCard({
   outcome,
 }: Readonly<{outcome: AlertRouteOutcomeSummary}>) {
+  const badgeVariant = (result: AlertRouteActionSummary): BadgeProps['variant'] => {
+    if (result.state === 'SUCCEEDED') return 'success'
+    if (result.state === 'FAILED') return 'danger'
+    return 'neutral'
+  }
+  const badgeLabel = (result: AlertRouteActionSummary): string => {
+    if (result.state === 'SUCCEEDED') return 'Completed'
+    if (result.state === 'FAILED') return 'Failed'
+    return 'Skipped'
+  }
   const action = (label: string, result: AlertRouteOutcomeSummary['grouping']) => (
     <div className="rounded-lg border bg-muted/20 p-3">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-medium">{label}</p>
-        <Badge variant={result.state === 'SUCCEEDED' ? 'success' : result.state === 'FAILED' ? 'danger' : 'neutral'}>
-          {result.state === 'SUCCEEDED' ? 'Completed' : result.state === 'FAILED' ? 'Failed' : 'Skipped'}
-        </Badge>
+        <Badge variant={badgeVariant(result)}>{badgeLabel(result)}</Badge>
       </div>
       <p className="mt-1 text-xs text-muted-foreground">{result.reason}</p>
     </div>

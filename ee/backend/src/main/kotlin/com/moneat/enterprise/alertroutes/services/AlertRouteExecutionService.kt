@@ -55,6 +55,7 @@ import kotlin.uuid.Uuid
 
 private const val ROUTE_ALERT_SOURCE = "alert-route"
 private const val ROUTE_AUTOMATION_ORIGIN = "ALERT_ROUTE"
+private const val ROUTE_EXECUTION_FAILURE_REASON = "Alert-route execution failed"
 private val executionLogger = KotlinLogging.logger {}
 
 /** Executes the selected route without coupling it to workflow or provider delivery. */
@@ -68,17 +69,17 @@ class AlertRouteExecutionService(
 ) {
     suspend fun execute(context: AlertFanoutContext) {
         val outcome = executeInternal(context, propagateFailures = true)
-        check(outcome.state != AlertRouteExecutionState.FAILED) { outcome.reason ?: "Alert-route execution failed" }
+        check(outcome.state != AlertRouteExecutionState.FAILED) { outcome.reason ?: ROUTE_EXECUTION_FAILURE_REASON }
     }
 
     suspend fun executeWithOutcome(context: AlertFanoutContext): AlertRouteExecutionOutcome =
         suspendRunCatching { executeInternal(context, propagateFailures = false) }
             .getOrElse { error ->
                 if (error is kotlinx.coroutines.CancellationException) throw error
-                executionLogger.error(error) { "Alert-route execution failed" }
+                executionLogger.error(error) { ROUTE_EXECUTION_FAILURE_REASON }
                 AlertRouteExecutionOutcome(
                     state = AlertRouteExecutionState.FAILED,
-                    reason = error.message ?: "Alert-route execution failed",
+                    reason = error.message ?: ROUTE_EXECUTION_FAILURE_REASON,
                 )
             }
 

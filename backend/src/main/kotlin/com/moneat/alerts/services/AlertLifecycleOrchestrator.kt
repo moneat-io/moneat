@@ -130,7 +130,7 @@ enum class AlertRouteActionState {
 }
 
 /** Optional result channel for licensed route implementations; the legacy SAM remains source-compatible. */
-interface AlertRouteOutcomeFanout {
+fun interface AlertRouteOutcomeFanout {
     suspend fun processWithOutcome(context: AlertFanoutContext): AlertRouteExecutionOutcome
 }
 
