@@ -164,6 +164,26 @@ class AlertRouteExecutionServiceTest {
     }
 
     @Test
+    fun `matched alert explains when incident creation is disabled`() = runBlocking {
+        createRoute(
+            pagingTargets = 1,
+            incident = AlertRouteIncidentInput(create = false),
+        )
+        val episodeId = AlertRouteTestDatabase.seedAlertEpisode(
+            organization.organizationId,
+            "HOST_ALERT",
+            "no-incident",
+        )
+        executionService.execute(firingContext(episodeId))
+
+        val alertId = transaction { OnCallAlerts.selectAll().single()[OnCallAlerts.id].value }
+        val outcome = AlertRouteOutcomeReader.findForOnCallAlert(organization.organizationId, alertId)
+        assertNotNull(outcome)
+        assertEquals("SKIPPED", outcome.incident.state)
+        assertEquals("Incident creation is disabled for this route", outcome.incident.reason)
+    }
+
+    @Test
     fun `silence retains a group without paging or automatic incident creation`() = runBlocking {
         createRoute(
             pagingTargets = 1,
