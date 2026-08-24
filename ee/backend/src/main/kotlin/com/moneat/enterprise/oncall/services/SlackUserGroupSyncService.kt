@@ -123,7 +123,7 @@ class SlackUserGroupSyncService(
         slackConfig: SlackConfig,
     ) {
         val responders =
-            onCallScheduleService.resolveCurrentResponders(
+            onCallScheduleService.resolveCurrentResponderRecords(
                 organizationId = schedule.organizationId,
                 scheduleIds = listOf(schedule.scheduleId),
                 all = true,
@@ -138,8 +138,9 @@ class SlackUserGroupSyncService(
                     if (slackId != null) {
                         add(slackId)
                     } else {
+                        val responderDescription = "${responder.model.userId} (${responder.model.userName})"
                         logger.warn(
-                            "On-call user ${responder.userId} (${responder.userName}) has no Slack mapping " +
+                            "On-call user $responderDescription has no Slack mapping " +
                                 "for schedule ${schedule.scheduleName}",
                         )
                     }

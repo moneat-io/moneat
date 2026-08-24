@@ -251,8 +251,6 @@ data class OnCallScheduleLayer(
     val participants: List<OnCallParticipant>,
     val createdAt: String,
     val updatedAt: String,
-    @Transient val internalId: Int = 0,
-    @Transient val scheduleId: Int = 0,
 )
 
 @Serializable
@@ -264,7 +262,6 @@ data class OnCallResponderResolution(
     val layerId: String? = null,
     val source: String,
     val activeUntil: String? = null,
-    @Transient val internalUserId: Int = 0,
 )
 
 @Serializable
