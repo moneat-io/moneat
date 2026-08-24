@@ -191,6 +191,7 @@ Automatic incident creation is configured separately through ordered **Alert Rou
 - An enabled route must explicitly turn on **Create an incident for matched alerts**. A route that only pages or groups alerts will not create an incident.
 - Routes are evaluated in order. A first matching page-only route prevents later routes from handling the alert, so put incident-capable routes before catch-all paging routes.
 - The route editor and test-alert result identify whether no route matched, paging occurred, grouping occurred, an incident was skipped, or a triage incident was created.
+- The administrator test-alert response is action-specific: a successful alert request does not imply an incident. Review the route state, matched route revision, group, paging result, and incident result separately.
 - Manual **Declare Incident** remains available independently of Alert Route automation.
 
 External incident-provider passthrough is a separate capability and is not affected by native incident entitlement.

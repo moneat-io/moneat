@@ -22,7 +22,9 @@ import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.PricingTierService
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.isClickHouseError
+import com.moneat.events.models.AlertRouteActionResult
 import com.moneat.events.models.TriggerIncidentRequest
+import com.moneat.events.models.TriggerIncidentResponse
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.alerts.models.AlertPriority
@@ -411,8 +413,27 @@ fun Route.adminRoutes() {
                             metadata = mapOf("triggered_by" to JsonPrimitive(userResourceId(userId)))
                         )
 
-                    alertOrchestrator.process(event, AlertFanoutPlan.FULL)
-                    call.respond(HttpStatusCode.OK, AdminSuccessResponse(success = true))
+                    val orchestration = alertOrchestrator.process(event, AlertFanoutPlan.FULL)
+                    val routeOutcome = orchestration.outcomes.firstOrNull { it.arm.name == "ROUTE" }
+                    val route = routeOutcome?.route
+                    val incidentTriggered = route?.incident?.state?.name == "SUCCEEDED"
+                    call.respond(
+                        HttpStatusCode.OK,
+                        TriggerIncidentResponse(
+                            success = incidentTriggered,
+                            incidentTriggered = incidentTriggered,
+                            routeState = route?.state?.name ?: routeOutcome?.state?.name ?: "UNAVAILABLE",
+                            routeReason = route?.reason ?: routeOutcome?.error
+                                ?: "No Alert Route execution details were available",
+                            matchedRouteId = route?.matchedRouteId,
+                            matchedRouteRevision = route?.matchedRouteRevision,
+                            groupId = route?.groupId,
+                            incidentId = route?.incidentId,
+                            grouping = route?.grouping.toApiAction(),
+                            paging = route?.paging.toApiAction(),
+                            incident = route?.incident.toApiAction(),
+                        ),
+                    )
                 }.getOrElse { e ->
                     call.respond(
                         HttpStatusCode.InternalServerError,
@@ -1038,6 +1059,12 @@ fun Route.adminRoutes() {
         }
     }
 }
+
+private fun com.moneat.alerts.services.AlertRouteActionOutcome?.toApiAction(): AlertRouteActionResult =
+    AlertRouteActionResult(
+        state = this?.state?.name ?: "SKIPPED",
+        reason = this?.reason ?: "No action was taken",
+    )
 
 private suspend fun ApplicationCall.handleQuotaUsageRequest(
     quotaService: BillingQuotaService,

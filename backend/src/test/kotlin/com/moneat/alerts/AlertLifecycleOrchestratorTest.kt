@@ -29,6 +29,11 @@ import com.moneat.alerts.services.AlertFanoutState
 import com.moneat.alerts.services.AlertIncidentFanout
 import com.moneat.alerts.services.AlertLifecycleOrchestrator
 import com.moneat.alerts.services.AlertRouteFanout
+import com.moneat.alerts.services.AlertRouteActionOutcome
+import com.moneat.alerts.services.AlertRouteActionState
+import com.moneat.alerts.services.AlertRouteExecutionOutcome
+import com.moneat.alerts.services.AlertRouteExecutionState
+import com.moneat.alerts.services.AlertRouteOutcomeFanout
 import com.moneat.alerts.services.AlertSilenceService
 import com.moneat.alerts.services.AlertWorkflowFanout
 import com.moneat.shared.models.Organizations
@@ -174,6 +179,38 @@ class AlertLifecycleOrchestratorTest {
         assertEquals(0, result.context.episode?.notificationCount)
         assertTrue(delivered.isEmpty())
         assertEquals(AlertFanoutState.SKIPPED, result.outcome(AlertFanoutArm.WORKFLOW).state)
+    }
+
+    @Test
+    fun `route action outcome is returned without executing the route twice`() = runBlocking {
+        var legacyProcessCalls = 0
+        var outcomeCalls = 0
+        val route = object : AlertRouteFanout, AlertRouteOutcomeFanout {
+            override suspend fun process(context: AlertFanoutContext) {
+                legacyProcessCalls += 1
+            }
+
+            override suspend fun processWithOutcome(context: AlertFanoutContext): AlertRouteExecutionOutcome {
+                outcomeCalls += 1
+                return AlertRouteExecutionOutcome(
+                    state = AlertRouteExecutionState.MATCHED,
+                    matchedRouteId = "route-resource",
+                    matchedRouteRevision = 3,
+                    groupId = "group-resource",
+                    grouping = AlertRouteActionOutcome(AlertRouteActionState.SUCCEEDED, "Alert grouped"),
+                )
+            }
+        }
+        val result = orchestrator(
+            workflow = AlertWorkflowFanout {},
+            incidents = capturingIncidentFanout(mutableListOf()),
+            route = route,
+        ).process(event(), AlertFanoutPlan(route = true, workflow = false))
+
+        assertEquals(0, legacyProcessCalls)
+        assertEquals(1, outcomeCalls)
+        assertEquals("route-resource", result.outcomes.single { it.arm == AlertFanoutArm.ROUTE }.route?.matchedRouteId)
+        assertEquals(AlertFanoutState.SUCCEEDED, result.outcome(AlertFanoutArm.ROUTE).state)
     }
 
     @Test

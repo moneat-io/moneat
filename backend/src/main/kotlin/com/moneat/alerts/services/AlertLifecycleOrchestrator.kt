@@ -71,6 +71,7 @@ data class AlertFanoutOutcome(
     val arm: AlertFanoutArm,
     val state: AlertFanoutState,
     val error: String? = null,
+    val route: AlertRouteExecutionOutcome? = null,
 )
 
 data class AlertOrchestrationResult(
@@ -96,22 +97,41 @@ fun interface AlertRouteFanout {
     suspend fun process(context: AlertFanoutContext)
 }
 
-/** Optional enterprise route arm; core-only deployments safely retain the no-op bridge. */
-object AlertRouteFanoutRegistry {
-    @Volatile
-    private var registered: AlertRouteFanout? = null
+/** Optional details returned by an enterprise route arm after evaluating one alert. */
+data class AlertRouteExecutionOutcome(
+    val state: AlertRouteExecutionState,
+    val reason: String? = null,
+    val matchedRouteId: String? = null,
+    val matchedRouteRevision: Int? = null,
+    val groupId: String? = null,
+    val incidentId: String? = null,
+    val grouping: AlertRouteActionOutcome = AlertRouteActionOutcome(),
+    val paging: AlertRouteActionOutcome = AlertRouteActionOutcome(),
+    val incident: AlertRouteActionOutcome = AlertRouteActionOutcome(),
+)
 
-    fun register(fanout: AlertRouteFanout) {
-        registered = fanout
-    }
+enum class AlertRouteExecutionState {
+    MATCHED,
+    NO_MATCH,
+    SKIPPED,
+    FAILED,
+    UNAVAILABLE,
+}
 
-    fun unregister(fanout: AlertRouteFanout) {
-        synchronized(this) {
-            if (registered === fanout) registered = null
-        }
-    }
+data class AlertRouteActionOutcome(
+    val state: AlertRouteActionState = AlertRouteActionState.SKIPPED,
+    val reason: String? = null,
+)
 
-    fun current(): AlertRouteFanout? = registered
+enum class AlertRouteActionState {
+    SUCCEEDED,
+    SKIPPED,
+    FAILED,
+}
+
+/** Optional result channel for licensed route implementations; the legacy SAM remains source-compatible. */
+interface AlertRouteOutcomeFanout {
+    suspend fun processWithOutcome(context: AlertFanoutContext): AlertRouteExecutionOutcome
 }
 
 /** Records or resolves one episode once, then isolates every selected downstream arm. */
@@ -119,7 +139,7 @@ class AlertLifecycleOrchestrator(
     private val episodeService: AlertEpisodeService = AlertEpisodeService(),
     private val workflowFanoutProvider: () -> AlertWorkflowFanout? = ::workflowFanoutFromKoin,
     private val incidentFanoutProvider: () -> AlertIncidentFanout? = ::incidentFanoutFromKoin,
-    private val routeFanoutProvider: () -> AlertRouteFanout? = AlertRouteFanoutRegistry::current,
+    private val routeFanoutProvider: () -> AlertRouteFanout? = ::routeFanoutFromKoin,
 ) {
     suspend fun process(
         event: AlertLifecycleEvent,
@@ -182,7 +202,26 @@ class AlertLifecycleOrchestrator(
             AlertFanoutArm.ROUTE,
             AlertFanoutState.UNAVAILABLE,
         )
-        return runArm(AlertFanoutArm.ROUTE) { fanout.process(context) }
+        return suspendRunCatching {
+            (fanout as? AlertRouteOutcomeFanout)?.processWithOutcome(context)
+                ?: fanout.process(context).let { null }
+        }.fold(
+            onSuccess = { outcome ->
+                val routeOutcome = outcome ?: return@fold AlertFanoutOutcome(
+                    AlertFanoutArm.ROUTE,
+                    AlertFanoutState.SUCCEEDED,
+                )
+                AlertFanoutOutcome(
+                    AlertFanoutArm.ROUTE,
+                    routeOutcome.toFanoutState(),
+                    route = routeOutcome,
+                )
+            },
+            onFailure = { error ->
+                logger.error(error) { "Alert fan-out arm ${AlertFanoutArm.ROUTE} failed" }
+                AlertFanoutOutcome(AlertFanoutArm.ROUTE, AlertFanoutState.FAILED, error.message)
+            },
+        )
     }
 
     private suspend fun runWorkflowArm(
@@ -238,6 +277,19 @@ class AlertLifecycleOrchestrator(
 
 private fun workflowFanoutFromKoin(): AlertWorkflowFanout? =
     GlobalContext.getOrNull()?.getOrNull()
+
+private fun routeFanoutFromKoin(): AlertRouteFanout? =
+    GlobalContext.getOrNull()?.getOrNull()
+
+private fun AlertRouteExecutionOutcome.toFanoutState(): AlertFanoutState =
+    when (state) {
+        AlertRouteExecutionState.UNAVAILABLE -> AlertFanoutState.UNAVAILABLE
+        AlertRouteExecutionState.FAILED -> AlertFanoutState.FAILED
+        AlertRouteExecutionState.MATCHED,
+        AlertRouteExecutionState.NO_MATCH,
+        AlertRouteExecutionState.SKIPPED,
+        -> AlertFanoutState.SUCCEEDED
+    }
 
 private fun incidentFanoutFromKoin(): AlertIncidentFanout? =
     GlobalContext.getOrNull()?.getOrNull()

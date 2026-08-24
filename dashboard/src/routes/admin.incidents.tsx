@@ -66,10 +66,13 @@ function AdminIncidentsPage() {
         description
       })
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       toast({
-        title: 'Incident Triggered',
-        description: 'The incident has been successfully triggered.',
+        title: result.incidentTriggered ? 'Incident Triggered' : 'No Incident Created',
+        description: result.incidentTriggered
+          ? result.incident?.reason || 'The alert route created or attached an incident.'
+          : result.routeReason || result.incident?.reason || 'The alert was accepted without creating an incident.',
+        variant: result.incidentTriggered ? 'default' : 'destructive',
       })
     },
     onError: (error) => {
@@ -90,14 +93,14 @@ function AdminIncidentsPage() {
     <div className="space-y-8">
       <SectionHeader
         title="Incident Management"
-        description="Manually trigger incidents to test alerting and escalation policies."
+        description="Send a test alert and review the Alert Route actions that actually occurred."
       />
 
       <Card>
         <CardHeader>
           <CardTitle>Trigger New Incident</CardTitle>
           <CardDescription>
-            Configure the parameters below to fire a test incident.
+            Configure the parameters below to evaluate a test alert. An alert is not an incident unless a matching route creates or attaches one.
           </CardDescription>
         </CardHeader>
         <CardContent>

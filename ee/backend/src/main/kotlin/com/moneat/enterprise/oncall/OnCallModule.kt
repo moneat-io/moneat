@@ -5,7 +5,7 @@
 package com.moneat.enterprise.oncall
 
 import com.moneat.config.RedisClient
-import com.moneat.alerts.services.AlertRouteFanoutRegistry
+import com.moneat.alerts.services.AlertRouteFanout
 import com.moneat.enterprise.EnterpriseModule
 import com.moneat.enterprise.IncidentInfo
 import com.moneat.enterprise.OnCallBridge
@@ -51,6 +51,8 @@ import io.ktor.server.routing.Route
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import mu.KotlinLogging
+import org.koin.core.module.Module
+import org.koin.dsl.module
 
 private val logger = KotlinLogging.logger {}
 
@@ -125,6 +127,13 @@ class OnCallModule :
     override val name: String = "On-Call"
     override val licenseFeature: String = "oncall"
 
+    override fun koinModules(): List<Module> =
+        listOf(
+            module {
+                single<AlertRouteFanout> { alertRouteFanout }
+            },
+        )
+
     override fun registerRoutes(route: Route) {
         route.apply {
             onCallRoutes(
@@ -150,7 +159,6 @@ class OnCallModule :
 
     override fun startBackgroundJobs(application: Application) {
         logger.info { "Starting on-call enterprise background jobs" }
-        AlertRouteFanoutRegistry.register(alertRouteFanout)
         alertRouteRecoveryWorker.start()
         escalationEngine.start()
         slackUserGroupSyncService.start()
@@ -161,7 +169,6 @@ class OnCallModule :
 
     override fun stopBackgroundJobs() {
         logger.info { "Stopping on-call enterprise background jobs" }
-        AlertRouteFanoutRegistry.unregister(alertRouteFanout)
         alertRouteRecoveryWorker.stop()
         if (escalationEngineDelegate.isInitialized()) escalationEngine.stop()
         if (slackUserGroupSyncServiceDelegate.isInitialized()) slackUserGroupSyncService.stop()

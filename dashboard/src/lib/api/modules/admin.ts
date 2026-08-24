@@ -28,6 +28,20 @@ import type {
   BillingUsage,
 } from '../types'
 
+export type TriggerIncidentResponse = {
+  success: boolean
+  incidentTriggered: boolean
+  routeState: string
+  routeReason?: string | null
+  matchedRouteId?: string | null
+  matchedRouteRevision?: number | null
+  groupId?: string | null
+  incidentId?: string | null
+  grouping: { state: string; reason?: string | null }
+  paging: { state: string; reason?: string | null }
+  incident: { state: string; reason?: string | null }
+}
+
 export function adminMethods(core: ApiClientCore) {
   const base = core.API_BASE
 
@@ -214,7 +228,7 @@ export function adminMethods(core: ApiClientCore) {
       title: string
       description: string
     }) =>
-      core.request<{ success: boolean }>(`${base}/admin/incidents/trigger`, {
+      core.request<TriggerIncidentResponse>(`${base}/admin/incidents/trigger`, {
         method: 'POST',
         body: JSON.stringify(data),
       }),

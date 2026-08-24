@@ -690,6 +690,27 @@ data class TriggerIncidentRequest(
 )
 
 @Serializable
+data class AlertRouteActionResult(
+    val state: String,
+    val reason: String? = null,
+)
+
+@Serializable
+data class TriggerIncidentResponse(
+    val success: Boolean,
+    val incidentTriggered: Boolean,
+    val routeState: String,
+    val routeReason: String? = null,
+    val matchedRouteId: String? = null,
+    val matchedRouteRevision: Int? = null,
+    val groupId: String? = null,
+    val incidentId: String? = null,
+    val grouping: AlertRouteActionResult,
+    val paging: AlertRouteActionResult,
+    val incident: AlertRouteActionResult,
+)
+
+@Serializable
 data class ErrorResponse(
     val error: String
 )

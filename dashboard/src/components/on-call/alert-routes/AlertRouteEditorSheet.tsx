@@ -274,6 +274,16 @@ function AlertRouteEditorForm({
           />
         </EditorSection>
 
+        {form.paging.mode !== 'NONE' && !form.incident.create && (
+          <div className="flex items-start gap-2 rounded-lg border border-warning-border bg-warning-bg p-3 text-xs text-warning-fg">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <p>
+              This is a paging-only route. It will page the configured targets and will not create an
+              incident. Because routes use first match wins, a matching alert will not continue to a later route.
+            </p>
+          </div>
+        )}
+
         <EditorSection title="Grouping" description="How matched alerts fold together.">
           <AlertRouteGroupingSection
             grouping={form.grouping}
@@ -290,6 +300,16 @@ function AlertRouteEditorForm({
             onRecoveryChange={(recovery) => patch({recovery})}
           />
         </EditorSection>
+
+        <div className="rounded-lg border bg-muted/30 p-3 text-xs">
+          <p className="font-medium">Save summary</p>
+          <p className="mt-1 text-muted-foreground">
+            {form.enabled ? 'Enabled' : 'Disabled'} route · {form.paging.mode === 'NONE' ? 'no paging' : 'pages responders'} ·{' '}
+            {form.incident.create
+              ? `creates a ${form.incident.mode === 'ACTIVE' ? 'active' : 'triage'} incident`
+              : 'does not create incidents'}
+          </p>
+        </div>
 
         <details className="rounded-lg border">
           <summary className="cursor-pointer px-4 py-2.5 text-sm font-semibold">Preview</summary>
