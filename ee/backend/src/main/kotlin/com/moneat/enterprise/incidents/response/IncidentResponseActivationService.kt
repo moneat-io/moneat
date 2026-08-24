@@ -40,6 +40,7 @@ import kotlin.time.Instant
 private const val INCIDENT_COMMANDER_ROLE_KEY = "incident-commander"
 private const val TARGET_COMMANDER = "COMMANDER"
 private const val TARGET_OWNERSHIP = "OWNERSHIP"
+private const val INCIDENT_ACTIVATION_NOT_FOUND = "Incident response activation not found"
 
 data class IncidentResponsePageRequest(
     val organizationId: Int,
@@ -226,9 +227,9 @@ class IncidentResponseActivationService(
                     (NativeIncidentResponseActivations.resourceId eq resourceId)
             }.singleOrNull()?.also {
                 if (incidentId != null && it[NativeIncidentResponseActivations.incidentId] != incidentId) {
-                    throw NoSuchElementException("Incident response activation not found")
+                    throw NoSuchElementException(INCIDENT_ACTIVATION_NOT_FOUND)
                 }
-            } ?: throw NoSuchElementException("Incident response activation not found")
+            } ?: throw NoSuchElementException(INCIDENT_ACTIVATION_NOT_FOUND)
             NativeIncidentResponseTargets.update({
                 (NativeIncidentResponseTargets.organizationId eq organizationId) and
                     (NativeIncidentResponseTargets.activationId eq
@@ -284,7 +285,7 @@ class IncidentResponseActivationService(
             val activation = NativeIncidentResponseActivations.selectAll().where {
                 (NativeIncidentResponseActivations.organizationId eq organizationId) and
                     (NativeIncidentResponseActivations.resourceId eq resourceId)
-            }.singleOrNull() ?: throw NoSuchElementException("Incident response activation not found")
+            }.singleOrNull() ?: throw NoSuchElementException(INCIDENT_ACTIVATION_NOT_FOUND)
             activationResponse(activation)
         }
 
