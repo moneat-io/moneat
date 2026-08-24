@@ -22,6 +22,7 @@ data class EscalationPath(
         const val MAX_NODES = 128
         const val MAX_TARGETS_PER_NODE = 32
         const val MAX_BRANCHES_PER_NODE = 16
+        const val MAX_NODE_ID_LENGTH = 128
     }
 }
 
@@ -68,6 +69,51 @@ data class EscalationPathBranch(
     val value: String,
     val nextNodeId: String,
 )
+
+data class EscalationPathContext(
+    val priority: String,
+    val severity: String?,
+    val workingHours: Boolean,
+)
+
+object EscalationPathRuntime {
+    fun nextNode(path: EscalationPath, nodeId: String, context: EscalationPathContext): String? {
+        val node = path.nodes.firstOrNull { it.id == nodeId } ?: return null
+        if (node.stop) return null
+        if (node.kind == EscalationPathNode.NODE_KIND_BRANCH) {
+            return node.branches.firstOrNull { matches(it, context) }?.nextNodeId
+        }
+        return node.nextNodeId
+    }
+
+    fun targetsFor(node: EscalationPathNode, deliveryIndex: Int): List<EscalationPathTarget> {
+        if (node.targets.isEmpty()) return emptyList()
+        return when (node.delivery) {
+            EscalationPathNode.DELIVERY_SEQUENTIAL,
+            EscalationPathNode.DELIVERY_ROUND_ROBIN,
+            -> listOf(node.targets[deliveryIndex.mod(node.targets.size)])
+            EscalationPathNode.DELIVERY_PARALLEL,
+            EscalationPathNode.DELIVERY_PAGE_ALL,
+            -> node.targets
+            else -> emptyList()
+        }
+    }
+
+    private fun matches(branch: EscalationPathBranch, context: EscalationPathContext): Boolean {
+        val actual = when (branch.field) {
+            EscalationPathBranchField.PRIORITY -> context.priority
+            EscalationPathBranchField.SEVERITY -> context.severity
+            EscalationPathBranchField.WORKING_HOURS -> if (context.workingHours) "IN" else "OUT"
+            else -> null
+        } ?: return false
+        return when (branch.operator) {
+            "EQ" -> actual == branch.value
+            "NEQ" -> actual != branch.value
+            "IN" -> branch.value.split(',').map(String::trim).contains(actual)
+            else -> false
+        }
+    }
+}
 
 object EscalationPathTargetType {
     const val USER = "USER"
@@ -130,6 +176,9 @@ object EscalationPathValidator {
 
         path.nodes.forEach { node ->
             require(node.id == node.id.trim()) { "Escalation path node IDs must not contain surrounding whitespace" }
+            require(node.id.length <= EscalationPath.MAX_NODE_ID_LENGTH) {
+                "Escalation path node IDs must be at most ${EscalationPath.MAX_NODE_ID_LENGTH} characters"
+            }
             require(
                 node.kind == EscalationPathNode.NODE_KIND_LEVEL ||
                     node.kind == EscalationPathNode.NODE_KIND_BRANCH,
@@ -161,14 +210,16 @@ object EscalationPathValidator {
                 require(branch.operator in operators) { "Unsupported escalation branch operator: ${branch.operator}" }
                 require(branch.value.isNotBlank()) { "Escalation branch values must not be blank" }
                 require(branch.nextNodeId in nodeIds) { "Branch ${node.id} points to a missing next node" }
+                val values = branch.value.split(',').map(String::trim).filter(String::isNotEmpty)
+                require(values.isNotEmpty()) { "Escalation branch values must not be blank" }
                 when (branch.field) {
-                    EscalationPathBranchField.PRIORITY -> require(branch.value in priorities) {
+                    EscalationPathBranchField.PRIORITY -> require(values.all { it in priorities }) {
                         "Unsupported priority branch value: ${branch.value}"
                     }
-                    EscalationPathBranchField.SEVERITY -> require(branch.value in severities) {
+                    EscalationPathBranchField.SEVERITY -> require(values.all { it in severities }) {
                         "Unsupported severity branch value: ${branch.value}"
                     }
-                    EscalationPathBranchField.WORKING_HOURS -> require(branch.value in setOf("IN", "OUT")) {
+                    EscalationPathBranchField.WORKING_HOURS -> require(values.all { it in setOf("IN", "OUT") }) {
                         "Working-hours branch value must be IN or OUT"
                     }
                 }

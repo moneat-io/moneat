@@ -9,9 +9,12 @@ import com.moneat.enterprise.oncall.overrideResourceId
 import com.moneat.enterprise.oncall.models.OnCallOverrides
 import com.moneat.enterprise.oncall.models.OnCallScheduleUsergroups
 import com.moneat.enterprise.oncall.services.OnCallScheduleService
+import com.moneat.enterprise.oncall.services.ScheduleLayerDefinition
+import com.moneat.enterprise.oncall.services.ScheduleLayerUpdate
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OnCallSchedules
 import com.moneat.shared.models.OnCallParticipants
+import com.moneat.shared.models.OnCallScheduleLayers
 import com.moneat.shared.models.Users
 import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.ErrorResponse
@@ -38,6 +41,7 @@ import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.less
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -53,8 +57,10 @@ import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 private const val WEEKLY_ROTATION_DAYS = 7L
+private const val INVALID_TOKEN_MESSAGE = "Invalid token"
 private const val SCHEDULE_NOT_FOUND_MESSAGE = "Schedule not found"
 private const val OVERRIDE_NOT_FOUND_MESSAGE = "Override not found"
+private const val LAYER_NOT_FOUND_MESSAGE = "Layer not found"
 
 @Serializable
 data class ScheduleTimelineEntry(
@@ -111,6 +117,30 @@ data class CreateOverrideRequest(
     val endAt: String, // ISO 8601 timestamp
 )
 
+@Serializable
+data class CreateScheduleLayerRequest(
+    val name: String,
+    val layerOrder: Int,
+    val rotationType: String,
+    val handoffTime: String,
+    val timezone: String,
+    val enabled: Boolean = true,
+    val explicitGap: Boolean = false,
+    val participants: List<ScheduleParticipant> = emptyList(),
+)
+
+@Serializable
+data class UpdateScheduleLayerRequest(
+    val name: String? = null,
+    val layerOrder: Int? = null,
+    val rotationType: String? = null,
+    val handoffTime: String? = null,
+    val timezone: String? = null,
+    val enabled: Boolean? = null,
+    val explicitGap: Boolean? = null,
+    val participants: List<ScheduleParticipant>? = null,
+)
+
 private data class TimelineParticipant(
     val userId: Int,
     val userResourceId: String,
@@ -138,7 +168,7 @@ fun Route.onCallRoutes(
                 val organizationId = principal?.currentOrgIdOrNull()
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@get
                 }
 
@@ -146,12 +176,53 @@ fun Route.onCallRoutes(
                 call.respond(schedules)
             }
 
+            get("/responders") {
+                val principal = call.principal<JWTPrincipal>()
+                val organizationId = principal?.currentOrgIdOrNull()
+                if (organizationId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
+                    return@get
+                }
+                val rawScheduleIds =
+                    call.request.queryParameters.getAll("scheduleId")
+                        .orEmpty()
+                        .flatMap { it.split(',') }
+                        .map(String::trim)
+                        .filter(String::isNotEmpty)
+                if (rawScheduleIds.isEmpty()) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("At least one scheduleId is required"))
+                    return@get
+                }
+                val scheduleResourceIds = rawScheduleIds.mapNotNull { it.toUuidOrNull() }
+                if (scheduleResourceIds.size != rawScheduleIds.size) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid schedule ID"))
+                    return@get
+                }
+                val scheduleIds =
+                    transaction {
+                        OnCallSchedules
+                            .selectAll()
+                            .where {
+                                (OnCallSchedules.organizationId eq organizationId) and
+                                    (OnCallSchedules.resourceId inList scheduleResourceIds)
+                            }
+                            .map { it[OnCallSchedules.id].value }
+                    }
+                val all = call.request.queryParameters["all"]?.toBooleanStrictOrNull() ?: true
+                val responders = scheduleService.resolveCurrentResponders(organizationId, scheduleIds, all = all)
+                if (responders.isEmpty()) {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("No on-call responders found"))
+                } else {
+                    call.respond(responders)
+                }
+            }
+
             post {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.currentOrgIdOrNull()
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@post
                 }
 
@@ -184,7 +255,7 @@ fun Route.onCallRoutes(
                 val scheduleId = call.resolveScheduleId(organizationId)
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@get
                 }
 
@@ -211,7 +282,7 @@ fun Route.onCallRoutes(
                 val scheduleId = call.resolveScheduleId(organizationId)
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@put
                 }
 
@@ -258,7 +329,7 @@ fun Route.onCallRoutes(
                 val scheduleId = call.resolveScheduleId(organizationId)
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@delete
                 }
 
@@ -285,7 +356,7 @@ fun Route.onCallRoutes(
                 val scheduleId = call.resolveScheduleId(organizationId)
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@get
                 }
 
@@ -306,6 +377,141 @@ fun Route.onCallRoutes(
                 }
             }
 
+            get("/{id}/responders") {
+                val principal = call.principal<JWTPrincipal>()
+                val organizationId = principal?.currentOrgIdOrNull()
+                val scheduleId = call.resolveScheduleId(organizationId)
+
+                if (organizationId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
+                    return@get
+                }
+                if (scheduleId == null) return@get
+                if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(SCHEDULE_NOT_FOUND_MESSAGE))
+                    return@get
+                }
+
+                val all = call.request.queryParameters["all"]?.toBooleanStrictOrNull() ?: true
+                val responders = scheduleService.resolveCurrentResponders(
+                    organizationId = organizationId,
+                    scheduleIds = listOf(scheduleId),
+                    all = all,
+                )
+                if (responders.isEmpty()) {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("No on-call responders found"))
+                } else {
+                    call.respond(responders)
+                }
+            }
+
+            get("/{id}/layers") {
+                val principal = call.principal<JWTPrincipal>()
+                val organizationId = principal?.currentOrgIdOrNull()
+                val scheduleId = call.resolveScheduleId(organizationId)
+                if (organizationId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
+                    return@get
+                }
+                if (scheduleId == null) return@get
+                call.respond(scheduleService.listLayers(organizationId, scheduleId))
+            }
+
+            post("/{id}/layers") {
+                val principal = call.principal<JWTPrincipal>()
+                val organizationId = principal?.currentOrgIdOrNull()
+                val scheduleId = call.resolveScheduleId(organizationId)
+                if (organizationId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
+                    return@post
+                }
+                if (scheduleId == null) return@post
+                val request = call.receive<CreateScheduleLayerRequest>()
+                try {
+                    val layer =
+                        scheduleService.createLayer(
+                            organizationId = organizationId,
+                            scheduleId = scheduleId,
+                            definition =
+                                ScheduleLayerDefinition(
+                                    name = request.name,
+                                    layerOrder = request.layerOrder,
+                                    rotationType = request.rotationType,
+                                    handoffTime = LocalTime.parse(request.handoffTime),
+                                    timezone = request.timezone,
+                                    enabled = request.enabled,
+                                    explicitGap = request.explicitGap,
+                                    participantIds =
+                                        request.participants
+                                            .sortedBy { it.position }
+                                            .map { resolveOnCallUserId(organizationId, it.userId) },
+                                ),
+                        )
+                    call.respond(HttpStatusCode.Created, layer)
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
+                }
+            }
+
+            put("/{id}/layers/{layerId}") {
+                val principal = call.principal<JWTPrincipal>()
+                val organizationId = principal?.currentOrgIdOrNull()
+                val scheduleId = call.resolveScheduleId(organizationId)
+                val layerId = call.resolveLayerId(organizationId, scheduleId)
+                if (organizationId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
+                    return@put
+                }
+                if (scheduleId == null || layerId == null) return@put
+                val request = call.receive<UpdateScheduleLayerRequest>()
+                try {
+                    val layer =
+                        scheduleService.updateLayer(
+                            organizationId = organizationId,
+                            scheduleId = scheduleId,
+                            layerId = layerId,
+                            update =
+                                ScheduleLayerUpdate(
+                                    name = request.name,
+                                    layerOrder = request.layerOrder,
+                                    rotationType = request.rotationType,
+                                    handoffTime = request.handoffTime?.let(LocalTime::parse),
+                                    timezone = request.timezone,
+                                    enabled = request.enabled,
+                                    explicitGap = request.explicitGap,
+                                    participantIds =
+                                        request.participants
+                                            ?.sortedBy { it.position }
+                                            ?.map { resolveOnCallUserId(organizationId, it.userId) },
+                                ),
+                        )
+                    if (layer == null) {
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse(LAYER_NOT_FOUND_MESSAGE))
+                    } else {
+                        call.respond(layer)
+                    }
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
+                }
+            }
+
+            delete("/{id}/layers/{layerId}") {
+                val principal = call.principal<JWTPrincipal>()
+                val organizationId = principal?.currentOrgIdOrNull()
+                val scheduleId = call.resolveScheduleId(organizationId)
+                val layerId = call.resolveLayerId(organizationId, scheduleId)
+                if (organizationId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
+                    return@delete
+                }
+                if (scheduleId == null || layerId == null) return@delete
+                if (scheduleService.deleteLayer(organizationId, scheduleId, layerId)) {
+                    call.respond(HttpStatusCode.NoContent)
+                } else {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(LAYER_NOT_FOUND_MESSAGE))
+                }
+            }
+
             get("/{id}/timeline") {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.currentOrgIdOrNull()
@@ -314,7 +520,7 @@ fun Route.onCallRoutes(
                 val endParam = call.request.queryParameters["end"]
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@get
                 }
                 if (scheduleId == null) {
@@ -353,7 +559,7 @@ fun Route.onCallRoutes(
                 val scheduleId = call.resolveScheduleId(organizationId)
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@post
                 }
 
@@ -362,7 +568,7 @@ fun Route.onCallRoutes(
                 }
 
                 if (userId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@post
                 }
 
@@ -414,7 +620,7 @@ fun Route.onCallRoutes(
                 val overrideId = call.resolveOverrideId(organizationId)
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@delete
                 }
 
@@ -447,7 +653,7 @@ fun Route.onCallRoutes(
                 val scheduleId = call.resolveScheduleId(organizationId)
 
                 if (organizationId == null || userId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@put
                 }
 
@@ -513,7 +719,7 @@ fun Route.onCallRoutes(
                 val scheduleId = call.resolveScheduleId(organizationId)
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@delete
                 }
 
@@ -736,6 +942,35 @@ private suspend fun io.ktor.server.application.ApplicationCall.resolveScheduleId
         respond(HttpStatusCode.NotFound, ErrorResponse(SCHEDULE_NOT_FOUND_MESSAGE))
     }
     return scheduleId
+}
+
+private suspend fun io.ktor.server.application.ApplicationCall.resolveLayerId(
+    organizationId: Int?,
+    scheduleId: Int?,
+): Int? {
+    if (organizationId == null || scheduleId == null) return null
+    val resourceId = parameters["layerId"]?.toUuidOrNull()
+    if (resourceId == null) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid layer ID"))
+        return null
+    }
+    val layerId =
+        transaction {
+            OnCallScheduleLayers
+                .selectAll()
+                .where {
+                    (OnCallScheduleLayers.organizationId eq organizationId) and
+                        (OnCallScheduleLayers.scheduleId eq scheduleId) and
+                        (OnCallScheduleLayers.resourceId eq resourceId)
+                }
+                .firstOrNull()
+                ?.get(OnCallScheduleLayers.id)
+                ?.value
+        }
+    if (layerId == null) {
+        respond(HttpStatusCode.NotFound, ErrorResponse(LAYER_NOT_FOUND_MESSAGE))
+    }
+    return layerId
 }
 
 private suspend fun io.ktor.server.application.ApplicationCall.resolveOverrideId(organizationId: Int?): Int? {

@@ -243,8 +243,7 @@ class OnCallModule :
         organizationId: Int,
         scheduleId: Int,
     ): OnCallUserInfo? {
-        val schedule = onCallScheduleService.getSchedule(scheduleId) ?: return null
-        if (schedule.organizationId != organizationId) return null
+        if (!onCallScheduleService.isScheduleInOrganization(scheduleId, organizationId)) return null
         val participant = onCallScheduleService.getCurrentOnCall(scheduleId) ?: return null
         return OnCallUserInfo(userId = participant.userResourceId, userName = participant.userName)
     }

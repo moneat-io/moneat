@@ -80,6 +80,32 @@ class EscalationPathValidatorTest {
         }
     }
 
+    @Test
+    fun `runtime selects delivery batches and bounded branch`() {
+        val node = EscalationPathNode(
+            id = "page",
+            delivery = EscalationPathNode.DELIVERY_ROUND_ROBIN,
+            targets = listOf(target(), target("ON_CALL_SCHEDULE")),
+        )
+        assertEquals(listOf(node.targets[1]), EscalationPathRuntime.targetsFor(node, 1))
+
+        val path = EscalationPath(
+            startNodeId = "branch",
+            nodes = listOf(
+                EscalationPathNode(
+                    id = "branch",
+                    kind = EscalationPathNode.NODE_KIND_BRANCH,
+                    branches = listOf(EscalationPathBranch("PRIORITY", "EQ", "P0", "urgent")),
+                ),
+                EscalationPathNode("urgent", targets = listOf(target()), stop = true),
+            ),
+        )
+        assertEquals(
+            "urgent",
+            EscalationPathRuntime.nextNode(path, "branch", EscalationPathContext("P0", null, true)),
+        )
+    }
+
     private fun target(type: String = EscalationPathTargetType.USER) =
         EscalationPathTarget(type, "00000000-0000-0000-0000-000000000001")
 }

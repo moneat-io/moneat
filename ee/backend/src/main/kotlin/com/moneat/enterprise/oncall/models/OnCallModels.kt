@@ -292,6 +292,34 @@ object OnCallScheduleUsergroups : IntIdTable("on_call_schedule_usergroups") {
 }
 
 @Serializable
+data class OnCallScheduleLayer(
+    val id: String,
+    @SerialName("scheduleId") val scheduleResourceId: String,
+    val name: String,
+    val layerOrder: Int,
+    val rotationType: String,
+    @Serializable(with = LocalTimeSerializer::class)
+    val handoffTime: LocalTime,
+    val timezone: String,
+    val enabled: Boolean,
+    val explicitGap: Boolean,
+    val participants: List<OnCallParticipant>,
+    val createdAt: String,
+    val updatedAt: String,
+)
+
+@Serializable
+data class OnCallResponderResolution(
+    val userId: String,
+    val userName: String,
+    val userEmail: String,
+    @SerialName("scheduleId") val scheduleResourceId: String,
+    val layerId: String? = null,
+    val source: String,
+    val activeUntil: String? = null,
+)
+
+@Serializable
 data class OnCallParticipant(
     val id: String,
     @SerialName("userId") val userResourceId: String,
@@ -329,13 +357,12 @@ data class OnCallSchedule(
     val timezone: String,
     val participants: List<OnCallParticipant>,
     val overrides: List<OnCallOverride>,
+    val layers: List<OnCallScheduleLayer> = emptyList(),
     val currentOnCall: OnCallParticipant? = null,
     val slackUsergroupId: String? = null,
     val slackUsergroupHandle: String? = null,
     val createdAt: String,
     val updatedAt: String,
-    @Transient val internalId: Int = 0,
-    @Transient val organizationId: Int = 0,
 )
 
 // ===== On-Call Incidents (User Declared) =====

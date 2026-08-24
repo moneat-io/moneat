@@ -20,6 +20,8 @@ import type {
   Priority,
   BusinessHours,
   OnCallSchedule,
+  OnCallScheduleLayer,
+  OnCallResponderResolution,
   OnCallOverride,
   EscalationPolicy,
   OnCallAlert,
@@ -32,6 +34,8 @@ import type {
   CreateOnCallScheduleRequest,
   UpdateOnCallScheduleRequest,
   CreateOverrideRequest,
+  CreateScheduleLayerRequest,
+  UpdateScheduleLayerRequest,
   CreateEscalationPolicyRequest,
   UpdateEscalationPolicyRequest,
   UpdatePrioritiesRequest,
@@ -169,6 +173,47 @@ export function onCallMethods(core: ApiClientCore) {
     getCurrentOnCall: (scheduleId: string) =>
       core.request<{ userId: string; userName: string }>(
         `${base}/on-call/schedules/${encodeURIComponent(scheduleId)}/current`
+      ),
+
+    getOnCallResponders: (scheduleId: string, all = true) =>
+      core.request<OnCallResponderResolution[]>(
+        `${base}/on-call/schedules/${encodeURIComponent(scheduleId)}/responders?all=${String(all)}`
+      ),
+
+    getScheduleLayers: (scheduleId: string) =>
+      core.request<OnCallScheduleLayer[]>(
+        `${base}/on-call/schedules/${encodeURIComponent(scheduleId)}/layers`
+      ),
+
+    createScheduleLayer: (
+      scheduleId: string,
+      request: CreateScheduleLayerRequest
+    ) =>
+      core.request<OnCallScheduleLayer>(
+        `${base}/on-call/schedules/${encodeURIComponent(scheduleId)}/layers`,
+        {
+          method: 'POST',
+          body: JSON.stringify(request),
+        }
+      ),
+
+    updateScheduleLayer: (
+      scheduleId: string,
+      layerId: string,
+      request: UpdateScheduleLayerRequest
+    ) =>
+      core.request<OnCallScheduleLayer>(
+        `${base}/on-call/schedules/${encodeURIComponent(scheduleId)}/layers/${encodeURIComponent(layerId)}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify(request),
+        }
+      ),
+
+    deleteScheduleLayer: (scheduleId: string, layerId: string) =>
+      core.request<void>(
+        `${base}/on-call/schedules/${encodeURIComponent(scheduleId)}/layers/${encodeURIComponent(layerId)}`,
+        {method: 'DELETE'}
       ),
 
     createOverride: (

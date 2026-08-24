@@ -13,6 +13,7 @@ import com.moneat.enterprise.oncall.models.EscalationPolicyVersions
 import com.moneat.shared.models.EscalationPolicies
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OrganizationTeams
+import com.moneat.shared.models.OrganizationTeamMembers
 import com.moneat.shared.models.OnCallSchedules
 import com.moneat.shared.models.Users
 import com.moneat.shared.services.toUuidOrNull
@@ -215,6 +216,19 @@ class EscalationPathService {
         appendEventInTransaction(organizationId, executionId, event)
     }
 
+    fun appendEventForAlert(alertId: Int, event: EscalationExecutionEvent): Boolean = transaction {
+        val execution = EscalationExecutionStates.selectAll()
+            .where { EscalationExecutionStates.alertId eq alertId }
+            .singleOrNull()
+            ?: return@transaction false
+        appendEventInTransaction(
+            execution[EscalationExecutionStates.organizationId],
+            execution[EscalationExecutionStates.id].value,
+            event,
+        )
+        true
+    }
+
     fun transition(
         organizationId: Int,
         executionId: Int,
@@ -334,7 +348,18 @@ class EscalationPathService {
                             (OrganizationTeams.resourceId eq resourceId)
                     }.count() > 0,
                     "Team target not found",
-                )
+                ).also {
+                    val teamId = OrganizationTeams.selectAll().where {
+                        (OrganizationTeams.organizationId eq organizationId) and
+                            (OrganizationTeams.resourceId eq resourceId)
+                    }.singleOrNull()?.get(OrganizationTeams.id)?.value
+                    requireTarget(
+                        teamId != null && OrganizationTeamMembers.selectAll()
+                            .where { OrganizationTeamMembers.teamId eq teamId }
+                            .count() > 0,
+                        "Team target has no members",
+                    )
+                }
                 EscalationPathTargetType.ESCALATION_POLICY -> {
                     val nestedPolicyId = EscalationPolicies.selectAll().where {
                         (EscalationPolicies.organizationId eq organizationId) and
