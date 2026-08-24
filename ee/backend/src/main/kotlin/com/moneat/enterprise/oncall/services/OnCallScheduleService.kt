@@ -205,8 +205,6 @@ class OnCallScheduleService {
             slackUsergroupHandle = usergroupMapping?.get(OnCallScheduleUsergroups.slackUsergroupHandle),
             createdAt = scheduleRow[OnCallSchedules.createdAt].toString(),
             updatedAt = scheduleRow[OnCallSchedules.updatedAt].toString(),
-            internalId = scheduleRow[OnCallSchedules.id].value,
-            organizationId = scheduleRow[OnCallSchedules.organizationId],
         )
     }
 
@@ -304,7 +302,7 @@ class OnCallScheduleService {
                             (OnCallSchedules.organizationId eq organizationId)
                     }
                     .singleOrNull() ?: return@transaction null
-            if (
+            val existingLayerId =
                 OnCallScheduleLayers
                     .selectAll()
                     .where {
@@ -312,8 +310,9 @@ class OnCallScheduleService {
                             (OnCallScheduleLayers.scheduleId eq scheduleId) and
                             (OnCallScheduleLayers.organizationId eq organizationId)
                     }
-                    .singleOrNull() == null
-            ) {
+                    .singleOrNull()
+                    ?.get(OnCallScheduleLayers.id)
+            if (existingLayerId == null) {
                 return@transaction null
             }
             if (update.layerOrder != null) require(update.layerOrder >= 0) { "Layer order must be non-negative" }

@@ -308,8 +308,6 @@ data class OnCallSchedule(
     val slackUsergroupHandle: String? = null,
     val createdAt: String,
     val updatedAt: String,
-    @Transient val internalId: Int = 0,
-    @Transient val organizationId: Int = 0,
 )
 
 // ===== On-Call Incidents (User Declared) =====
