@@ -220,6 +220,11 @@ class AlertRouteExecutionServiceTest {
         }
 
         assertEquals(1, gateway.triggered.size)
+        val alertId = transaction { OnCallAlerts.selectAll().single()[OnCallAlerts.id].value }
+        val outcome = AlertRouteOutcomeReader.findForOnCallAlert(organization.organizationId, alertId)
+        assertNotNull(outcome)
+        assertEquals("FAILED", outcome.incident.state)
+        assertNotNull(outcome.incident.reason)
     }
 
     @Test

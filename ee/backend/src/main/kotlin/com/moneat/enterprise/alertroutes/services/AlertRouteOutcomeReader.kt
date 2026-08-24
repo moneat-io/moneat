@@ -12,6 +12,8 @@ import com.moneat.enterprise.oncall.models.AlertRouteActionSummary
 import com.moneat.enterprise.oncall.models.AlertRouteOutcomeSummary
 import com.moneat.enterprise.oncall.models.OnCallIncidents
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
@@ -56,8 +58,17 @@ object AlertRouteOutcomeReader {
         }
         val createIncident = group[EnterpriseAlertGroups.incidentTemplateSnapshot]["create"]
             ?.jsonPrimitive?.booleanOrNull == true
+        val storedIncident = group[EnterpriseAlertGroups.incidentTemplateSnapshot]["execution"]
+            ?.jsonObject
+            ?.get("incident")
+            ?.jsonObject
         val incident = if (incidentId != null) {
             AlertRouteActionSummary("SUCCEEDED", "Alert linked to the incident")
+        } else if (storedIncident != null) {
+            AlertRouteActionSummary(
+                state = storedIncident["state"]?.jsonPrimitive?.contentOrNull ?: "FAILED",
+                reason = storedIncident["reason"]?.jsonPrimitive?.contentOrNull ?: "Incident action failed",
+            )
         } else if (createIncident) {
             AlertRouteActionSummary("SKIPPED", "Incident was not created for this alert")
         } else {

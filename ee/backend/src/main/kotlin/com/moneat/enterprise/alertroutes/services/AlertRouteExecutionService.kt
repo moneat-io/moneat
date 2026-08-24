@@ -58,6 +58,12 @@ private const val ROUTE_AUTOMATION_ORIGIN = "ALERT_ROUTE"
 private const val ROUTE_EXECUTION_FAILURE_REASON = "Alert-route execution failed"
 private val executionLogger = KotlinLogging.logger {}
 
+private data class IncidentActionExecution(
+    val group: AlertGroupRecord,
+    val outcome: AlertRouteActionOutcome,
+    val error: Throwable?,
+)
+
 /** Executes the selected route without coupling it to workflow or provider delivery. */
 class AlertRouteExecutionService(
     private val evaluationService: AlertRouteEvaluationService = AlertRouteEvaluationService(),
@@ -126,21 +132,16 @@ class AlertRouteExecutionService(
             null
         }
         val group = groupService.recordFiring(live.context, decision, episodeId, candidate, now())
-        val incidentResult = runCatching { applyIncidentActions(context, episodeId, group) }
-        val finalGroup = incidentResult.getOrNull() ?: group
-        val incidentOutcome = incidentResult.fold(
-            onSuccess = { updatedGroup -> incidentActionOutcome(context, group, updatedGroup) },
-            onFailure = { error ->
-                AlertRouteActionOutcome(AlertRouteActionState.FAILED, error.message ?: "Incident action failed")
-            },
-        )
+        val incidentExecution = applyIncidentActionsWithOutcome(context, episodeId, group)
+        val finalGroup = incidentExecution.group
+        val incidentOutcome = incidentExecution.outcome
         val pagingOutcome = if (context.deliverySilenced) {
             AlertRouteActionOutcome(AlertRouteActionState.SKIPPED, "Paging skipped because delivery is silenced")
         } else {
             page(context, finalGroup, decision.paging.escalationPolicies.map { it.id })
         }
         if (propagateFailures) {
-            incidentResult.exceptionOrNull()?.let { throw it }
+            incidentExecution.error?.let { throw it }
             check(pagingOutcome.state != AlertRouteActionState.FAILED) {
                 pagingOutcome.reason ?: "Alert-route paging failed"
             }
@@ -165,6 +166,34 @@ class AlertRouteExecutionService(
             paging = pagingOutcome,
             incident = incidentOutcome,
         )
+    }
+
+    private fun applyIncidentActionsWithOutcome(
+        context: AlertFanoutContext,
+        episodeId: Uuid,
+        group: AlertGroupRecord,
+    ): IncidentActionExecution {
+        val result = runCatching { applyIncidentActions(context, episodeId, group) }
+        val error = result.exceptionOrNull()
+        error?.let {
+            groupService.recordIncidentActionOutcome(
+                organizationId = context.event.organizationId,
+                groupId = group.id,
+                state = AlertRouteActionState.FAILED.name,
+                reason = it.message ?: "Incident action failed",
+            )
+        }
+        val finalGroup = result.getOrNull() ?: group
+        val outcome = result.fold(
+            onSuccess = { updatedGroup -> incidentActionOutcome(context, group, updatedGroup) },
+            onFailure = { failure ->
+                AlertRouteActionOutcome(
+                    AlertRouteActionState.FAILED,
+                    failure.message ?: "Incident action failed",
+                )
+            },
+        )
+        return IncidentActionExecution(finalGroup, outcome, error)
     }
 
     private fun incidentActionOutcome(

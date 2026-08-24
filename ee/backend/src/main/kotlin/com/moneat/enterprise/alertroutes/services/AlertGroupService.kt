@@ -31,6 +31,7 @@ import com.moneat.enterprise.oncall.models.OnCallAlerts
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.EscalationPolicies
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.v1.core.Exists
 import org.jetbrains.exposed.v1.core.JoinType
@@ -202,6 +203,34 @@ class AlertGroupService(private val policy: AlertGroupPolicy = AlertGroupPolicy(
             )
             touchGroup(group, effectiveDecision, now)
             AlertGroupReader.get(context.organizationId, group[EnterpriseAlertGroups.resourceId])
+        }
+    }
+
+    internal fun recordIncidentActionOutcome(
+        organizationId: Int,
+        groupId: Uuid,
+        state: String,
+        reason: String?,
+    ) {
+        policy.requireEnabled(organizationId)
+        transaction {
+            val group = AlertGroupReader.requireGroup(organizationId, groupId, lock = true)
+            val execution = group[EnterpriseAlertGroups.incidentTemplateSnapshot]["execution"]
+                ?.let { it as? JsonObject }
+                ?.toMutableMap()
+                ?: mutableMapOf()
+            val incident = mutableMapOf<String, JsonElement>("state" to JsonPrimitive(state))
+            reason?.let { incident["reason"] = JsonPrimitive(it) }
+            execution["incident"] = JsonObject(incident)
+            val snapshot = group[EnterpriseAlertGroups.incidentTemplateSnapshot].toMutableMap()
+            snapshot["execution"] = JsonObject(execution)
+            EnterpriseAlertGroups.update({
+                (EnterpriseAlertGroups.organizationId eq organizationId) and
+                    (EnterpriseAlertGroups.resourceId eq groupId)
+            }) {
+                it[incidentTemplateSnapshot] = snapshot
+                it[updatedAt] = Clock.System.now()
+            }
         }
     }
 
