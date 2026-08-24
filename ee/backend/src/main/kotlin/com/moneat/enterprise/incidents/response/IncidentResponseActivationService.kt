@@ -272,7 +272,7 @@ class IncidentResponseActivationService(
             }
         }
         if (updated == 0) return false
-        claimCommander(target[NativeIncidentResponseTargets.activationId], userId)
+        claimCommander(target[NativeIncidentResponseTargets.activationId], target, userId)
         addParticipant(target[NativeIncidentResponseTargets.activationId], userId)
         return true
     }
@@ -569,11 +569,16 @@ class IncidentResponseActivationService(
         }
     }
 
-    private fun claimCommander(activationId: Int, userId: Int) = transaction {
-        val target = NativeIncidentResponseTargets.selectAll().where {
+    private fun claimCommander(
+        activationId: Int,
+        acknowledgedTarget: org.jetbrains.exposed.v1.core.ResultRow,
+        userId: Int,
+    ) = transaction {
+        val commanderTarget = NativeIncidentResponseTargets.selectAll().where {
             (NativeIncidentResponseTargets.activationId eq activationId) and
+                (NativeIncidentResponseTargets.targetType eq TARGET_COMMANDER) and
                 NativeIncidentResponseTargets.onCallAlertId.isNotNull()
-        }.singleOrNull() ?: return@transaction
+        }.singleOrNull() ?: acknowledgedTarget
         val activation = NativeIncidentResponseActivations.selectAll().where {
             NativeIncidentResponseActivations.id eq activationId
         }.single()
@@ -608,7 +613,7 @@ class IncidentResponseActivationService(
             }
         }
         NativeIncidentResponseTargets.update({
-            NativeIncidentResponseTargets.id eq target[NativeIncidentResponseTargets.id].value
+            NativeIncidentResponseTargets.id eq commanderTarget[NativeIncidentResponseTargets.id].value
         }) {
             it[NativeIncidentResponseTargets.userId] = userId
             it[updatedAt] = now()
