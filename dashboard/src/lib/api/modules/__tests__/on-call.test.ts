@@ -503,7 +503,7 @@ describe('onCallMethods', () => {
     })
   })
 
-  // ──── Native incident rollout capabilities ────
+  // ──── Native incident entitlement capabilities ────
 
   describe('getNativeIncidentCapabilities', () => {
     it('parses an enabled capability payload', async () => {
@@ -511,8 +511,6 @@ describe('onCallMethods', () => {
         http.get(`${API_BASE}/on-call/incident-response/capabilities`, () =>
           HttpResponse.json({
             enabled: true,
-            environment: 'production',
-            state: 'ENABLED',
             entitlementEnabled: true,
             plan: 'TEAM',
             entitlementReason: null,
@@ -526,8 +524,6 @@ describe('onCallMethods', () => {
       const result = await api.getNativeIncidentCapabilities()
       expect(result).toEqual({
         enabled: true,
-        environment: 'production',
-        state: 'ENABLED',
         entitlementEnabled: true,
         plan: 'TEAM',
         entitlementReason: null,
@@ -538,21 +534,22 @@ describe('onCallMethods', () => {
       })
     })
 
-    it('preserves reason states while reporting disabled', async () => {
+    it('preserves entitlement reason while reporting disabled', async () => {
       server.use(
         http.get(`${API_BASE}/on-call/incident-response/capabilities`, () =>
           HttpResponse.json({
             enabled: false,
-            environment: 'staging',
-            state: 'FLAG_NOT_FOUND',
+            entitlementEnabled: false,
+            plan: 'FREE',
+            entitlementReason: 'Upgrade the plan',
             externalProviderPassthroughAffected: false,
           })
         )
       )
       const result = await api.getNativeIncidentCapabilities()
       expect(result.enabled).toBe(false)
-      expect(result.environment).toBe('staging')
-      expect(result.state).toBe('FLAG_NOT_FOUND')
+      expect(result.entitlementEnabled).toBe(false)
+      expect(result.entitlementReason).toBe('Upgrade the plan')
     })
 
     it('fails closed and normalizes an unexpected payload', async () => {
@@ -564,8 +561,6 @@ describe('onCallMethods', () => {
       const result = await api.getNativeIncidentCapabilities()
       expect(result).toEqual({
         enabled: false,
-        environment: '',
-        state: 'EVALUATION_ERROR',
         entitlementEnabled: false,
         plan: 'UNKNOWN',
         entitlementReason: null,
@@ -574,24 +569,22 @@ describe('onCallMethods', () => {
       })
     })
 
-    it('fails closed when enabled conflicts with the rollout state', async () => {
+    it('requires explicit entitlement for enabled capability responses', async () => {
       server.use(
         http.get(`${API_BASE}/on-call/incident-response/capabilities`, () =>
-          HttpResponse.json({enabled: true, environment: 'production', state: 'EVALUATION_ERROR'})
+          HttpResponse.json({enabled: true, plan: 'TEAM'})
         )
       )
       const result = await api.getNativeIncidentCapabilities()
       expect(result.enabled).toBe(false)
-      expect(result.state).toBe('EVALUATION_ERROR')
+      expect(result.entitlementEnabled).toBe(false)
     })
 
-    it('fails closed when rollout is enabled but the plan entitlement is disabled', async () => {
+    it('fails closed when the plan entitlement is disabled', async () => {
       server.use(
         http.get(`${API_BASE}/on-call/incident-response/capabilities`, () =>
           HttpResponse.json({
             enabled: false,
-            environment: 'production',
-            state: 'ENABLED',
             entitlementEnabled: false,
             plan: 'FREE',
             entitlementReason: 'Upgrade the plan',

@@ -147,7 +147,7 @@ class AlertRouteExecutionService(
         return group
     }
 
-    suspend fun recoverDue(enabled: (Int) -> Boolean = FeatureRegistry::isNativeIncidentResponseEnabled) {
+    suspend fun recoverDue(enabled: (Int) -> Boolean = FeatureRegistry::isNativeIncidentResponseEntitled) {
         groupService.recoveryCandidates().forEach { (organizationId, groupId) ->
             if (!enabled(organizationId)) return@forEach
             try {

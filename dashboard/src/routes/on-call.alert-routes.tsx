@@ -49,8 +49,8 @@ import {
 import {useToast} from '@/hooks/useToast'
 import {
   nativeIncidentUnavailableCopy,
-  useNativeIncidentRollout,
-} from '@/hooks/useNativeIncidentRollout'
+  useNativeIncidentCapabilities,
+} from '@/hooks/useNativeIncidentCapabilities'
 import {useOnCallAdmin} from '@/hooks/useOnCallAdmin'
 import type {AlertRoute} from '@/lib/api/types'
 import {
@@ -73,7 +73,7 @@ const STALE_ROUTE_MESSAGE =
   'This route changed since the page loaded. The latest routes have been reloaded — try again.'
 
 function AlertRoutesPage() {
-  const rollout = useNativeIncidentRollout()
+  const capabilities = useNativeIncidentCapabilities()
   const {isAdmin} = useOnCallAdmin()
   const queryClient = useQueryClient()
   const {toast} = useToast()
@@ -84,22 +84,22 @@ function AlertRoutesPage() {
   const routesQuery = useQuery({
     queryKey: ALERT_ROUTES_QUERY_KEY,
     queryFn: () => api.getAlertRoutes(),
-    enabled: rollout.enabled,
+    enabled: capabilities.enabled,
   })
   const escalationPoliciesQuery = useQuery({
     queryKey: ['escalation-policies'],
     queryFn: () => api.getEscalationPolicies(),
-    enabled: rollout.enabled,
+    enabled: capabilities.enabled,
   })
   const teamsQuery = useQuery({
     queryKey: ['organization-teams'],
     queryFn: () => api.getOrganizationTeams(),
-    enabled: rollout.enabled,
+    enabled: capabilities.enabled,
   })
   const incidentTypesQuery = useQuery({
     queryKey: ['incident-type-definitions'],
     queryFn: () => api.getIncidentTypes(),
-    enabled: rollout.enabled,
+    enabled: capabilities.enabled,
   })
 
   const routes = [...(routesQuery.data ?? [])].sort((a, b) => a.position - b.position)
@@ -176,7 +176,7 @@ function AlertRoutesPage() {
 
   const busy = toggleMutation.isPending || reorderMutation.isPending || deleteMutation.isPending
 
-  if (rollout.isLoading) {
+  if (capabilities.isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted border-t-primary" />
@@ -184,8 +184,8 @@ function AlertRoutesPage() {
     )
   }
 
-  if (!rollout.enabled) {
-    const copy = nativeIncidentUnavailableCopy(rollout)
+  if (!capabilities.enabled) {
+    const copy = nativeIncidentUnavailableCopy(capabilities)
     return (
       <div className="space-y-4">
         <PageHeader icon={RouteIcon} title="Alert routes" description="Route alerts to responders and incidents" />

@@ -19,7 +19,7 @@ import {Bell, Boxes, Calendar, ListChecks, AlertTriangle, Settings2, Shield, Use
 import type {LucideIcon} from 'lucide-react'
 import {cn} from '@/lib/utils'
 import {PageHeader} from '@/components/ui/page-header'
-import {useNativeIncidentRollout} from '@/hooks/useNativeIncidentRollout'
+import {useNativeIncidentCapabilities} from '@/hooks/useNativeIncidentCapabilities'
 import {useOnCallAdmin} from '@/hooks/useOnCallAdmin'
 
 export const Route = createFileRoute('/on-call')({
@@ -31,8 +31,8 @@ interface OnCallTab {
   label: string
   href: string
   icon: LucideIcon
-  /** Hidden unless native incident response is enabled for the organization. */
-  requiresRollout?: boolean
+  /** Hidden unless the organization is entitled to native incident response. */
+  requiresEntitlement?: boolean
   /** Hidden for non-admins (mirrors the backend's admin-only route mutations). */
   adminOnly?: boolean
 }
@@ -43,14 +43,14 @@ const tabs: OnCallTab[] = [
   {id: 'schedules', label: 'Schedules', href: '/on-call/schedules', icon: Calendar},
   {id: 'escalation-policies', label: 'Escalation Policies', href: '/on-call/escalation-policies', icon: ListChecks},
   {id: 'alerts', label: 'Alerts', href: '/on-call/alerts', icon: AlertTriangle},
-  {id: 'alert-groups', label: 'Alert Groups', href: '/on-call/alert-groups', icon: Boxes, requiresRollout: true},
-  {id: 'incidents', label: 'Incidents', href: '/on-call/incidents', icon: Shield, requiresRollout: true},
+  {id: 'alert-groups', label: 'Alert Groups', href: '/on-call/alert-groups', icon: Boxes, requiresEntitlement: true},
+  {id: 'incidents', label: 'Incidents', href: '/on-call/incidents', icon: Shield, requiresEntitlement: true},
   {
     id: 'alert-routes',
     label: 'Alert Routes',
     href: '/on-call/alert-routes',
     icon: Waypoints,
-    requiresRollout: true,
+    requiresEntitlement: true,
     adminOnly: true,
   },
   {
@@ -58,17 +58,17 @@ const tabs: OnCallTab[] = [
     label: 'Configuration',
     href: '/on-call/incident-configuration',
     icon: Settings2,
-    requiresRollout: true,
+    requiresEntitlement: true,
   },
 ]
 
 function OnCallLayout() {
   const router = useRouterState()
   const currentPath = router.location.pathname
-  const nativeIncidentRollout = useNativeIncidentRollout()
+  const nativeIncidentCapabilities = useNativeIncidentCapabilities()
   const {isAdmin} = useOnCallAdmin()
   const visibleTabs = tabs.filter((tab) => {
-    if (tab.requiresRollout && !nativeIncidentRollout.enabled) return false
+    if (tab.requiresEntitlement && !nativeIncidentCapabilities.enabled) return false
     if (tab.adminOnly && !isAdmin) return false
     return true
   })

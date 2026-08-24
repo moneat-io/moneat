@@ -49,8 +49,8 @@ import type {ReactNode} from 'react'
 import {isUuidResourceId} from '@/lib/api/utils'
 import {
   nativeIncidentUnavailableCopy,
-  useNativeIncidentRollout,
-} from '@/hooks/useNativeIncidentRollout'
+  useNativeIncidentCapabilities,
+} from '@/hooks/useNativeIncidentCapabilities'
 import {incidentStatusConfig, isResolvableIncidentStatus} from '@/lib/incident-status'
 import {IncidentTriageActions} from '@/components/on-call/IncidentTriageActions'
 import {isTriageIncident} from '@/components/on-call/triage'
@@ -76,7 +76,7 @@ function DeclaredIncidentDetailComponent() {
   const [resolveOpen, setResolveOpen] = useState(false)
   const [resolutionNote, setResolutionNote] = useState('')
   const [note, setNote] = useState('')
-  const rollout = useNativeIncidentRollout()
+  const capabilities = useNativeIncidentCapabilities()
   const normalizedIncidentId = incidentId.trim()
   const hasValidIncidentId = isUuidResourceId(normalizedIncidentId)
   const incidentKey = ['declared-incident', normalizedIncidentId]
@@ -85,8 +85,8 @@ function DeclaredIncidentDetailComponent() {
     queryKey: incidentKey,
     queryFn: () => api.getOnCallIncident(normalizedIncidentId),
     // Hold the incident fetch (and the child panels' native queries) until the
-    // rollout is confirmed enabled.
-    enabled: hasValidIncidentId && rollout.enabled,
+    // entitlement is confirmed.
+    enabled: hasValidIncidentId && capabilities.enabled,
   })
 
   const refreshIncident = () => queryClient.invalidateQueries({queryKey: incidentKey})
@@ -122,7 +122,7 @@ function DeclaredIncidentDetailComponent() {
     },
   })
 
-  if (rollout.isLoading) {
+  if (capabilities.isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted border-t-primary" />
@@ -130,8 +130,8 @@ function DeclaredIncidentDetailComponent() {
     )
   }
 
-  if (!rollout.enabled) {
-    const copy = nativeIncidentUnavailableCopy(rollout)
+  if (!capabilities.enabled) {
+    const copy = nativeIncidentUnavailableCopy(capabilities)
     return <EmptyState icon={AlertTriangle} title={copy.title} description={copy.description} />
   }
 

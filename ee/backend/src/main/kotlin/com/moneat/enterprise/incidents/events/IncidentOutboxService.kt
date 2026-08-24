@@ -10,7 +10,6 @@ import com.moneat.enterprise.incidents.models.IncidentDeliveryStatus
 import com.moneat.enterprise.incidents.models.IncidentOutboxStatus
 import com.moneat.enterprise.incidents.models.NativeIncidentOutboxDeliveries
 import com.moneat.enterprise.incidents.models.NativeIncidentOutboxEvents
-import com.moneat.monitoring.OperationalMetrics
 import kotlinx.serialization.json.JsonElement
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
@@ -94,7 +93,7 @@ class IncidentOutboxService(
     private val workerId: String = "incident-outbox-${Uuid.random()}",
     private val clock: Clock = Clock.System,
     private val entitlement: IncidentEntitlement = IncidentEntitlement {
-        FeatureRegistry.isNativeIncidentResponseEnabled(it)
+        FeatureRegistry.isNativeIncidentResponseEntitled(it)
     },
 ) {
     private val logger = LoggerFactory.getLogger(IncidentOutboxService::class.java)
@@ -115,7 +114,7 @@ class IncidentOutboxService(
             if (entitlement.isEnabled(event.organizationId)) {
                 processEvent(event)
             } else {
-                deferEventForRollout(event)
+                deferEventForEntitlement(event)
             }
             processed += 1
         }
@@ -242,7 +241,7 @@ class IncidentOutboxService(
         }
     }
 
-    private fun deferEventForRollout(event: NativeIncidentDomainEvent) {
+    private fun deferEventForEntitlement(event: NativeIncidentDomainEvent) {
         transaction {
             val row =
                 NativeIncidentOutboxEvents
@@ -253,16 +252,15 @@ class IncidentOutboxService(
             NativeIncidentOutboxEvents.update({ NativeIncidentOutboxEvents.id eq event.id }) {
                 it[status] = IncidentOutboxStatus.PENDING.wire
                 it[attemptCount] = (row[NativeIncidentOutboxEvents.attemptCount] - 1).coerceAtLeast(0)
-                it[availableAt] = now.plus(ROLLOUT_DEFER_DURATION)
+                it[availableAt] = now.plus(ENTITLEMENT_DEFER_DURATION)
                 it[leasedAt] = null
                 it[leaseOwner] = null
-                it[lastError] = ROLLOUT_DISABLED_MESSAGE
+                it[lastError] = ENTITLEMENT_UNAVAILABLE_MESSAGE
                 it[updatedAt] = now
             }
         }
-        OperationalMetrics.recordNativeIncidentRolloutDecision("outbox", "deferred")
         logger.debug(
-            "Deferred native incident outbox event {} for organization {} while rollout is disabled",
+            "Deferred native incident outbox event {} for organization {} while entitlement is unavailable",
             event.resourceId,
             event.organizationId,
         )
@@ -478,8 +476,9 @@ class IncidentOutboxService(
         private const val MAX_ERROR_LENGTH = 4_000
         private const val MAX_BACKOFF_SECONDS = 300
         private const val MAX_BACKOFF_EXPONENT = 8
-        private const val ROLLOUT_DISABLED_MESSAGE = "Native incident rollout is disabled; delivery is deferred"
+        private const val ENTITLEMENT_UNAVAILABLE_MESSAGE =
+            "Native incident entitlement is unavailable; delivery is deferred"
         private val LEASE_DURATION = 5.minutes
-        private val ROLLOUT_DEFER_DURATION = 30.seconds
+        private val ENTITLEMENT_DEFER_DURATION = 30.seconds
     }
 }

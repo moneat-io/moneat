@@ -29,7 +29,6 @@ import com.moneat.monitor.repositories.HostAlertRepositoryImpl
 import com.moneat.monitor.repositories.HostRepositoryImpl
 import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.monitor.services.MonitorService
-import com.moneat.monitoring.OperationalMetrics
 import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Projects
@@ -74,7 +73,7 @@ class WorkflowTrustedActionExecutor(
     private val monitorService: MonitorService = MonitorService(HostRepositoryImpl(), HostAlertRepositoryImpl()),
     private val monitorAlertServiceProvider: () -> MonitorAlertService = { MonitorAlertService() },
     private val statusPageService: StatusPageService = StatusPageService(),
-    private val nativeIncidentEntitlement: (Int) -> Boolean = FeatureRegistry::isNativeIncidentResponseEnabled,
+    private val nativeIncidentEntitlement: (Int) -> Boolean = FeatureRegistry::isNativeIncidentResponseEntitled,
 ) {
     private val json = workflowJson
 
@@ -313,7 +312,6 @@ class WorkflowTrustedActionExecutor(
         idempotencyKey: String?,
     ): Map<String, JsonElement> {
         if (!nativeIncidentEntitlement(organizationId)) {
-            OperationalMetrics.recordNativeIncidentRolloutDecision("workflow", "denied")
             throw IllegalStateException("Native incident response is not enabled for this organization")
         }
         val bridge = FeatureRegistry.getOnCallBridge()

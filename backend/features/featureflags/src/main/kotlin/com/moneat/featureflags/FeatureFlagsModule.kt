@@ -17,11 +17,9 @@
 package com.moneat.featureflags
 
 import com.moneat.enterprise.EnterpriseModule
-import com.moneat.enterprise.NativeIncidentRolloutBridge
 import com.moneat.featureflags.routes.featureFlagRoutes
 import com.moneat.featureflags.services.FeatureFlagEvaluator
 import com.moneat.featureflags.services.FeatureFlagEventService
-import com.moneat.featureflags.services.FeatureFlagNativeIncidentRolloutBridge
 import com.moneat.featureflags.services.FeatureFlagService
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
@@ -29,11 +27,7 @@ import io.ktor.server.routing.Route
 class FeatureFlagsModule(
     private val featureFlagService: FeatureFlagService = FeatureFlagService(),
     private val evaluator: FeatureFlagEvaluator = FeatureFlagEvaluator(),
-    nativeIncidentRolloutBridge: NativeIncidentRolloutBridge =
-        FeatureFlagNativeIncidentRolloutBridge(featureFlagService, evaluator),
-) :
-    EnterpriseModule,
-    NativeIncidentRolloutBridge by nativeIncidentRolloutBridge {
+) : EnterpriseModule {
     override val name: String = "Feature Flags"
 
     private val eventService = FeatureFlagEventService()

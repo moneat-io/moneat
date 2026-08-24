@@ -32,8 +32,8 @@ vi.mock('@tanstack/react-router', () => ({
   Outlet: () => <div>Group detail outlet</div>,
 }))
 vi.mock('@/lib/api', () => ({api}))
-vi.mock('@/hooks/useNativeIncidentRollout', () => ({
-  useNativeIncidentRollout: () => ({...state, reason: state.enabled ? undefined : 'disabled'}),
+vi.mock('@/hooks/useNativeIncidentCapabilities', () => ({
+  useNativeIncidentCapabilities: () => ({...state, isError: false}),
   nativeIncidentUnavailableCopy: () => ({title: 'Incidents unavailable', description: 'Enable incidents first.'}),
 }))
 

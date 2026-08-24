@@ -7,7 +7,6 @@ package com.moneat.enterprise.incidents.commands
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.enterprise.NativeIncidentQuotaKey
 import com.moneat.enterprise.incidents.models.NativeIncidentStatus
-import com.moneat.monitoring.OperationalMetrics
 
 fun interface IncidentEntitlement {
     fun isEnabled(organizationId: Int): Boolean
@@ -91,7 +90,7 @@ fun interface IncidentQuotaAdmission {
 
 class IncidentCommandPolicy(
     private val entitlement: IncidentEntitlement = IncidentEntitlement {
-        FeatureRegistry.isNativeIncidentResponseEnabled(it)
+        FeatureRegistry.isNativeIncidentResponseEntitled(it)
     },
     private val authorizer: IncidentCommandAuthorizer = IncidentCommandAuthorizer { actor, _ ->
         actor.organizationId > 0 && actor.userId > 0
@@ -108,7 +107,6 @@ class IncidentCommandPolicy(
     fun requireAllowed(command: IncidentCommand) {
         val actor = command.actor
         if (!entitlement.isEnabled(actor.organizationId)) {
-            OperationalMetrics.recordNativeIncidentRolloutDecision("command", "denied")
             throw IncidentCommandDeniedException("Native incident response is not enabled for this organization")
         }
         if (!authorizer.isAllowed(actor, command.type)) {

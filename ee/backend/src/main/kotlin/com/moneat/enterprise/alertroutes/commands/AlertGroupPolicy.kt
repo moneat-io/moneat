@@ -17,7 +17,7 @@ fun interface AlertGroupQuotaAdmission {
 }
 
 class AlertGroupPolicy(
-    private val enabled: (Int) -> Boolean = FeatureRegistry::isNativeIncidentResponseEnabled,
+    private val enabled: (Int) -> Boolean = FeatureRegistry::isNativeIncidentResponseEntitled,
     private val capacityAdmission: AlertGroupQuotaAdmission =
         AlertGroupQuotaAdmission { organizationId, key, usage, id ->
             FeatureRegistry.reconcileNativeIncidentQuota(organizationId, key, usage, id)

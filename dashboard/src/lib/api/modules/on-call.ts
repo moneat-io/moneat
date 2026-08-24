@@ -60,39 +60,16 @@ import type {
   IncidentRoleDefinition,
   CreateIncidentRoleInput,
   NativeIncidentCapabilities,
-  NativeIncidentRolloutState,
   AcceptIncidentInput,
   DeclineIncidentInput,
   MergeIncidentInput,
 } from '../types'
 
-const NATIVE_INCIDENT_ROLLOUT_STATES: ReadonlySet<NativeIncidentRolloutState> = new Set([
-  'ENABLED',
-  'DISABLED',
-  'ENVIRONMENT_NOT_FOUND',
-  'FLAG_NOT_FOUND',
-  'EVALUATION_ERROR',
-  'PROVIDER_UNAVAILABLE',
-  'MODULE_UNAVAILABLE',
-])
-
-/**
- * Normalize the native incident capability payload into a strict, gating-safe
- * shape. `enabled` is the single source of truth for whether native incident
- * surfaces may render, so anything other than an explicit `true` fails closed,
- * and an unrecognized state degrades to `EVALUATION_ERROR`.
- */
+/** Normalize the entitlement and quota payload into a strict, fail-closed shape. */
 function normalizeNativeIncidentCapabilities(raw: unknown): NativeIncidentCapabilities {
   const value = (raw ?? {}) as Record<string, unknown>
-  const state = value.state
-  const normalizedState = NATIVE_INCIDENT_ROLLOUT_STATES.has(state as NativeIncidentRolloutState)
-    ? (state as NativeIncidentRolloutState)
-    : 'EVALUATION_ERROR'
   return {
-    enabled:
-      value.enabled === true && normalizedState === 'ENABLED' && value.entitlementEnabled === true,
-    environment: typeof value.environment === 'string' ? value.environment : '',
-    state: normalizedState,
+    enabled: value.enabled === true && value.entitlementEnabled === true,
     entitlementEnabled: value.entitlementEnabled === true,
     plan: typeof value.plan === 'string' ? value.plan : 'UNKNOWN',
     entitlementReason:
@@ -302,11 +279,10 @@ export function onCallMethods(core: ApiClientCore) {
         method: 'DELETE',
       }),
 
-    // ──── Native incident rollout ────
+    // ──── Native incident capabilities ────
 
-    // Server-authoritative capability check gating native incident dashboard
-    // surfaces and actions. The backend independently enforces the rollout; this
-    // only drives what the dashboard reveals.
+    // Server-authoritative entitlement check for native incident dashboard surfaces
+    // and actions. The backend independently enforces the same entitlement.
     getNativeIncidentCapabilities: (): Promise<NativeIncidentCapabilities> =>
       core
         .request<unknown>(`${base}/on-call/incident-response/capabilities`)

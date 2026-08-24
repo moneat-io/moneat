@@ -48,8 +48,8 @@ import {IncidentTriageActions, TriageSeverityBadge} from '@/components/on-call/I
 import {isTriageIncident} from '@/components/on-call/triage'
 import {
   nativeIncidentUnavailableCopy,
-  useNativeIncidentRollout,
-} from '@/hooks/useNativeIncidentRollout'
+  useNativeIncidentCapabilities,
+} from '@/hooks/useNativeIncidentCapabilities'
 
 export const Route = createFileRoute('/on-call/incidents')({
   component: DeclaredIncidents,
@@ -109,7 +109,7 @@ function DeclaredIncidents() {
   const [severityFilter, setSeverityFilter] = useState<IncidentSeverityFilter>('all')
   const [declareOpen, setDeclareOpen] = useState(false)
   const [triageOnly, setTriageOnly] = useState(false)
-  const rollout = useNativeIncidentRollout()
+  const capabilities = useNativeIncidentCapabilities()
   const isDetailRoute = pathname.startsWith('/on-call/incidents/')
 
   const declareMutation = useMutation({
@@ -136,8 +136,8 @@ function DeclaredIncidents() {
       return api.getOnCallIncidents(filters)
     },
     refetchInterval: 30000,
-    // Never fetch native incidents while the rollout is loading or disabled.
-    enabled: rollout.enabled,
+    // Wait for the server-authoritative entitlement before querying incidents.
+    enabled: capabilities.enabled,
   })
 
   // The triage queue is its own always-on surface: responders act on unclassified
@@ -147,7 +147,7 @@ function DeclaredIncidents() {
     queryKey: ['on-call-incidents', 'triage-queue'],
     queryFn: () => api.getOnCallIncidents({status: 'TRIAGE'}),
     refetchInterval: 30000,
-    enabled: rollout.enabled,
+    enabled: capabilities.enabled,
   })
 
   // Treat the server-side status filter as an optimization, not a trust boundary.
@@ -168,7 +168,7 @@ function DeclaredIncidents() {
     return <Outlet />
   }
 
-  if (rollout.isLoading) {
+  if (capabilities.isLoading) {
     return (
       <div className="flex items-center justify-center py-10">
         <div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-primary" />
@@ -176,8 +176,8 @@ function DeclaredIncidents() {
     )
   }
 
-  if (!rollout.enabled) {
-    const copy = nativeIncidentUnavailableCopy(rollout)
+  if (!capabilities.enabled) {
+    const copy = nativeIncidentUnavailableCopy(capabilities)
     return (
       <div className="space-y-4">
         <PageHeader icon={ShieldAlert} title="Incidents" description="Manage user-declared incidents" />

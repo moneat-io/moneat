@@ -9,7 +9,6 @@ import com.moneat.alerts.models.IncidentSeverity
 import com.moneat.alerts.models.AlertEpisodes
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.enterprise.NativeIncidentEntitlementStatus
-import com.moneat.enterprise.NativeIncidentRolloutStatus
 import com.moneat.enterprise.incidents.commands.AcceptIncidentCommand
 import com.moneat.enterprise.incidents.commands.DeclareIncidentCommand
 import com.moneat.enterprise.incidents.commands.DeclineIncidentCommand
@@ -44,7 +43,6 @@ import com.moneat.enterprise.oncall.models.OnCallIncidents
 import com.moneat.enterprise.oncall.services.OnCallAlertService
 import com.moneat.enterprise.oncall.services.OnCallIncidentService
 import com.moneat.org.services.OrgRole
-import com.moneat.monitoring.OperationalMetrics
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Users
 import com.moneat.shared.services.toUuidOrNull
@@ -171,10 +169,8 @@ data class ResolveIncidentRequest(
 )
 
 @Serializable
-data class NativeIncidentRolloutResponse(
+data class NativeIncidentCapabilitiesResponse(
     val enabled: Boolean,
-    val environment: String,
-    val state: String,
     val entitlementEnabled: Boolean,
     val plan: String,
     val entitlementReason: String? = null,
@@ -222,9 +218,8 @@ fun Route.incidentRoutes(
     alertServiceProvider: () -> OnCallAlertService,
     onCallIncidentService: OnCallIncidentService = OnCallIncidentService(),
     incidentEntitlement: IncidentEntitlement = IncidentEntitlement {
-        FeatureRegistry.isNativeIncidentResponseEnabled(it)
+        FeatureRegistry.isNativeIncidentResponseEntitled(it)
     },
-    rolloutStatusProvider: (Int) -> NativeIncidentRolloutStatus = FeatureRegistry::nativeIncidentRolloutStatus,
     entitlementStatusProvider: (Int) -> NativeIncidentEntitlementStatus =
         FeatureRegistry::nativeIncidentEntitlementStatus,
 ) {
@@ -236,7 +231,7 @@ fun Route.incidentRoutes(
             responderService = IncidentResponderService(),
             timelineService = IncidentTimelineService(),
         )
-    registerIncidentRolloutStatusRoute(rolloutStatusProvider, entitlementStatusProvider)
+    registerIncidentCapabilitiesRoute(entitlementStatusProvider)
     registerAlertRoutes(services.alertServiceProvider, services.incidentService, incidentEntitlement)
     registerDeclaredIncidentRoutes(services, incidentEntitlement)
     registerIncidentConfigurationRoutes(
@@ -246,21 +241,17 @@ fun Route.incidentRoutes(
     )
 }
 
-private fun Route.registerIncidentRolloutStatusRoute(
-    rolloutStatusProvider: (Int) -> NativeIncidentRolloutStatus,
+private fun Route.registerIncidentCapabilitiesRoute(
     entitlementStatusProvider: (Int) -> NativeIncidentEntitlementStatus,
 ) {
     route("/v1/on-call/incident-response/capabilities") {
         authenticate(JWT_AUTH_PROVIDER) {
             get {
                 val organizationId = call.requireOrganizationId() ?: return@get
-                val rollout = rolloutStatusProvider(organizationId)
                 val entitlement = entitlementStatusProvider(organizationId)
                 call.respond(
-                    NativeIncidentRolloutResponse(
-                        enabled = rollout.enabled && entitlement.enabled,
-                        environment = rollout.environment,
-                        state = rollout.state.name,
+                    NativeIncidentCapabilitiesResponse(
+                        enabled = entitlement.enabled,
                         entitlementEnabled = entitlement.enabled,
                         plan = entitlement.plan,
                         entitlementReason = entitlement.reason,
@@ -311,7 +302,7 @@ private fun Route.registerDeclaredIncidentRoutes(
 ) {
     route("/v1/on-call/incidents") {
         authenticate(JWT_AUTH_PROVIDER) {
-            installNativeIncidentRolloutGate("NativeIncidentRoutesGate", incidentEntitlement)
+            installNativeIncidentEntitlementGate("NativeIncidentRoutesGate", incidentEntitlement)
             registerDeclareIncidentRoute(services.incidentService, services.configurationService)
             registerListDeclaredIncidentsRoute(services.incidentService)
             registerGetDeclaredIncidentRoute(services.incidentService)
@@ -326,7 +317,7 @@ private fun Route.registerDeclaredIncidentRoutes(
     }
 }
 
-internal fun Route.installNativeIncidentRolloutGate(
+internal fun Route.installNativeIncidentEntitlementGate(
     pluginName: String,
     incidentEntitlement: IncidentEntitlement,
 ) {
@@ -336,12 +327,10 @@ internal fun Route.installNativeIncidentRolloutGate(
                 if (call.isHandled) return@on
                 val organizationId = call.principal<JWTPrincipal>()?.currentOrgIdOrNull()
                 if (organizationId == null) {
-                    OperationalMetrics.recordNativeIncidentRolloutDecision("http", "denied")
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Organization context is required"))
                     return@on
                 }
                 if (!incidentEntitlement.isEnabled(organizationId)) {
-                    OperationalMetrics.recordNativeIncidentRolloutDecision("http", "denied")
                     call.respond(
                         HttpStatusCode.Forbidden,
                         ErrorResponse("Native incident response is not enabled for this organization"),
@@ -876,7 +865,6 @@ private fun Route.registerDeclareIncidentFromAlertRoute(
     post("/{alertId}/declare-incident") {
         val context = call.requireUserContext() ?: return@post
         if (!incidentEntitlement.isEnabled(context.organizationId)) {
-            OperationalMetrics.recordNativeIncidentRolloutDecision("http", "denied")
             call.respond(
                 HttpStatusCode.Forbidden,
                 ErrorResponse("Native incident response is not enabled for this organization"),
