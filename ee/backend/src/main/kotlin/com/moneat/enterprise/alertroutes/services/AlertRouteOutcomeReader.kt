@@ -62,17 +62,14 @@ object AlertRouteOutcomeReader {
             ?.jsonObject
             ?.get("incident")
             ?.jsonObject
-        val incident = if (incidentId != null) {
-            AlertRouteActionSummary("SUCCEEDED", "Alert linked to the incident")
-        } else if (storedIncident != null) {
-            AlertRouteActionSummary(
+        val incident = when {
+            incidentId != null -> AlertRouteActionSummary("SUCCEEDED", "Alert linked to the incident")
+            storedIncident != null -> AlertRouteActionSummary(
                 state = storedIncident["state"]?.jsonPrimitive?.contentOrNull ?: "FAILED",
                 reason = storedIncident["reason"]?.jsonPrimitive?.contentOrNull ?: "Incident action failed",
             )
-        } else if (createIncident) {
-            AlertRouteActionSummary("SKIPPED", "Incident was not created for this alert")
-        } else {
-            AlertRouteActionSummary("SKIPPED", "Incident creation is disabled for this route")
+            createIncident -> AlertRouteActionSummary("SKIPPED", "Incident was not created for this alert")
+            else -> AlertRouteActionSummary("SKIPPED", "Incident creation is disabled for this route")
         }
         AlertRouteOutcomeSummary(
             matchedRouteId = group[EnterpriseAlertGroups.routeResourceId].toString(),
