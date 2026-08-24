@@ -22,6 +22,8 @@ import com.moneat.enterprise.FeatureRegistry
 import com.moneat.events.services.IngestionWorker
 import com.moneat.ingestion.queue.IngestionPipeline
 import com.moneat.ingestion.queue.IngestionQueueSettings
+import com.moneat.config.EnvConfig
+import com.moneat.notifications.services.SlackInboundWorker
 import com.moneat.shared.services.ArtifactCleanupService
 import com.moneat.shared.services.DemoLivenessBackgroundService
 import com.moneat.shared.services.RetentionBackgroundService
@@ -109,15 +111,25 @@ private class CoreIngestionWorkers(application: Application) {
         config.property("ingest.workerCount").getString().toInt(),
         eventService = koin.get(),
     )
+    private val slackInboundWorker = SlackInboundWorker(
+        queueKey = EnvConfig.get("SLACK_INBOUND_QUEUE_KEY") ?: "slack-inbound",
+        dlqKey = EnvConfig.get("SLACK_INBOUND_DLQ_KEY") ?: "slack-inbound-dlq",
+        workerCount = EnvConfig.get("SLACK_INBOUND_WORKER_COUNT")?.toIntOrNull()?.coerceAtLeast(1) ?: 1,
+        gateway = koin.get(),
+    )
 
     fun startSelected(startIngestionWorkers: Boolean) {
         if (shouldStartIngestionPipeline(startIngestionWorkers, IngestionPipeline.EVENTS)) {
             ingestionWorker.start()
         }
+        if (shouldStartIngestionPipeline(startIngestionWorkers, IngestionPipeline.SLACK_INBOUND)) {
+            slackInboundWorker.start()
+        }
     }
 
     fun stop() {
         ingestionWorker.stop()
+        slackInboundWorker.stop()
     }
 }
 
