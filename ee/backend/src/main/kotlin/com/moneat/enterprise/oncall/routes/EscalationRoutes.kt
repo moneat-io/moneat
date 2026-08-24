@@ -35,6 +35,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.uuid.Uuid
 
 private const val POLICY_NOT_FOUND_MESSAGE = "Policy not found"
+private const val INVALID_TOKEN_MESSAGE = "Invalid token"
 
 @Serializable
 data class CreatePolicyRequest(
@@ -84,7 +85,7 @@ fun Route.escalationRoutes() {
                 val organizationId = principal?.currentOrgIdOrNull()
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@get
                 }
 
@@ -97,7 +98,7 @@ fun Route.escalationRoutes() {
                 val organizationId = principal?.currentOrgIdOrNull()
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@post
                 }
 
@@ -149,7 +150,7 @@ fun Route.escalationRoutes() {
                 val policyId = call.resolvePolicyId(call.parameters["id"], organizationId)
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@get
                 }
 
@@ -168,7 +169,7 @@ fun Route.escalationRoutes() {
                 val organizationId = principal?.currentOrgIdOrNull()
                 val policyId = call.resolvePolicyId(call.parameters["id"], organizationId)
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@get
                 }
                 if (policyId == null) return@get
@@ -180,7 +181,7 @@ fun Route.escalationRoutes() {
                 val organizationId = principal?.currentOrgIdOrNull()
                 val policyId = call.resolvePolicyId(call.parameters["id"], organizationId)
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@post
                 }
                 if (policyId == null) return@post
@@ -203,7 +204,7 @@ fun Route.escalationRoutes() {
                 val organizationId = principal?.currentOrgIdOrNull()
                 val policyId = call.resolvePolicyId(call.parameters["id"], organizationId)
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@post
                 }
                 if (policyId == null) return@post
@@ -225,7 +226,7 @@ fun Route.escalationRoutes() {
                 val policyId = call.resolvePolicyId(call.parameters["id"], organizationId)
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@put
                 }
 
@@ -291,7 +292,7 @@ fun Route.escalationRoutes() {
                 val policyId = call.resolvePolicyId(call.parameters["id"], organizationId)
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@delete
                 }
 
