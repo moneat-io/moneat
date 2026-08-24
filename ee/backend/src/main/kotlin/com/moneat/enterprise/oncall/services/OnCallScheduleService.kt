@@ -283,7 +283,7 @@ class OnCallScheduleService {
                             (OnCallSchedules.organizationId eq organizationId)
                     }
                     .singleOrNull() ?: return@transaction null
-            val layer =
+            if (
                 OnCallScheduleLayers
                     .selectAll()
                     .where {
@@ -291,7 +291,10 @@ class OnCallScheduleService {
                             (OnCallScheduleLayers.scheduleId eq scheduleId) and
                             (OnCallScheduleLayers.organizationId eq organizationId)
                     }
-                    .singleOrNull() ?: return@transaction null
+                    .singleOrNull() == null
+            ) {
+                return@transaction null
+            }
             if (update.layerOrder != null) require(update.layerOrder >= 0) { "Layer order must be non-negative" }
             update.timezone?.let { ZoneId.of(it) }
             val now = Clock.System.now()
