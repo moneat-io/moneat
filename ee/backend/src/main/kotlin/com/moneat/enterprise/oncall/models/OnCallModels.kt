@@ -439,7 +439,7 @@ object OnCallAlertTimeline : IntIdTable("on_call_alert_timeline") {
     val createdAt = timestamp("created_at")
 }
 
-@Serializable
+@Serializable(with = OnCallAlertSerializer::class)
 data class OnCallAlert(
     val id: String,
     @SerialName("organizationId") val organizationResourceId: String,
@@ -466,12 +466,133 @@ data class OnCallAlert(
     val viewedByCurrentUser: Boolean = false,
     val createdAt: String,
     val updatedAt: String,
+    val routeOutcome: AlertRouteOutcomeSummary? = null,
     @Transient val internalId: Int = 0,
     @Transient val organizationId: Int = 0,
     @Transient val declaredIncidentId: Int? = null,
     @Transient val escalationPolicyId: Int? = null,
     @Transient val acknowledgedBy: Int? = null,
     @Transient val resolvedBy: Int? = null,
+)
+
+@Serializable
+private data class OnCallAlertWire(
+    val id: String,
+    @SerialName("organizationId") val organizationResourceId: String,
+    @SerialName("declaredIncidentId") val declaredIncidentResourceId: String? = null,
+    @SerialName("escalationPolicyId") val escalationPolicyResourceId: String? = null,
+    val escalationPolicyName: String? = null,
+    val title: String,
+    val description: String? = null,
+    val priority: String,
+    val status: String,
+    val alertSource: String? = null,
+    val deduplicationKey: String? = null,
+    val currentStep: Int,
+    val repeatIteration: Int,
+    val triggeredAt: String,
+    val acknowledgedAt: String? = null,
+    @SerialName("acknowledgedBy") val acknowledgedByResourceId: String? = null,
+    val acknowledgedByName: String? = null,
+    val resolvedAt: String? = null,
+    @SerialName("resolvedBy") val resolvedByResourceId: String? = null,
+    val resolvedByName: String? = null,
+    val metadata: Map<String, kotlinx.serialization.json.JsonElement>? = null,
+    val nextEscalationAt: String? = null,
+    val viewedByCurrentUser: Boolean = false,
+    val createdAt: String,
+    val updatedAt: String,
+    val routeOutcome: AlertRouteOutcomeSummary? = null,
+)
+
+object OnCallAlertSerializer : KSerializer<OnCallAlert> {
+    private val delegate = OnCallAlertWire.serializer()
+
+    override val descriptor: SerialDescriptor = delegate.descriptor
+
+    override fun serialize(encoder: Encoder, value: OnCallAlert) {
+        encoder.encodeSerializableValue(delegate, value.toWire())
+    }
+
+    override fun deserialize(decoder: Decoder): OnCallAlert {
+        val wire = decoder.decodeSerializableValue(delegate)
+        return wire.toAlert()
+    }
+}
+
+private fun OnCallAlert.toWire() = OnCallAlertWire(
+    id,
+    organizationResourceId,
+    declaredIncidentResourceId,
+    escalationPolicyResourceId,
+    escalationPolicyName,
+    title,
+    description,
+    priority,
+    status,
+    alertSource,
+    deduplicationKey,
+    currentStep,
+    repeatIteration,
+    triggeredAt,
+    acknowledgedAt,
+    acknowledgedByResourceId,
+    acknowledgedByName,
+    resolvedAt,
+    resolvedByResourceId,
+    resolvedByName,
+    metadata,
+    nextEscalationAt,
+    viewedByCurrentUser,
+    createdAt,
+    updatedAt,
+    routeOutcome,
+)
+
+private fun OnCallAlertWire.toAlert() = OnCallAlert(
+    id,
+    organizationResourceId,
+    declaredIncidentResourceId,
+    escalationPolicyResourceId,
+    escalationPolicyName,
+    title,
+    description,
+    priority,
+    status,
+    alertSource,
+    deduplicationKey,
+    currentStep,
+    repeatIteration,
+    triggeredAt,
+    acknowledgedAt,
+    acknowledgedByResourceId,
+    acknowledgedByName,
+    resolvedAt,
+    resolvedByResourceId,
+    resolvedByName,
+    metadata,
+    nextEscalationAt,
+    viewedByCurrentUser,
+    createdAt,
+    updatedAt,
+    routeOutcome,
+)
+
+@Serializable
+data class AlertRouteActionSummary(
+    val state: String,
+    val reason: String,
+)
+
+@Serializable
+data class AlertRouteOutcomeSummary(
+    val matchedRouteId: String,
+    val matchedRouteRevision: Int,
+    val groupId: String,
+    val incidentId: String? = null,
+    val grouping: AlertRouteActionSummary,
+    val paging: AlertRouteActionSummary,
+    val incident: AlertRouteActionSummary,
 )
 
 object OnCallIncidentAlerts : Table("on_call_incident_alerts") {

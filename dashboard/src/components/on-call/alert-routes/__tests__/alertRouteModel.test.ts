@@ -18,6 +18,7 @@ import {describe, expect, it} from 'vitest'
 import type {AlertRouteEvaluation, AlertRoutePreviewResponse} from '@/lib/api/types'
 import {
   createEmptyAlertRouteForm,
+  applyP0P2TriagePreset,
   formToRequest,
   overlappingEarlierRoutes,
   validateAlertRouteForm,
@@ -66,6 +67,21 @@ describe('alert route request mapping and validation', () => {
       expect.stringMatching(/supported scoped field/i),
       expect.stringMatching(/requires a severity/i),
     ]))
+  })
+})
+
+describe('alert route presets', () => {
+  it('opts into grouped paging and priority-derived triage severity', () => {
+    const preset = applyP0P2TriagePreset(createEmptyAlertRouteForm())
+
+    expect(preset.conditionGroups[0].conditions[0]).toMatchObject({
+      field: 'priority',
+      operator: 'AT_LEAST_AS_SEVERE_AS',
+      values: ['P2'],
+    })
+    expect(preset.paging.mode).toBe('FIRST_EPISODE_PER_GROUP')
+    expect(preset.grouping.behavior).toBe('AUTOMATIC')
+    expect(preset.incident).toMatchObject({create: true, mode: 'TRIAGE', severity: 'ALERT_PRIORITY'})
   })
 })
 

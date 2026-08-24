@@ -118,6 +118,7 @@ describe('alert routes page', () => {
     expect(screen.getByText(/\(\+1 more group\)/)).toBeInTheDocument()
     expect(screen.getByText(/2 targets/)).toBeInTheDocument()
     expect(screen.getByText('Incident (active)')).toBeInTheDocument()
+    expect(screen.getByText('Active incident')).toBeInTheDocument()
     expect(screen.getByText('No conditions')).toBeInTheDocument()
 
     fireEvent.click(screen.getByLabelText('Toggle Checkout'))
@@ -150,6 +151,18 @@ describe('alert routes page', () => {
     renderPage()
     expect(await screen.findByText(/Editing routes requires an administrator/)).toBeInTheDocument()
     expect(screen.queryByText('New route')).not.toBeInTheDocument()
+  })
+
+  it('warns when enabled routes cannot create incidents', async () => {
+    api.getAlertRoutes.mockResolvedValue([
+      {
+        ...baseRoute,
+        incident: {create: false, mode: 'TRIAGE'},
+      },
+    ])
+    renderPage()
+    expect(await screen.findByText('No enabled route creates incidents')).toBeInTheDocument()
+    expect(screen.getByText('Paging only')).toBeInTheDocument()
   })
 
   it('reports stale and ordinary mutation failures', async () => {

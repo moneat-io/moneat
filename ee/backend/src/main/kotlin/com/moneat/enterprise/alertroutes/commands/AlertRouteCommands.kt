@@ -15,6 +15,9 @@ import com.moneat.enterprise.alertroutes.models.AlertRoutePagingMode
 import com.moneat.enterprise.alertroutes.models.AlertRouteTargetKind
 import kotlin.uuid.Uuid
 
+/** Route-only sentinel resolved from the matched alert's priority at execution time. */
+const val ALERT_PRIORITY_SEVERITY = "ALERT_PRIORITY"
+
 data class AlertRouteActor(
     val organizationId: Int,
     val userId: Int,

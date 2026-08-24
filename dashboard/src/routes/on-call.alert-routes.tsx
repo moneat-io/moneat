@@ -103,6 +103,8 @@ function AlertRoutesPage() {
   })
 
   const routes = [...(routesQuery.data ?? [])].sort((a, b) => a.position - b.position)
+  const enabledRoutes = routes.filter((route) => route.enabled)
+  const incidentCreatingRoutes = enabledRoutes.filter((route) => route.incident.create)
   const escalationPolicies = (escalationPoliciesQuery.data ?? []).map((policy) => ({
     id: policy.id,
     name: policy.name,
@@ -213,6 +215,18 @@ function AlertRoutesPage() {
       {!isAdmin && (
         <div className="rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
           You can review alert routes here. Editing routes requires an administrator.
+        </div>
+      )}
+
+      {!routesQuery.isLoading && routes.length > 0 && incidentCreatingRoutes.length === 0 && (
+        <div className="rounded-lg border border-warning-border bg-warning-bg px-3 py-3 text-xs text-warning-fg">
+          <p className="font-medium">No enabled route creates incidents</p>
+          <p className="mt-1">
+            Matching alerts may still be grouped or paged, but they will not open an incident.
+            {isAdmin
+              ? ' Enable incident creation on a route or create a triage route before relying on automatic incidents.'
+              : ' Ask an administrator to enable incident creation on a matching route.'}
+          </p>
         </div>
       )}
 
@@ -363,6 +377,9 @@ function AlertRouteRow({
             <Badge variant={route.enabled ? 'success' : 'neutral'} size="sm">
               {route.enabled ? 'Enabled' : 'Disabled'}
             </Badge>
+            <Badge variant="outline" size="sm">
+              {routeBehaviorLabel(route)}
+            </Badge>
           </div>
           {route.description && (
             <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{route.description}</p>
@@ -430,4 +447,10 @@ function RouteSummary({route}: Readonly<{route: AlertRoute}>) {
       </div>
     </div>
   )
+}
+
+function routeBehaviorLabel(route: AlertRoute): string {
+  if (!route.enabled) return 'Disabled'
+  if (!route.incident.create) return route.paging.mode === 'NONE' ? 'Grouping only' : 'Paging only'
+  return route.incident.mode === 'ACTIVE' ? 'Active incident' : 'Triage incident'
 }

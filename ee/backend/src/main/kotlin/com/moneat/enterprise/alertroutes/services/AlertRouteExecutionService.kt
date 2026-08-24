@@ -5,9 +5,15 @@
 package com.moneat.enterprise.alertroutes.services
 
 import com.moneat.alerts.models.AlertStatus
+import com.moneat.alerts.models.AlertPriority
+import com.moneat.alerts.services.AlertRouteActionOutcome
+import com.moneat.alerts.services.AlertRouteActionState
 import com.moneat.alerts.services.AlertFanoutContext
+import com.moneat.alerts.services.AlertRouteExecutionOutcome
+import com.moneat.alerts.services.AlertRouteExecutionState
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.enterprise.alertroutes.commands.AlertGroupActor
+import com.moneat.enterprise.alertroutes.commands.ALERT_PRIORITY_SEVERITY
 import com.moneat.enterprise.alertroutes.commands.AttachAlertGroupIncidentCommand
 import com.moneat.enterprise.alertroutes.commands.CreateAlertGroupTriageCommand
 import com.moneat.enterprise.alertroutes.models.AlertGroupEscalationState
@@ -31,6 +37,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -48,7 +55,14 @@ import kotlin.uuid.Uuid
 
 private const val ROUTE_ALERT_SOURCE = "alert-route"
 private const val ROUTE_AUTOMATION_ORIGIN = "ALERT_ROUTE"
+private const val ROUTE_EXECUTION_FAILURE_REASON = "Alert-route execution failed"
 private val executionLogger = KotlinLogging.logger {}
+
+private data class IncidentActionExecution(
+    val group: AlertGroupRecord,
+    val outcome: AlertRouteActionOutcome,
+    val error: Throwable?,
+)
 
 /** Executes the selected route without coupling it to workflow or provider delivery. */
 class AlertRouteExecutionService(
@@ -60,25 +74,54 @@ class AlertRouteExecutionService(
     private val now: () -> Instant = { Clock.System.now() },
 ) {
     suspend fun execute(context: AlertFanoutContext) {
-        val episode = context.episode ?: return
+        val outcome = executeInternal(context, propagateFailures = true)
+        check(outcome.state != AlertRouteExecutionState.FAILED) { outcome.reason ?: ROUTE_EXECUTION_FAILURE_REASON }
+    }
+
+    suspend fun executeWithOutcome(context: AlertFanoutContext): AlertRouteExecutionOutcome =
+        suspendRunCatching { executeInternal(context, propagateFailures = false) }
+            .getOrElse { error ->
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                executionLogger.error(error) { ROUTE_EXECUTION_FAILURE_REASON }
+                AlertRouteExecutionOutcome(
+                    state = AlertRouteExecutionState.FAILED,
+                    reason = error.message ?: ROUTE_EXECUTION_FAILURE_REASON,
+                )
+            }
+
+    private suspend fun executeInternal(
+        context: AlertFanoutContext,
+        propagateFailures: Boolean,
+    ): AlertRouteExecutionOutcome {
+        val episode = context.episode ?: return AlertRouteExecutionOutcome(
+                state = AlertRouteExecutionState.UNAVAILABLE,
+                reason = "Alert episode is unavailable for route evaluation",
+            )
         val episodeId = episode.resourceId
         if (context.event.status == AlertStatus.RESOLVED) {
             recover(context.event.organizationId, episodeId)
-            return
+            return AlertRouteExecutionOutcome(
+                state = AlertRouteExecutionState.SKIPPED,
+                reason = "Resolved alerts are handled by route recovery",
+            )
         }
-        executeFiring(context, episode)
+        return executeFiring(context, episode, propagateFailures)
     }
 
     private suspend fun executeFiring(
         context: AlertFanoutContext,
         episode: com.moneat.alerts.services.AlertEpisodeContext,
-    ) {
+        propagateFailures: Boolean,
+    ): AlertRouteExecutionOutcome {
         val episodeId = episode.resourceId
         val live = evaluationService.evaluateLive(
             context.event,
             com.moneat.enterprise.alertroutes.context.AlertRouteEpisodeIdentity.from(episode),
         )
-        val decision = live.result.decision ?: return
+        val decision = live.result.decision ?: return AlertRouteExecutionOutcome(
+            state = AlertRouteExecutionState.NO_MATCH,
+            reason = "No enabled alert route matched this alert",
+        )
         val candidate = if (decision.grouping.behavior in CORRELATING_GROUPING_BEHAVIORS) {
             groupService.findCandidateIncident(
                 context.event.organizationId,
@@ -89,12 +132,88 @@ class AlertRouteExecutionService(
             null
         }
         val group = groupService.recordFiring(live.context, decision, episodeId, candidate, now())
-        val incidentResult = runCatching { applyIncidentActions(context, episodeId, group) }
-        val pagingResult = suspendRunCatching {
-            if (!context.deliverySilenced) page(context, group, decision.paging.escalationPolicies.map { it.id })
+        val incidentExecution = applyIncidentActionsWithOutcome(context, episodeId, group)
+        val finalGroup = incidentExecution.group
+        val incidentOutcome = incidentExecution.outcome
+        val pagingOutcome = if (context.deliverySilenced) {
+            AlertRouteActionOutcome(AlertRouteActionState.SKIPPED, "Paging skipped because delivery is silenced")
+        } else {
+            page(context, finalGroup, decision.paging.escalationPolicies.map { it.id })
         }
-        incidentResult.exceptionOrNull()?.let { throw it }
-        pagingResult.getOrThrow()
+        if (propagateFailures) {
+            incidentExecution.error?.let { throw it }
+            check(pagingOutcome.state != AlertRouteActionState.FAILED) {
+                pagingOutcome.reason ?: "Alert-route paging failed"
+            }
+        }
+        val overallState = when {
+            incidentOutcome.state == AlertRouteActionState.FAILED ||
+                pagingOutcome.state == AlertRouteActionState.FAILED -> AlertRouteExecutionState.FAILED
+            else -> AlertRouteExecutionState.MATCHED
+        }
+        return AlertRouteExecutionOutcome(
+            state = overallState,
+            reason = if (overallState == AlertRouteExecutionState.FAILED) {
+                incidentOutcome.reason ?: pagingOutcome.reason
+            } else {
+                null
+            },
+            matchedRouteId = decision.routeId.toString(),
+            matchedRouteRevision = decision.revision,
+            groupId = finalGroup.id.toString(),
+            incidentId = finalGroup.incidentId?.toString(),
+            grouping = AlertRouteActionOutcome(AlertRouteActionState.SUCCEEDED, "Alert grouped"),
+            paging = pagingOutcome,
+            incident = incidentOutcome,
+        )
+    }
+
+    private fun applyIncidentActionsWithOutcome(
+        context: AlertFanoutContext,
+        episodeId: Uuid,
+        group: AlertGroupRecord,
+    ): IncidentActionExecution {
+        val result = runCatching { applyIncidentActions(context, episodeId, group) }
+        val error = result.exceptionOrNull()
+        error?.let {
+            groupService.recordIncidentActionOutcome(
+                organizationId = context.event.organizationId,
+                groupId = group.id,
+                state = AlertRouteActionState.FAILED.name,
+                reason = it.message ?: "Incident action failed",
+            )
+        }
+        val finalGroup = result.getOrNull() ?: group
+        val outcome = result.fold(
+            onSuccess = { updatedGroup -> incidentActionOutcome(context, group, updatedGroup) },
+            onFailure = { failure ->
+                AlertRouteActionOutcome(
+                    AlertRouteActionState.FAILED,
+                    failure.message ?: "Incident action failed",
+                )
+            },
+        )
+        return IncidentActionExecution(finalGroup, outcome, error)
+    }
+
+    private fun incidentActionOutcome(
+        context: AlertFanoutContext,
+        initialGroup: AlertGroupRecord,
+        finalGroup: AlertGroupRecord,
+    ): AlertRouteActionOutcome = when {
+        context.deliverySilenced ->
+            AlertRouteActionOutcome(
+                AlertRouteActionState.SKIPPED,
+                "Incident action skipped because delivery is silenced",
+            )
+        finalGroup.incidentId != null && initialGroup.incidentId == null ->
+            AlertRouteActionOutcome(AlertRouteActionState.SUCCEEDED, "Incident created or attached")
+        finalGroup.incidentId != null ->
+            AlertRouteActionOutcome(AlertRouteActionState.SUCCEEDED, "Alert linked to the existing incident")
+        finalGroup.candidateIncidentId != null && finalGroup.behavior != AlertRouteGroupingBehavior.AUTOMATIC ->
+            AlertRouteActionOutcome(AlertRouteActionState.SKIPPED, "Incident attachment requires automatic grouping")
+        else ->
+            AlertRouteActionOutcome(AlertRouteActionState.SKIPPED, "Incident creation is disabled for this route")
     }
 
     private fun applyIncidentActions(
@@ -122,10 +241,11 @@ class AlertRouteExecutionService(
                         CreateAlertGroupTriageCommand(
                             commandKey = "route-create-incident:${group.id}",
                             actor = actor,
-                            groupId = group.id,
-                            expectedVersion = group.version,
-                            initialStatus = group.incidentTemplateSnapshot.incidentStatus(),
-                        ),
+                    groupId = group.id,
+                    expectedVersion = group.version,
+                    initialStatus = group.incidentTemplateSnapshot.incidentStatus(),
+                    severity = derivedIncidentSeverity(context.event.priority, group),
+                ),
                     ).group
                 else -> group
             }
@@ -147,6 +267,17 @@ class AlertRouteExecutionService(
         return group
     }
 
+    private fun derivedIncidentSeverity(priority: AlertPriority, group: AlertGroupRecord): String? {
+        val configured = group.incidentTemplateSnapshot.text("severity") ?: return null
+        if (configured != ALERT_PRIORITY_SEVERITY) return configured
+        return when (priority) {
+            AlertPriority.P0 -> "SEV-0"
+            AlertPriority.P1 -> "SEV-1"
+            AlertPriority.P2 -> "SEV-2"
+            else -> null
+        }
+    }
+
     suspend fun recoverDue(enabled: (Int) -> Boolean = FeatureRegistry::isNativeIncidentResponseEntitled) {
         groupService.recoveryCandidates().forEach { (organizationId, groupId) ->
             if (!enabled(organizationId)) return@forEach
@@ -162,10 +293,17 @@ class AlertRouteExecutionService(
         }
     }
 
-    private suspend fun page(context: AlertFanoutContext, group: AlertGroupRecord, policyIds: List<Int>) {
-        if (policyIds.isEmpty()) return
+    private suspend fun page(
+        context: AlertFanoutContext,
+        group: AlertGroupRecord,
+        policyIds: List<Int>,
+    ): AlertRouteActionOutcome {
+        if (policyIds.isEmpty()) {
+            return AlertRouteActionOutcome(AlertRouteActionState.SKIPPED, "No paging targets are configured")
+        }
         val episodeId = requireNotNull(context.episode).resourceId
-        val commandKey = pagingCommandKey(group, episodeId) ?: return
+        val commandKey = pagingCommandKey(group, episodeId)
+            ?: return AlertRouteActionOutcome(AlertRouteActionState.SKIPPED, "Paging is disabled for this route")
         val attemptTime = now()
         val existingByKey = groupService.escalations(context.event.organizationId, group.id)
             .associateBy(AlertGroupEscalationRecord::escalationKey)
@@ -196,7 +334,7 @@ class AlertRouteExecutionService(
                 ),
             )
         ) {
-            return
+            return AlertRouteActionOutcome(AlertRouteActionState.SKIPPED, "Paging was already claimed for this group")
         }
         var succeeded = true
         policyIds.distinct().forEach { policyId ->
@@ -254,7 +392,14 @@ class AlertRouteExecutionService(
                 succeeded,
             ),
         )
-        check(succeeded) { "One or more alert-route paging targets failed" }
+        return if (succeeded) {
+            AlertRouteActionOutcome(
+                AlertRouteActionState.SUCCEEDED,
+                "Paged ${policyIds.distinct().size} escalation target(s)",
+            )
+        } else {
+            AlertRouteActionOutcome(AlertRouteActionState.FAILED, "One or more alert-route paging targets failed")
+        }
     }
 
     private fun pagingCommandKey(group: AlertGroupRecord, episodeId: Uuid): String? =
@@ -365,6 +510,9 @@ class AlertRouteExecutionService(
 
     private fun Map<String, kotlinx.serialization.json.JsonElement>.boolean(key: String): Boolean? =
         get(key)?.jsonPrimitive?.booleanOrNull
+
+    private fun Map<String, kotlinx.serialization.json.JsonElement>.text(key: String): String? =
+        get(key)?.jsonPrimitive?.contentOrNull
 
     private fun Map<String, kotlinx.serialization.json.JsonElement>.incidentStatus(): NativeIncidentStatus =
         when (get("mode")?.jsonPrimitive?.content) {

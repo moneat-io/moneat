@@ -4,6 +4,7 @@
 
 package com.moneat.enterprise.oncall.services
 
+import com.moneat.enterprise.alertroutes.services.AlertRouteOutcomeReader
 import com.moneat.enterprise.oncall.escalationPolicyResourceIds
 import com.moneat.enterprise.oncall.incidentResourceIds
 import com.moneat.enterprise.oncall.organizationResourceId
@@ -103,6 +104,10 @@ class OnCallAlertService(
                 viewedByCurrentUser = viewed,
                 createdAt = row[OnCallAlerts.createdAt].toString(),
                 updatedAt = row[OnCallAlerts.updatedAt].toString(),
+                routeOutcome = AlertRouteOutcomeReader.findForOnCallAlert(
+                    row[OnCallAlerts.organizationId],
+                    row[OnCallAlerts.id].value,
+                ),
                 internalId = row[OnCallAlerts.id].value,
                 organizationId = row[OnCallAlerts.organizationId],
                 declaredIncidentId = row[OnCallAlerts.declaredIncidentId],

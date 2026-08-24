@@ -6,6 +6,7 @@ package com.moneat.enterprise.oncall
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
+import com.moneat.alerts.services.AlertRouteFanout
 import io.ktor.client.request.get
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.install
@@ -14,10 +15,24 @@ import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.jwt.jwt
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import io.mockk.mockk
+import io.ktor.server.application.Application
 import org.junit.jupiter.api.Test
+import org.koin.core.KoinApplication
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 
 class OnCallModuleTest {
+    @Test
+    fun `provides synchronous alert route fanout without starting background jobs`() {
+        val module = OnCallModule()
+        val application = KoinApplication.init().apply { modules(module.koinModules()) }
+        module.startBackgroundJobs(mockk<Application>(), startSchedulers = false, startIngestionWorkers = false)
+
+        assertNotNull(application.koin.get<AlertRouteFanout>())
+        application.close()
+    }
+
     @Test
     fun `registers API routes before scheduler jobs start`() {
         val previousFrontendUrl = System.getProperty("FRONTEND_URL")

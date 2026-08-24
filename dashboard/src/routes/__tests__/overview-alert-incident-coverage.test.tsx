@@ -199,6 +199,15 @@ const alert = {
   status: 'TRIGGERED',
   alertSource: 'monitor',
   triggeredAt: '2026-06-05T12:00:00.000Z',
+  routeOutcome: {
+    matchedRouteId: resourceId(171),
+    matchedRouteRevision: 3,
+    groupId: resourceId(172),
+    incidentId: DECLARED_INCIDENT_RESOURCE_ID,
+    grouping: {state: 'SUCCEEDED', reason: 'Grouped into the active alert window'},
+    paging: {state: 'FAILED', reason: 'Paging target delivery failed'},
+    incident: {state: 'SKIPPED', reason: 'Incident already linked'},
+  },
 }
 
 const alertTimeline = [

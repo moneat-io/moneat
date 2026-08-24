@@ -16,7 +16,7 @@
 
 import {useState} from 'react'
 import {useMutation, useQueryClient} from '@tanstack/react-query'
-import {AlertTriangle, Loader2} from 'lucide-react'
+import {AlertTriangle, Loader2, WandSparkles} from 'lucide-react'
 import {api} from '@/lib/api'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
@@ -37,6 +37,7 @@ import type {
 } from '@/lib/api/types'
 import {
   alertRouteToForm,
+  applyP0P2TriagePreset,
   createEmptyAlertRouteForm,
   formToRequest,
   isConflictError,
@@ -189,6 +190,7 @@ function AlertRouteEditorForm({
   }
 
   const busy = saveMutation.isPending
+  const incidentSummary = describeIncidentSummary(form)
 
   return (
     <>
@@ -259,6 +261,24 @@ function AlertRouteEditorForm({
         </section>
 
         <EditorSection title="Conditions" description="OR across groups, AND within a group.">
+          <div className="flex items-start justify-between gap-3 rounded-lg border border-info-border bg-info-bg p-3 text-xs">
+            <div>
+              <p className="font-medium text-info-fg">Need a standard high-severity path?</p>
+              <p className="mt-0.5 text-info-fg/80">
+                Opt in to page once per group and create triage incidents for P0–P2 alerts.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 shrink-0"
+              onClick={() => setForm((current) => applyP0P2TriagePreset(current))}
+            >
+              <WandSparkles className="mr-1.5 h-3.5 w-3.5" />
+              Use P0–P2 preset
+            </Button>
+          </div>
           <AlertRouteConditionsSection
             groups={form.conditionGroups}
             onChange={(conditionGroups) => patch({conditionGroups})}
@@ -273,6 +293,16 @@ function AlertRouteEditorForm({
             onChange={(paging) => patch({paging})}
           />
         </EditorSection>
+
+        {form.paging.mode !== 'NONE' && !form.incident.create && (
+          <div className="flex items-start gap-2 rounded-lg border border-warning-border bg-warning-bg p-3 text-xs text-warning-fg">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <p>
+              This is a paging-only route. It will page the configured targets and will not create an
+              incident. Because routes use first match wins, a matching alert will not continue to a later route.
+            </p>
+          </div>
+        )}
 
         <EditorSection title="Grouping" description="How matched alerts fold together.">
           <AlertRouteGroupingSection
@@ -290,6 +320,14 @@ function AlertRouteEditorForm({
             onRecoveryChange={(recovery) => patch({recovery})}
           />
         </EditorSection>
+
+        <div className="rounded-lg border bg-muted/30 p-3 text-xs">
+          <p className="font-medium">Save summary</p>
+          <p className="mt-1 text-muted-foreground">
+            {form.enabled ? 'Enabled' : 'Disabled'} route · {form.paging.mode === 'NONE' ? 'no paging' : 'pages responders'} ·{' '}
+            {incidentSummary}
+          </p>
+        </div>
 
         <details className="rounded-lg border">
           <summary className="cursor-pointer px-4 py-2.5 text-sm font-semibold">Preview</summary>
@@ -363,6 +401,18 @@ function EditorSection({
       {children}
     </section>
   )
+}
+
+function describeIncidentSummary(form: AlertRouteFormState): string {
+  if (!form.incident.create) return 'does not create incidents'
+  if (form.incident.mode === 'ACTIVE') {
+    const severity = form.incident.severity ? ` at ${form.incident.severity}` : ''
+    return `creates an active incident${severity}`
+  }
+  if (form.incident.severity === 'ALERT_PRIORITY') {
+    return 'creates triage incidents with severity derived from P0–P2 priority'
+  }
+  return 'creates a triage incident'
 }
 
 interface ConflictBannerProps {

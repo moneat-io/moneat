@@ -7,6 +7,7 @@ package com.moneat.enterprise.alertroutes.services
 import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.IncidentSeverity
 import com.moneat.enterprise.alertroutes.commands.AlertRouteCommand
+import com.moneat.enterprise.alertroutes.commands.ALERT_PRIORITY_SEVERITY
 import com.moneat.enterprise.alertroutes.commands.AlertRouteConditionInput
 import com.moneat.enterprise.alertroutes.commands.AlertRouteSpecification
 import com.moneat.enterprise.alertroutes.commands.AlertRouteTargetInput
@@ -167,10 +168,14 @@ internal object AlertRouteValidator {
             "Incident type is too long"
         }
         incident.severity?.let {
-            require(IncidentSeverity.fromString(it) != null) { "Invalid incident severity: $it" }
+            require(it == ALERT_PRIORITY_SEVERITY || IncidentSeverity.fromString(it) != null) {
+                "Invalid incident severity: $it"
+            }
         }
         if (incident.create && incident.mode == AlertRouteIncidentMode.ACTIVE) {
-            require(!incident.severity.isNullOrBlank()) { "Incident creation requires a severity" }
+            require(!incident.severity.isNullOrBlank() && incident.severity != ALERT_PRIORITY_SEVERITY) {
+                "Incident creation requires a severity; active routes must use a fixed severity"
+            }
         }
         templateReferences(incident.titleTemplate, incident.summaryTemplate).forEach(::validateReference)
     }
