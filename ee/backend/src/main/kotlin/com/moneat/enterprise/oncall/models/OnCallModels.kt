@@ -511,71 +511,72 @@ object OnCallAlertSerializer : KSerializer<OnCallAlert> {
     override val descriptor: SerialDescriptor = delegate.descriptor
 
     override fun serialize(encoder: Encoder, value: OnCallAlert) {
-        encoder.encodeSerializableValue(
-            delegate,
-            OnCallAlertWire(
-                id = value.id,
-                organizationResourceId = value.organizationResourceId,
-                declaredIncidentResourceId = value.declaredIncidentResourceId,
-                escalationPolicyResourceId = value.escalationPolicyResourceId,
-                escalationPolicyName = value.escalationPolicyName,
-                title = value.title,
-                description = value.description,
-                priority = value.priority,
-                status = value.status,
-                alertSource = value.alertSource,
-                deduplicationKey = value.deduplicationKey,
-                currentStep = value.currentStep,
-                repeatIteration = value.repeatIteration,
-                triggeredAt = value.triggeredAt,
-                acknowledgedAt = value.acknowledgedAt,
-                acknowledgedByResourceId = value.acknowledgedByResourceId,
-                acknowledgedByName = value.acknowledgedByName,
-                resolvedAt = value.resolvedAt,
-                resolvedByResourceId = value.resolvedByResourceId,
-                resolvedByName = value.resolvedByName,
-                metadata = value.metadata,
-                nextEscalationAt = value.nextEscalationAt,
-                viewedByCurrentUser = value.viewedByCurrentUser,
-                createdAt = value.createdAt,
-                updatedAt = value.updatedAt,
-                routeOutcome = value.routeOutcome,
-            ),
-        )
+        encoder.encodeSerializableValue(delegate, value.toWire())
     }
 
     override fun deserialize(decoder: Decoder): OnCallAlert {
         val wire = decoder.decodeSerializableValue(delegate)
-        return OnCallAlert(
-            id = wire.id,
-            organizationResourceId = wire.organizationResourceId,
-            declaredIncidentResourceId = wire.declaredIncidentResourceId,
-            escalationPolicyResourceId = wire.escalationPolicyResourceId,
-            escalationPolicyName = wire.escalationPolicyName,
-            title = wire.title,
-            description = wire.description,
-            priority = wire.priority,
-            status = wire.status,
-            alertSource = wire.alertSource,
-            deduplicationKey = wire.deduplicationKey,
-            currentStep = wire.currentStep,
-            repeatIteration = wire.repeatIteration,
-            triggeredAt = wire.triggeredAt,
-            acknowledgedAt = wire.acknowledgedAt,
-            acknowledgedByResourceId = wire.acknowledgedByResourceId,
-            acknowledgedByName = wire.acknowledgedByName,
-            resolvedAt = wire.resolvedAt,
-            resolvedByResourceId = wire.resolvedByResourceId,
-            resolvedByName = wire.resolvedByName,
-            metadata = wire.metadata,
-            nextEscalationAt = wire.nextEscalationAt,
-            viewedByCurrentUser = wire.viewedByCurrentUser,
-            createdAt = wire.createdAt,
-            updatedAt = wire.updatedAt,
-            routeOutcome = wire.routeOutcome,
-        )
+        return wire.toAlert()
     }
 }
+
+private fun OnCallAlert.toWire() = OnCallAlertWire(
+    id,
+    organizationResourceId,
+    declaredIncidentResourceId,
+    escalationPolicyResourceId,
+    escalationPolicyName,
+    title,
+    description,
+    priority,
+    status,
+    alertSource,
+    deduplicationKey,
+    currentStep,
+    repeatIteration,
+    triggeredAt,
+    acknowledgedAt,
+    acknowledgedByResourceId,
+    acknowledgedByName,
+    resolvedAt,
+    resolvedByResourceId,
+    resolvedByName,
+    metadata,
+    nextEscalationAt,
+    viewedByCurrentUser,
+    createdAt,
+    updatedAt,
+    routeOutcome,
+)
+
+private fun OnCallAlertWire.toAlert() = OnCallAlert(
+    id,
+    organizationResourceId,
+    declaredIncidentResourceId,
+    escalationPolicyResourceId,
+    escalationPolicyName,
+    title,
+    description,
+    priority,
+    status,
+    alertSource,
+    deduplicationKey,
+    currentStep,
+    repeatIteration,
+    triggeredAt,
+    acknowledgedAt,
+    acknowledgedByResourceId,
+    acknowledgedByName,
+    resolvedAt,
+    resolvedByResourceId,
+    resolvedByName,
+    metadata,
+    nextEscalationAt,
+    viewedByCurrentUser,
+    createdAt,
+    updatedAt,
+    routeOutcome,
+)
 
 @Serializable
 data class AlertRouteActionSummary(

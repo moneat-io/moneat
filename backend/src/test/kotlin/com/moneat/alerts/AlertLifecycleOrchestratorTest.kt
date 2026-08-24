@@ -214,6 +214,56 @@ class AlertLifecycleOrchestratorTest {
     }
 
     @Test
+    fun `route execution state maps to fanout state`() = runBlocking {
+        var routeState = AlertRouteExecutionState.MATCHED
+        val route = object : AlertRouteFanout, AlertRouteOutcomeFanout {
+            override suspend fun process(context: AlertFanoutContext) = Unit
+
+            override suspend fun processWithOutcome(context: AlertFanoutContext) =
+                AlertRouteExecutionOutcome(state = routeState)
+        }
+        val orchestrator = orchestrator(
+            workflow = AlertWorkflowFanout {},
+            incidents = capturingIncidentFanout(mutableListOf()),
+            route = route,
+        )
+
+        val expected = mapOf(
+            AlertRouteExecutionState.MATCHED to AlertFanoutState.SUCCEEDED,
+            AlertRouteExecutionState.NO_MATCH to AlertFanoutState.SUCCEEDED,
+            AlertRouteExecutionState.SKIPPED to AlertFanoutState.SUCCEEDED,
+            AlertRouteExecutionState.FAILED to AlertFanoutState.FAILED,
+            AlertRouteExecutionState.UNAVAILABLE to AlertFanoutState.UNAVAILABLE,
+        )
+        expected.forEach { (state, fanoutState) ->
+            routeState = state
+            val result = orchestrator.process(
+                event().copy(deduplicationKey = "route-state-${state.name}"),
+                AlertFanoutPlan(route = true, workflow = false),
+            )
+            assertEquals(fanoutState, result.outcome(AlertFanoutArm.ROUTE).state)
+        }
+    }
+
+    @Test
+    fun `route outcome failure is isolated from other arms`() = runBlocking {
+        val route = object : AlertRouteFanout, AlertRouteOutcomeFanout {
+            override suspend fun process(context: AlertFanoutContext) = Unit
+
+            override suspend fun processWithOutcome(context: AlertFanoutContext): AlertRouteExecutionOutcome =
+                error("route evaluation failed")
+        }
+        val result = orchestrator(
+            workflow = AlertWorkflowFanout {},
+            incidents = capturingIncidentFanout(mutableListOf()),
+            route = route,
+        ).process(event(), AlertFanoutPlan(route = true, workflow = false))
+
+        assertEquals(AlertFanoutState.FAILED, result.outcome(AlertFanoutArm.ROUTE).state)
+        assertEquals("route evaluation failed", result.outcome(AlertFanoutArm.ROUTE).error)
+    }
+
+    @Test
     fun `resolved lifecycle shares the closed episode with every arm`() = runBlocking {
         val captured = mutableListOf<AlertFanoutContext>()
         val orchestrator = orchestrator(
@@ -260,7 +310,6 @@ class AlertLifecycleOrchestratorTest {
             episodeService = episodeService,
             workflowFanoutProvider = { null },
             incidentFanoutProvider = { null },
-            routeFanoutProvider = { null },
         )
 
         val result = orchestrator.process(event(), AlertFanoutPlan.FULL)
