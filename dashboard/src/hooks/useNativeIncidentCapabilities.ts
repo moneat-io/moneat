@@ -41,10 +41,11 @@ export function useNativeIncidentCapabilities(): NativeIncidentCapabilitiesState
     queryFn: () => api.getNativeIncidentCapabilities(),
     enabled: organizationId !== undefined && !currentUser.isFetching,
   })
+  const isError = currentUser.isError || capability.isError
   return {
-    enabled: capability.data?.enabled === true,
+    enabled: !isError && capability.data?.enabled === true,
     isLoading: currentUser.isLoading || currentUser.isFetching || capability.isLoading,
-    isError: currentUser.isError || capability.isError,
+    isError,
     data: capability.data,
   }
 }

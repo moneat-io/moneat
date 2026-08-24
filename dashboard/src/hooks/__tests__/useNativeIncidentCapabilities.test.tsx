@@ -31,8 +31,11 @@ function createWrapper() {
   const queryClient = new QueryClient({
     defaultOptions: {queries: {retry: false}},
   })
-  return ({children}: {children: React.ReactNode}) =>
-    React.createElement(QueryClientProvider, {client: queryClient}, children)
+  return {
+    queryClient,
+    wrapper: ({children}: {children: React.ReactNode}) =>
+      React.createElement(QueryClientProvider, {client: queryClient}, children),
+  }
 }
 
 describe('useNativeIncidentCapabilities', () => {
@@ -51,7 +54,8 @@ describe('useNativeIncidentCapabilities', () => {
       externalProviderPassthroughAffected: false,
     })
 
-    const {result} = renderHook(() => useNativeIncidentCapabilities(), {wrapper: createWrapper()})
+    const {wrapper} = createWrapper()
+    const {result} = renderHook(() => useNativeIncidentCapabilities(), {wrapper})
 
     await waitFor(() => expect(result.current.enabled).toBe(true))
     expect(result.current.data?.plan).toBe('TEAM')
@@ -68,7 +72,8 @@ describe('useNativeIncidentCapabilities', () => {
       externalProviderPassthroughAffected: false,
     })
 
-    const {result} = renderHook(() => useNativeIncidentCapabilities(), {wrapper: createWrapper()})
+    const {wrapper} = createWrapper()
+    const {result} = renderHook(() => useNativeIncidentCapabilities(), {wrapper})
 
     await waitFor(() => expect(result.current.isLoading).toBe(false))
     expect(result.current.enabled).toBe(false)
@@ -78,10 +83,34 @@ describe('useNativeIncidentCapabilities', () => {
   it('fails closed when the capability request errors', async () => {
     mockApi.getNativeIncidentCapabilities.mockRejectedValue(new Error('boom'))
 
-    const {result} = renderHook(() => useNativeIncidentCapabilities(), {wrapper: createWrapper()})
+    const {wrapper} = createWrapper()
+    const {result} = renderHook(() => useNativeIncidentCapabilities(), {wrapper})
 
     await waitFor(() => expect(result.current.isError).toBe(true))
     expect(result.current.enabled).toBe(false)
+  })
+
+  it('fails closed on refetch errors while retaining the last capability data', async () => {
+    mockApi.getNativeIncidentCapabilities
+      .mockResolvedValueOnce({
+        enabled: true,
+        entitlementEnabled: true,
+        plan: 'TEAM',
+        entitlementReason: null,
+        quotas: {},
+        externalProviderPassthroughAffected: false,
+      })
+      .mockRejectedValueOnce(new Error('refetch failed'))
+
+    const {queryClient, wrapper} = createWrapper()
+    const {result} = renderHook(() => useNativeIncidentCapabilities(), {wrapper})
+
+    await waitFor(() => expect(result.current.enabled).toBe(true))
+    await queryClient.invalidateQueries({queryKey: ['native-incident-capabilities']})
+    await waitFor(() => expect(result.current.isError).toBe(true))
+
+    expect(result.current.enabled).toBe(false)
+    expect(result.current.data?.plan).toBe('TEAM')
   })
 })
 
