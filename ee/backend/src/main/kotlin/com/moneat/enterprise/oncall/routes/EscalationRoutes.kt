@@ -5,7 +5,10 @@
 package com.moneat.enterprise.oncall.routes
 
 import com.moneat.auth.currentOrgIdOrNull
+import com.moneat.auth.currentUserIdOrNull
 import com.moneat.enterprise.oncall.services.EscalationPolicyService
+import com.moneat.enterprise.oncall.models.EscalationPath
+import com.moneat.enterprise.oncall.services.EscalationPathService
 import com.moneat.shared.models.EscalationPolicies
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OnCallSchedules
@@ -32,6 +35,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.uuid.Uuid
 
 private const val POLICY_NOT_FOUND_MESSAGE = "Policy not found"
+private const val INVALID_TOKEN_MESSAGE = "Invalid token"
 
 @Serializable
 data class CreatePolicyRequest(
@@ -39,6 +43,7 @@ data class CreatePolicyRequest(
     val description: String? = null,
     val repeatCount: Int,
     val steps: List<CreatePolicyStepRequest>,
+    val path: EscalationPath? = null,
 )
 
 @Serializable
@@ -61,10 +66,17 @@ data class UpdatePolicyRequest(
     val description: String? = null,
     val repeatCount: Int? = null,
     val steps: List<CreatePolicyStepRequest>? = null,
+    val path: EscalationPath? = null,
+)
+
+@Serializable
+data class CreateEscalationPathVersionRequest(
+    val path: EscalationPath,
 )
 
 fun Route.escalationRoutes() {
     val policyService = EscalationPolicyService()
+    val pathService = EscalationPathService()
 
     route("/v1/escalation-policies") {
         authenticate("auth-jwt") {
@@ -73,7 +85,7 @@ fun Route.escalationRoutes() {
                 val organizationId = principal?.currentOrgIdOrNull()
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@get
                 }
 
@@ -86,7 +98,7 @@ fun Route.escalationRoutes() {
                 val organizationId = principal?.currentOrgIdOrNull()
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@post
                 }
 
@@ -117,6 +129,15 @@ fun Route.escalationRoutes() {
                             repeatCount = request.repeatCount,
                             steps = steps,
                         )
+                    request.path?.let { path ->
+                        val draft = pathService.createDraft(
+                            organizationId,
+                            policy.internalId,
+                            path,
+                            principal.currentUserIdOrNull(),
+                        )
+                        pathService.publishVersion(organizationId, draft.id)
+                    }
                     call.respond(HttpStatusCode.Created, policy)
                 } catch (e: Exception) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
@@ -129,7 +150,7 @@ fun Route.escalationRoutes() {
                 val policyId = call.resolvePolicyId(call.parameters["id"], organizationId)
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@get
                 }
 
@@ -143,13 +164,69 @@ fun Route.escalationRoutes() {
                 }
             }
 
+            get("/{id}/versions") {
+                val principal = call.principal<JWTPrincipal>()
+                val organizationId = principal?.currentOrgIdOrNull()
+                val policyId = call.resolvePolicyId(call.parameters["id"], organizationId)
+                if (organizationId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
+                    return@get
+                }
+                if (policyId == null) return@get
+                call.respond(pathService.listVersions(organizationId, policyId))
+            }
+
+            post("/{id}/versions") {
+                val principal = call.principal<JWTPrincipal>()
+                val organizationId = principal?.currentOrgIdOrNull()
+                val policyId = call.resolvePolicyId(call.parameters["id"], organizationId)
+                if (organizationId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
+                    return@post
+                }
+                if (policyId == null) return@post
+                try {
+                    val request = call.receive<CreateEscalationPathVersionRequest>()
+                    val version = pathService.createDraft(
+                        organizationId,
+                        policyId,
+                        request.path,
+                        principal.currentUserIdOrNull(),
+                    )
+                    call.respond(HttpStatusCode.Created, version)
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
+                }
+            }
+
+            post("/{id}/versions/{versionId}/publish") {
+                val principal = call.principal<JWTPrincipal>()
+                val organizationId = principal?.currentOrgIdOrNull()
+                val policyId = call.resolvePolicyId(call.parameters["id"], organizationId)
+                if (organizationId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
+                    return@post
+                }
+                if (policyId == null) return@post
+                val version = pathService.getVersion(organizationId, call.parameters["versionId"].orEmpty())
+                if (version == null || version.policyResourceId != call.parameters["id"]) {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Version not found"))
+                    return@post
+                }
+                try {
+                    call.respond(pathService.publishVersion(organizationId, version.id)!!)
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
+                }
+            }
+
             put("/{id}") {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.currentOrgIdOrNull()
                 val policyId = call.resolvePolicyId(call.parameters["id"], organizationId)
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@put
                 }
 
@@ -189,6 +266,16 @@ fun Route.escalationRoutes() {
                             steps = steps,
                         )
 
+                    request.path?.let { path ->
+                        val draft = pathService.createDraft(
+                            organizationId,
+                            policyId,
+                            path,
+                            principal.currentUserIdOrNull(),
+                        )
+                        pathService.publishVersion(organizationId, draft.id)
+                    }
+
                     if (policy != null) {
                         call.respond(policy)
                     } else {
@@ -205,7 +292,7 @@ fun Route.escalationRoutes() {
                 val policyId = call.resolvePolicyId(call.parameters["id"], organizationId)
 
                 if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
                     return@delete
                 }
 

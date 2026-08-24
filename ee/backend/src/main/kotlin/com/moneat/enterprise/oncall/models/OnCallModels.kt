@@ -175,6 +175,61 @@ object EscalationStepTargets : IntIdTable("escalation_step_targets") {
     val createdAt = timestamp("created_at")
 }
 
+/** Immutable graph snapshots used by new escalation paths. */
+object EscalationPolicyVersions : IntIdTable("escalation_policy_versions") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
+    val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
+    val escalationPolicyId = integer("escalation_policy_id")
+        .references(EscalationPolicies.id, onDelete = ReferenceOption.CASCADE)
+    val version = integer("version")
+    val status = varchar("status", 16)
+    val path = requiredJsonb("path")
+    val createdBy = integer("created_by").references(Users.id, onDelete = ReferenceOption.SET_NULL).nullable()
+    val createdAt = timestamp("created_at")
+    val publishedAt = timestamp("published_at").nullable()
+
+    init {
+        uniqueIndex(organizationId, resourceId)
+        uniqueIndex(escalationPolicyId, version)
+    }
+}
+
+/** One durable state row per alert and published path snapshot. */
+object EscalationExecutionStates : IntIdTable("escalation_execution_states") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
+    val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
+    val alertId = integer("alert_id").references(OnCallAlerts.id, onDelete = ReferenceOption.CASCADE)
+    val policyVersionId = integer("policy_version_id")
+        .references(EscalationPolicyVersions.id, onDelete = ReferenceOption.RESTRICT)
+    val currentNodeId = varchar("current_node_id", 128).nullable()
+    val transitionCount = integer("transition_count").default(0)
+    val status = varchar("status", 24)
+    val updatedAt = timestamp("updated_at")
+
+    init {
+        uniqueIndex(organizationId, alertId)
+        uniqueIndex(organizationId, resourceId)
+    }
+}
+
+/** Append-only responder and execution history for every control-flow action. */
+object EscalationExecutionEvents : IntIdTable("escalation_execution_events") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
+    val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
+    val executionId = integer("execution_id")
+        .references(EscalationExecutionStates.id, onDelete = ReferenceOption.CASCADE)
+    val eventType = varchar("event_type", 32)
+    val actorUserId = integer("actor_user_id").references(Users.id, onDelete = ReferenceOption.SET_NULL).nullable()
+    val nodeId = varchar("node_id", 128).nullable()
+    val details = requiredJsonb("details")
+    val createdAt = timestamp("created_at")
+
+    init {
+        uniqueIndex(organizationId, resourceId)
+        index(false, organizationId, executionId, createdAt)
+    }
+}
+
 @Serializable
 data class EscalationStepTarget(
     val id: String,
@@ -435,6 +490,8 @@ object OnCallAlerts : IntIdTable("on_call_alerts") {
         integer(
             "escalation_policy_id",
         ).references(EscalationPolicies.id, onDelete = ReferenceOption.SET_NULL).nullable()
+    val escalationPolicyVersionId = integer("escalation_policy_version_id")
+        .references(EscalationPolicyVersions.id, onDelete = ReferenceOption.SET_NULL).nullable()
     val title = varchar("title", 500)
     val description = text("description").nullable()
     val priority = varchar("priority", 10)
@@ -498,6 +555,7 @@ data class OnCallAlert(
     @Transient val organizationId: Int = 0,
     @Transient val declaredIncidentId: Int? = null,
     @Transient val escalationPolicyId: Int? = null,
+    @Transient val escalationPolicyVersionId: Int? = null,
     @Transient val acknowledgedBy: Int? = null,
     @Transient val resolvedBy: Int? = null,
 )

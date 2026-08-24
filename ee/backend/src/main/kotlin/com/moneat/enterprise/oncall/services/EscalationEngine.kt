@@ -56,6 +56,7 @@ class EscalationEngine(
     private val pushNotificationService: PushNotificationService,
     private val slackService: SlackService,
     private val redisClient: RedisClient,
+    private val escalationPathService: EscalationPathService = EscalationPathService(),
 ) {
     private val logger = LoggerFactory.getLogger(EscalationEngine::class.java)
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -142,6 +143,7 @@ class EscalationEngine(
         deduplicationKey: String?,
         metadata: Map<String, JsonElement>? = null,
     ): OnCallAlert? {
+        val publishedPath = escalationPathService.getPublishedVersion(escalationPolicyId)
         val alertId =
             transaction {
                 val now = Clock.System.now()
@@ -168,6 +170,7 @@ class EscalationEngine(
                         .insertAndGetId {
                             it[OnCallAlerts.organizationId] = organizationId
                             it[OnCallAlerts.escalationPolicyId] = escalationPolicyId
+                            it[OnCallAlerts.escalationPolicyVersionId] = publishedPath?.internalId
                             it[OnCallAlerts.title] = title
                             it[OnCallAlerts.description] = description
                             it[OnCallAlerts.priority] = priority
@@ -186,6 +189,15 @@ class EscalationEngine(
 
                 alertId
             } ?: return null
+
+        publishedPath?.let { pathVersion ->
+            escalationPathService.createExecution(
+                organizationId = organizationId,
+                alertId = alertId,
+                policyVersionId = pathVersion.internalId,
+                startNodeId = pathVersion.path.startNodeId,
+            )
+        }
 
         processEscalationStep(alertId, 0, 0)
         return getAlert(alertId)
@@ -691,8 +703,8 @@ class EscalationEngine(
     fun acknowledgeAlert(
         incidentId: Int,
         userId: Int,
-    ): Boolean =
-        transaction {
+    ): Boolean {
+        val acknowledged = transaction {
             val now = Clock.System.now()
 
             val updated =
@@ -715,9 +727,20 @@ class EscalationEngine(
                 false
             }
         }
+        if (acknowledged) {
+            escalationPathService.appendEventForAlert(
+                incidentId,
+                EscalationExecutionEvent(
+                    type = EscalationPathService.EVENT_ACKNOWLEDGED,
+                    actorUserId = userId,
+                ),
+            )
+        }
+        return acknowledged
+    }
 
-    fun acknowledgeAlertByPhone(incidentId: Int): Boolean =
-        transaction {
+    fun acknowledgeAlertByPhone(incidentId: Int): Boolean {
+        val acknowledged = transaction {
             val now = Clock.System.now()
             val updated =
                 OnCallAlerts.update({
@@ -737,12 +760,23 @@ class EscalationEngine(
                 false
             }
         }
+        if (acknowledged) {
+            escalationPathService.appendEventForAlert(
+                incidentId,
+                EscalationExecutionEvent(
+                    type = EscalationPathService.EVENT_ACKNOWLEDGED,
+                    details = mapOf("channel" to JsonPrimitive("phone")),
+                ),
+            )
+        }
+        return acknowledged
+    }
 
     fun resolveAlert(
         incidentId: Int,
         userId: Int,
-    ): Boolean =
-        transaction {
+    ): Boolean {
+        val resolved = transaction {
             val now = Clock.System.now()
 
             val updated =
@@ -765,13 +799,24 @@ class EscalationEngine(
                 false
             }
         }
+        if (resolved) {
+            escalationPathService.appendEventForAlert(
+                incidentId,
+                EscalationExecutionEvent(
+                    type = EscalationPathService.EVENT_RECOVERED,
+                    actorUserId = userId,
+                ),
+            )
+        }
+        return resolved
+    }
 
     fun reassignAlert(
         incidentId: Int,
         toUserId: Int,
         byUserId: Int,
-    ): Boolean =
-        transaction {
+    ): Boolean {
+        val reassigned = transaction {
             val incident =
                 OnCallAlerts
                     .selectAll()
@@ -802,6 +847,18 @@ class EscalationEngine(
             logger.info("Incident $incidentId reassigned to user $toUserId by $byUserId")
             true
         }
+        if (reassigned) {
+            escalationPathService.appendEventForAlert(
+                incidentId,
+                EscalationExecutionEvent(
+                    type = EscalationPathService.EVENT_REASSIGNED,
+                    actorUserId = byUserId,
+                    details = mapOf("toUserId" to JsonPrimitive(toUserId.toString())),
+                ),
+            )
+        }
+        return reassigned
+    }
 
     private fun logTimelineEvent(
         incidentId: Int,
