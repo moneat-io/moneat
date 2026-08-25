@@ -244,7 +244,7 @@ function ProfileDetailPage() {
           <div className="space-y-0.5 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl font-semibold tracking-tight leading-tight">
-                {profile?.service || 'Profile'}
+                {profile.service}
               </h1>
               {profile && (
                 <Badge
