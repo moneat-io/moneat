@@ -42,6 +42,7 @@ object AnalyticsSaltService {
 
     private const val SALT_TTL_SECONDS = 48L * 60 * 60 // 48 hours
     private const val SALT_BYTES_SIZE = 32
+    private val secureRandom = SecureRandom()
 
     fun getDailySalt(): String {
         val date = LocalDate.now().toString()
@@ -67,7 +68,7 @@ object AnalyticsSaltService {
 
     private fun generateSalt(): String {
         val bytes = ByteArray(SALT_BYTES_SIZE)
-        SecureRandom().nextBytes(bytes)
+        secureRandom.nextBytes(bytes)
         return bytes.joinToString("") { "%02x".format(it) }
     }
 }

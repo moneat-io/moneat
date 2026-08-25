@@ -34,6 +34,7 @@ object CredentialEncryption {
     private const val IV_LENGTH = 12
     private const val TAG_LENGTH = 128
     private const val KEY_LENGTH = 32
+    private val secureRandom = SecureRandom()
 
     private val secretKey: SecretKey by lazy {
         val keyStr = EnvConfig.get("DATA_SOURCE_ENCRYPTION_KEY")
@@ -48,7 +49,7 @@ object CredentialEncryption {
     }
 
     fun encrypt(plaintext: String): String {
-        val iv = ByteArray(IV_LENGTH).also { SecureRandom().nextBytes(it) }
+        val iv = ByteArray(IV_LENGTH).also { secureRandom.nextBytes(it) }
         val cipher = Cipher.getInstance(ALGORITHM)
         cipher.init(Cipher.ENCRYPT_MODE, secretKey, GCMParameterSpec(TAG_LENGTH, iv))
         val ciphertext = cipher.doFinal(plaintext.toByteArray(Charsets.UTF_8))

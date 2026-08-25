@@ -36,6 +36,7 @@ class ProjectService(
     companion object {
         private const val KEY_BYTE_LENGTH = 32
         private const val PUBLIC_KEY_LENGTH = 40
+        private val secureRandom = SecureRandom()
     }
 
     suspend fun getProjects(
@@ -158,13 +159,13 @@ class ProjectService(
 
     private fun generatePublicKey(): String {
         val bytes = ByteArray(KEY_BYTE_LENGTH)
-        SecureRandom().nextBytes(bytes)
+        secureRandom.nextBytes(bytes)
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes).take(PUBLIC_KEY_LENGTH)
     }
 
     private fun generateSecretKey(): String {
         val bytes = ByteArray(KEY_BYTE_LENGTH)
-        SecureRandom().nextBytes(bytes)
+        secureRandom.nextBytes(bytes)
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
     }
 }

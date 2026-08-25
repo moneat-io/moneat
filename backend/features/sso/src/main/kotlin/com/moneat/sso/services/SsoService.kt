@@ -295,7 +295,6 @@ open class SsoService {
                 .AuthorizationCode(code)
         val codeGrant = AuthorizationCodeGrant(authCode, redirectUri)
 
-        @Suppress("DEPRECATION")
         val tokenRequest =
             TokenRequest(
                 tokenEndpoint,
@@ -304,6 +303,7 @@ open class SsoService {
                     Secret(oidc.clientSecret),
                 ),
                 codeGrant,
+                null,
             )
 
         val tokenResponse = OIDCTokenResponseParser.parse(

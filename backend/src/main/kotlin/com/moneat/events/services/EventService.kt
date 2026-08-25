@@ -1405,10 +1405,6 @@ class EventService(
         return (value * MS_PER_SECOND).toLong()
     }
 
-    private fun unixSecondsToMillis(value: Double?): Long? {
-        return value?.let { unixSecondsToMillis(it) }
-    }
-
     private fun durationMs(
         start: Double?,
         end: Double?

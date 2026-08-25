@@ -42,6 +42,7 @@ class SessionHashService {
         private const val SALT_TTL_SECONDS = 48L * 3600 // 48 hours
         private const val SALT_BYTES = 32
         private val dateFormat = DateTimeFormatter.ISO_LOCAL_DATE
+        private val secureRandom = SecureRandom()
     }
 
     /**
@@ -70,7 +71,7 @@ class SessionHashService {
 
         // Generate new salt
         val bytes = ByteArray(SALT_BYTES)
-        SecureRandom().nextBytes(bytes)
+        secureRandom.nextBytes(bytes)
         val salt = Base64.getEncoder().encodeToString(bytes)
 
         try {

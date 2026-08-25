@@ -297,7 +297,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
             }
             // Direct string match
             if (mapping[ds]) return mapping[ds]
-          } else if (typeof ds === 'object' && ds !== null) {
+          } else if (typeof ds === 'object') {
             const dsObj = ds as Record<string, unknown>
             if (typeof dsObj.type === 'string' && mapping[dsObj.type]) {
               return mapping[dsObj.type]

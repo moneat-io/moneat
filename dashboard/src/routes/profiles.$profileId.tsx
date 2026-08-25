@@ -166,7 +166,7 @@ function ProfileDetailPage() {
     )
   }
 
-  const tagEntries = profile ? Object.entries(profile.tags) : []
+  const tagEntries = Object.entries(profile.tags)
 
   const sidebarMeta = (
     <div className="rounded-lg border p-2.5 space-y-2 shrink-0">
