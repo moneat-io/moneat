@@ -7,9 +7,11 @@ package com.moneat.enterprise.incidents.announcements
 import com.moneat.enterprise.incidents.IncidentTestDatabase
 import com.moneat.enterprise.incidents.SeededMember
 import com.moneat.enterprise.incidents.events.NativeIncidentDomainEvent
+import com.moneat.enterprise.incidents.models.IncidentUpdateRequestStatus
 import com.moneat.enterprise.incidents.models.NativeIncidentRoleAssignments
 import com.moneat.enterprise.incidents.models.NativeIncidentRoleDefinitions
 import com.moneat.enterprise.incidents.models.NativeIncidentStatus
+import com.moneat.enterprise.incidents.models.NativeIncidentUpdateRequests
 import com.moneat.enterprise.incidents.response.NativeIncidentResponseActivations
 import com.moneat.enterprise.oncall.models.OnCallIncidents
 import com.moneat.notifications.services.SlackOutboundEnqueueRequest
@@ -139,6 +141,42 @@ class IncidentAnnouncementServiceTest {
         val payload = requests.single().payload
         assertTrue(payload.contains("Incident Commander"))
         assertTrue(payload.contains("1/1 acknowledged"))
+    }
+
+    @Test
+    fun `announcement card synchronizes structured update fields`() = runBlocking {
+        val requests = mutableListOf<SlackOutboundEnqueueRequest>()
+        val service = IncidentAnnouncementService(
+            enqueue = { request -> requests += request; Uuid.random().toString() },
+        )
+        transaction {
+            OnCallIncidents.update({ OnCallIncidents.resourceId eq incidentResourceId }) {
+                it[OnCallIncidents.customerImpact] = "Checkout requests are timing out"
+                it[OnCallIncidents.nextUpdateAt] = Instant.parse("2026-08-25T01:00:00Z")
+            }
+            NativeIncidentUpdateRequests.insert {
+                it[resourceId] = Uuid.random()
+                it[organizationId] = member.organizationId
+                it[incidentId] = OnCallIncidents.selectAll().single()[OnCallIncidents.id].value
+                it[requestedBy] = member.userId
+                it[message] = "Please publish the next mitigation update"
+                it[dueAt] = now
+                it[status] = IncidentUpdateRequestStatus.OPEN.wire
+                it[escalationLevel] = 0
+                it[lastRemindedAt] = null
+                it[fulfilledAt] = null
+                it[createdAt] = now
+                it[updatedAt] = now
+            }
+        }
+
+        service.consume(event("INCIDENT_UPDATE", 1, NativeIncidentStatus.ACTIVE.wire), "structured-update")
+
+        val card = requests.single().payload
+        assertTrue(card.contains("Customer impact"))
+        assertTrue(card.contains("Checkout requests are timing out"))
+        assertTrue(card.contains("Next update"))
+        assertTrue(card.contains("Update requested"))
     }
 
     @Test

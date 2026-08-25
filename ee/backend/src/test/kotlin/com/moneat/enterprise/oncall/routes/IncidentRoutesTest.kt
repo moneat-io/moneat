@@ -532,6 +532,57 @@ class IncidentRoutesTest {
         }
     }
 
+    @Test
+    fun `incident update routes publish request pause and resume reminders`() = testApplication {
+        application { installIncidentRoutes() }
+        val incidentId = declareIncident("structured-updates")
+
+        val update = client.post("/v1/on-call/incidents/$incidentId/updates") {
+            authorize()
+            header(HttpHeaders.ContentType, ContentType.Application.Json)
+            header(IDEMPOTENCY_HEADER, "structured-update")
+            setBody(
+                """
+                {
+                  "message": "Mitigation is rolling out",
+                  "customerImpact": "Checkout requests are timing out",
+                  "nextUpdateAt": "2026-08-25T01:00:00Z"
+                }
+                """.trimIndent(),
+            )
+        }
+        assertEquals(HttpStatusCode.OK, update.status)
+        assertEquals("Mitigation is rolling out", update.jsonObject().requiredString("summary"))
+
+        val request = client.post("/v1/on-call/incidents/$incidentId/update-requests") {
+            authorize()
+            header(HttpHeaders.ContentType, ContentType.Application.Json)
+            header(IDEMPOTENCY_HEADER, "request-structured-update")
+            setBody("""{"message":"Please post the next update","dueAt":"2026-08-25T01:10:00Z"}""")
+        }
+        assertEquals(HttpStatusCode.OK, request.status)
+
+        val pause = client.post("/v1/on-call/incidents/$incidentId/update-reminders/pause") {
+            authorize()
+            header(HttpHeaders.ContentType, ContentType.Application.Json)
+            header(IDEMPOTENCY_HEADER, "pause-structured-update")
+            setBody("{}")
+        }
+        assertEquals(HttpStatusCode.OK, pause.status)
+        assertEquals(true, pause.jsonObject()["updateReminderPaused"]?.jsonPrimitive?.content?.toBoolean())
+
+        val resume = client.post("/v1/on-call/incidents/$incidentId/update-reminders/resume") {
+            authorize()
+            header(HttpHeaders.ContentType, ContentType.Application.Json)
+            header(IDEMPOTENCY_HEADER, "resume-structured-update")
+            setBody("""{"rescheduleAt":"2026-08-25T01:30:00Z"}""")
+        }
+        assertEquals(HttpStatusCode.OK, resume.status)
+        val resumed = client.get("/v1/on-call/incidents/$incidentId") { authorize() }
+        assertEquals(HttpStatusCode.OK, resumed.status)
+        assertEquals(false, resumed.jsonObject().stringOrDefault("updateReminderPaused", "false").toBoolean())
+    }
+
     private suspend fun io.ktor.server.testing.ApplicationTestBuilder.postJson(
         path: String,
         body: String,
