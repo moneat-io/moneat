@@ -35,6 +35,22 @@ class SlackIncidentDeclarationViewTest {
     }
 
     @Test
+    fun `incident help command exposes the response menu`() = runBlocking {
+        val response = OnCallModule().handleSlackInbound(
+            "commands",
+            "text=help&team_id=T123&user_id=U123",
+            null,
+        )
+        val menu = requireNotNull(response)
+        val normalizedMenu = menu.lowercase()
+
+        assertTrue(menu.contains("Incident response"))
+        listOf("overview", "timeline", "handover", "status page", "resolve", "reopen", "workflow")
+            .forEach { capability -> assertTrue(normalizedMenu.contains(capability)) }
+        assertTrue(menu.contains("incident_menu_declare"))
+    }
+
+    @Test
     fun `declaration modal renders configured fields`() {
         val form = IncidentFormDefinition(
             id = "declaration-form",

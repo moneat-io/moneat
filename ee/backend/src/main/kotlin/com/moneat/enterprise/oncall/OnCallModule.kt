@@ -93,6 +93,8 @@ private const val SLACK_TITLE_PREFILL_MAX_CHARS = 150
 private const val SLACK_FORM_LABEL_MAX_CHARS = 75
 private const val SLACK_FORM_HINT_MAX_CHARS = 200
 private const val SLACK_FORM_OPTION_MAX_CHARS = 75
+private const val SLACK_INCIDENT_MENU_CALLBACK_ID = "moneat_incident_menu"
+private val SLACK_INCIDENT_HELP_COMMANDS = setOf("help", "menu", "commands", "incident help", "incident menu")
 
 private data class SlackIncidentSubmitter(
     val organizationId: Int,
@@ -367,12 +369,21 @@ class OnCallModule :
         }
         val type = root?.get("type")?.jsonPrimitive?.contentOrNull
         if (requestType == "interactions" && type == "block_actions") {
+            val actionId = root["actions"]?.jsonArray?.firstOrNull()
+                ?.jsonObject?.get("action_id")?.jsonPrimitive?.contentOrNull
+            if (actionId == "incident_menu_declare") return openSlackIncident(root, value)
             return alertRouteSlackActionService.handle(payload, deliveryId)
         }
         if (requestType == "interactions" && type == "view_submission") {
             return submitSlackIncident(root, value, deliveryId)
         }
         if (requestType == "events" || requestType == "mentions") return null
+        if (requestType == "commands" && value("text")?.trim()?.lowercase() in SLACK_INCIDENT_HELP_COMMANDS) {
+            return slackIncidentCommandMenu()
+        }
+        if (requestType == "shortcuts" && value("callback_id") == SLACK_INCIDENT_MENU_CALLBACK_ID) {
+            return slackIncidentCommandMenu()
+        }
 
         return openSlackIncident(root, value)
     }
@@ -511,6 +522,45 @@ private fun slackEphemeral(message: String): String =
     buildJsonObject {
         put("response_type", "ephemeral")
         put("text", message)
+    }.toString()
+
+internal fun slackIncidentCommandMenu(): String =
+    buildJsonObject {
+        put("response_type", "ephemeral")
+        put("text", "Incident response commands")
+        putJsonArray("blocks") {
+            addJsonObject {
+                put("type", "header")
+                putJsonObject("text") {
+                    put("type", "plain_text")
+                    put("text", "Incident response")
+                }
+            }
+            addJsonObject {
+                put("type", "section")
+                put(
+                    "text",
+                    "*Available actions*\n" +
+                        "Overview · update · status · severity · summary · rename · roles · fields\n" +
+                        "Actions · follow-ups · timeline · decision · handover · call · status page\n" +
+                        "Escalation · resolve · cancel · reopen · workflow",
+                )
+            }
+            addJsonObject {
+                put("type", "actions")
+                putJsonArray("elements") {
+                    addJsonObject {
+                        put("type", "button")
+                        put("action_id", "incident_menu_declare")
+                        putJsonObject("text") {
+                            put("type", "plain_text")
+                            put("text", "Declare incident")
+                        }
+                        put("style", "primary")
+                    }
+                }
+            }
+        }
     }.toString()
 
 internal fun slackViewErrors(errors: Map<String, String>): String =
