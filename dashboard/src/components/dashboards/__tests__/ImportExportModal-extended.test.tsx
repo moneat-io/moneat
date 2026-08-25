@@ -22,6 +22,13 @@ import type {CustomDashboard, CustomDataSourceResponse} from '@/lib/api'
 import {ImportExportModal} from '../ImportExportModal'
 import {renderWithQueryClient, clearAuthStorage} from '@/test/utils'
 
+vi.stubGlobal('ResizeObserver', class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+})
+HTMLElement.prototype.scrollIntoView = vi.fn()
+
 const mockNavigate = vi.fn()
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => mockNavigate,
@@ -353,6 +360,85 @@ describe('ImportExportModal – extended branch coverage', () => {
       // Mapper should appear since there are unmapped sources
       await waitFor(() => {
         expect(screen.getByText('Map Data Sources')).toBeInTheDocument()
+      })
+    })
+  })
+
+  // ──── Import: apply mappings to panel and target datasource shapes ────
+  describe('import – applying datasource mappings', () => {
+    it('maps object and direct string datasources while preserving skipped values', async () => {
+      const json = JSON.stringify({
+        panels: [{
+          datasource: {type: 'prometheus', uid: 'prometheus-uid'},
+          targets: [
+            {datasource: 'prometheus', refId: 'A'},
+            {datasource: 'other', refId: 'B'},
+          ],
+        }],
+      })
+      renderImportModal()
+      await submitImport(json)
+
+      await waitFor(() => {
+        expect(screen.getByText('Map Data Sources')).toBeInTheDocument()
+      })
+      const user = userEvent.setup()
+      const comboboxes = screen.getAllByRole('combobox')
+      expect(comboboxes).toHaveLength(2)
+      await user.click(comboboxes[0])
+      await user.click(screen.getByText('Events'))
+      await user.click(screen.getByText('Continue Import'))
+
+      const mappedJson = JSON.stringify({
+        panels: [{
+          datasource: 'events',
+          targets: [
+            {datasource: 'events', refId: 'A'},
+            {datasource: 'other', refId: 'B'},
+          ],
+        }],
+      })
+      await waitFor(() => {
+        expect(mockedApi.importDashboard).toHaveBeenCalledWith('grafana', mappedJson)
+      })
+    })
+
+    it('resolves template variables and uid datasources, including unchanged values', async () => {
+      const json = JSON.stringify({
+        __inputs: [{name: 'DS_PROM', type: 'datasource', pluginId: 'prometheus'}],
+        panels: [{
+          datasource: '${DS_PROM}',
+          targets: [
+            {datasource: {uid: 'prometheus'}, refId: 'A'},
+            {datasource: {uid: 'unmapped'}, refId: 'B'},
+            {datasource: 123, refId: 'C'},
+          ],
+        }],
+      })
+      renderImportModal()
+      await submitImport(json)
+
+      await waitFor(() => {
+        expect(screen.getByText('Map Data Sources')).toBeInTheDocument()
+      })
+      const user = userEvent.setup()
+      await user.click(screen.getByRole('combobox'))
+      await user.click(screen.getByText('Events'))
+      await user.click(screen.getByText('Continue Import'))
+
+      const mappedJson = JSON.stringify({
+        __inputs: [{name: 'DS_PROM', type: 'datasource', pluginId: 'prometheus'}],
+        panels: [{
+          datasource: 'events',
+          targets: [
+            {datasource: 'events', refId: 'A'},
+            {datasource: {uid: 'unmapped'}, refId: 'B'},
+            {datasource: 123, refId: 'C'},
+          ],
+        }],
+      })
+      await waitFor(() => {
+        expect(mockedApi.importDashboard).toHaveBeenCalledWith('grafana', mappedJson)
       })
     })
   })
