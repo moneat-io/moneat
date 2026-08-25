@@ -97,85 +97,87 @@ class SlackIdentityResolver {
         }
 
         return transaction {
-            val mapping = SlackUserMappings
-                .selectAll()
-                .where {
-                    (SlackUserMappings.slackTeamId eq teamId) and
-                        (SlackUserMappings.slackUserId eq userId)
-                }
-                .firstOrNull()
-            if (mapping == null) {
-                return@transaction resolution(
-                    SlackIdentityStatus.UNMAPPED,
-                    teamId,
-                    enterpriseId,
-                    LINK_USER_MESSAGE,
-                )
-            }
-            val mappedUserId = mapping[SlackUserMappings.userId]
-            val user = Users
-                .selectAll()
-                .where { Users.id eq mappedUserId }
-                .firstOrNull()
-            if (user == null || user[Users.deletedAt] != null) {
-                return@transaction resolution(
-                    SlackIdentityStatus.REVOKED,
-                    teamId,
-                    enterpriseId,
-                    "This Slack identity is no longer active in Moneat. Relink it from the organization settings.",
-                )
-            }
+            resolveMappedIdentity(teamId, userId, enterpriseId, request.organizationId)
+        }
+    }
 
-            val installedOrganizations = OrganizationIntegrations
-                .selectAll()
-                .where {
-                    (OrganizationIntegrations.integration_type eq "slack") and
-                        (OrganizationIntegrations.team_id eq teamId) and
-                        (OrganizationIntegrations.enabled eq true)
-                }
-                .map { it[OrganizationIntegrations.organization_id] }
-                .distinct()
-            val memberships = Memberships
-                .selectAll()
-                .where { Memberships.user_id eq mappedUserId }
-                .toList()
-            val membership = memberships.firstOrNull { row ->
-                val organizationId = row[Memberships.organization_id]
-                (request.organizationId == null && organizationId in installedOrganizations) ||
-                    organizationId == request.organizationId
+    private fun resolveMappedIdentity(
+        teamId: String,
+        slackUserId: String,
+        enterpriseId: String?,
+        requestedOrganizationId: Int?,
+    ): SlackIdentityResolution {
+        val mapping = SlackUserMappings
+            .selectAll()
+            .where {
+                (SlackUserMappings.slackTeamId eq teamId) and
+                    (SlackUserMappings.slackUserId eq slackUserId)
             }
-            if (membership == null) {
-                val status = if (memberships.isEmpty()) {
-                    SlackIdentityStatus.REVOKED
-                } else {
-                    SlackIdentityStatus.CROSS_ORGANIZATION
-                }
-                return@transaction resolution(
-                    status,
-                    teamId,
-                    enterpriseId,
-                    "This Slack identity is not a member of the connected Moneat organization.",
-                )
-            }
-            val role = runCatching { OrgRole.fromString(membership[Memberships.role]) }.getOrNull()
-            if (role == null) {
-                return@transaction resolution(
-                    SlackIdentityStatus.REVOKED,
-                    teamId,
-                    enterpriseId,
-                    "This Moneat membership has an invalid or revoked role.",
-                )
-            }
-            SlackIdentityResolution(
-                status = SlackIdentityStatus.MAPPED,
-                organizationId = membership[Memberships.organization_id],
-                userId = mappedUserId,
-                role = role,
-                teamId = teamId,
-                enterpriseId = enterpriseId,
-                message = "Slack identity mapped to an active Moneat member.",
+            .firstOrNull()
+            ?: return resolution(SlackIdentityStatus.UNMAPPED, teamId, enterpriseId, LINK_USER_MESSAGE)
+        val mappedUserId = mapping[SlackUserMappings.userId]
+        val user = Users.selectAll().where { Users.id eq mappedUserId }.firstOrNull()
+        if (user == null || user[Users.deletedAt] != null) {
+            return resolution(
+                SlackIdentityStatus.REVOKED,
+                teamId,
+                enterpriseId,
+                "This Slack identity is no longer active in Moneat. Relink it from the organization settings.",
             )
         }
+        return resolveMembership(teamId, enterpriseId, mappedUserId, requestedOrganizationId)
+    }
+
+    private fun resolveMembership(
+        teamId: String,
+        enterpriseId: String?,
+        mappedUserId: Int,
+        requestedOrganizationId: Int?,
+    ): SlackIdentityResolution {
+        val installedOrganizations = OrganizationIntegrations
+            .selectAll()
+            .where {
+                (OrganizationIntegrations.integration_type eq "slack") and
+                    (OrganizationIntegrations.team_id eq teamId) and
+                    (OrganizationIntegrations.enabled eq true)
+            }
+            .map { it[OrganizationIntegrations.organization_id] }
+            .distinct()
+        val memberships = Memberships.selectAll().where { Memberships.user_id eq mappedUserId }.toList()
+        val membership = memberships.firstOrNull { row ->
+            val organizationId = row[Memberships.organization_id]
+            (requestedOrganizationId == null && organizationId in installedOrganizations) ||
+                organizationId == requestedOrganizationId
+        }
+        if (membership == null) {
+            val status = if (memberships.isEmpty()) {
+                SlackIdentityStatus.REVOKED
+            } else {
+                SlackIdentityStatus.CROSS_ORGANIZATION
+            }
+            return resolution(
+                status,
+                teamId,
+                enterpriseId,
+                "This Slack identity is not a member of the connected Moneat organization.",
+            )
+        }
+        val role = runCatching { OrgRole.fromString(membership[Memberships.role]) }.getOrNull()
+            ?: return resolution(
+                SlackIdentityStatus.REVOKED,
+                teamId,
+                enterpriseId,
+                "This Moneat membership has an invalid or revoked role.",
+            )
+        return SlackIdentityResolution(
+            status = SlackIdentityStatus.MAPPED,
+            organizationId = membership[Memberships.organization_id],
+            userId = mappedUserId,
+            role = role,
+            teamId = teamId,
+            enterpriseId = enterpriseId,
+            message = "Slack identity mapped to an active Moneat member.",
+        )
     }
 
     private fun resolution(
