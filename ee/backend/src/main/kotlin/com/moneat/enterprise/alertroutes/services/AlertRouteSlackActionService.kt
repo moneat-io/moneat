@@ -41,6 +41,7 @@ import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
 private data class AlertActionContext(
@@ -61,6 +62,7 @@ class AlertRouteSlackActionService(
     private val identityResolver = SlackIdentityResolver()
     private val incidentAuthorization = SlackIncidentAuthorizationService()
     private val incidentCommands = IncidentCommandService()
+    private val slackTimelineRecorder = SlackIncidentTimelineRecorder()
     private val alertGroupCommands = AlertGroupCommandService()
     private val alertEpisodeService = AlertEpisodeService()
     private val onCallAlertService by lazy(onCallAlertServiceProvider)
@@ -100,9 +102,9 @@ class AlertRouteSlackActionService(
         return when (actionId) {
             "declare_incident" -> declare(organizationId, userId, context, deliveryId)
             "join_incident" -> join(organizationId, userId, identity, value, deliveryId)
-            "acknowledge_alert" -> acknowledge(identity, context)
-            "silence_alert" -> silence(identity, context)
-            "resolve_alert" -> resolve(identity, context)
+            "acknowledge_alert" -> acknowledge(identity, context, deliveryId)
+            "silence_alert" -> silence(identity, context, deliveryId)
+            "resolve_alert" -> resolve(identity, context, deliveryId)
             "confirm_grouping" -> response("This alert is already grouped by the matched route.")
             "unrelated_alert", "merge_alert_group" ->
                 response("Use the alert group view to review this grouping decision.")
@@ -188,38 +190,77 @@ class AlertRouteSlackActionService(
         return response("You joined the incident.")
     }
 
-    private fun acknowledge(identity: SlackIdentityResolution, context: AlertActionContext?): String {
+    private fun acknowledge(
+        identity: SlackIdentityResolution,
+        context: AlertActionContext?,
+        deliveryId: String?,
+    ): String {
         if (context == null || context.onCallAlertId == null) {
             return response("No page is attached to this alert group.")
         }
         if (!canRespondToIncident(identity, context)) {
             return response("You are not authorized to acknowledge this alert.")
         }
-        onCallAlertService.acknowledge(context.onCallAlertId, requireNotNull(identity.userId))
+        val acknowledged = onCallAlertService.acknowledge(context.onCallAlertId, requireNotNull(identity.userId))
+        if (acknowledged) recordSlackAction(identity, context, "SLACK_ALERT_ACKNOWLEDGED", deliveryId)
         return response("Alert acknowledged.")
     }
 
-    private fun silence(identity: SlackIdentityResolution, context: AlertActionContext?): String {
+    private fun silence(
+        identity: SlackIdentityResolution,
+        context: AlertActionContext?,
+        deliveryId: String?,
+    ): String {
         if (context == null) return response("The alert episode is no longer available.")
         if (!canRespondToIncident(identity, context)) return response("You are not authorized to silence this alert.")
-        alertEpisodeService.suppressEpisode(
+        val suppressed = alertEpisodeService.suppressEpisode(
             requireNotNull(identity.organizationId),
             context.episodeId,
             identity.userId,
             "Silenced from Slack",
         )
+        if (suppressed != null) recordSlackAction(identity, context, "SLACK_ALERT_SILENCED", deliveryId)
         return response("Alert silenced.")
     }
 
-    private fun resolve(identity: SlackIdentityResolution, context: AlertActionContext?): String {
+    private fun resolve(
+        identity: SlackIdentityResolution,
+        context: AlertActionContext?,
+        deliveryId: String?,
+    ): String {
         if (context == null || context.onCallAlertId == null) {
             return response("No page is attached to this alert group.")
         }
         if (!canRespondToIncident(identity, context)) {
             return response("You are not authorized to resolve this alert.")
         }
-        onCallAlertService.resolve(context.onCallAlertId, requireNotNull(identity.userId))
+        val resolved = onCallAlertService.resolve(context.onCallAlertId, requireNotNull(identity.userId))
+        if (resolved) recordSlackAction(identity, context, "SLACK_ALERT_RESOLVED", deliveryId)
         return response("Alert resolved.")
+    }
+
+    private fun recordSlackAction(
+        identity: SlackIdentityResolution,
+        context: AlertActionContext,
+        eventType: String,
+        deliveryId: String?,
+    ) {
+        val incidentId = context.incidentId ?: return
+        val organizationId = identity.organizationId ?: return
+        val actorUserId = identity.userId ?: return
+        val observedAt = Clock.System.now()
+        slackTimelineRecorder.record(
+            SlackIncidentTimelineRecord(
+                organizationId = organizationId,
+                incidentId = incidentId,
+                actorUserId = actorUserId,
+                alertEpisodeId = context.episodeId,
+                onCallAlertId = context.onCallAlertId,
+                eventType = eventType,
+                deliveryId = deliveryId,
+                occurredAt = observedAt,
+            ),
+        )
     }
 
     private fun canRespondToIncident(identity: SlackIdentityResolution, context: AlertActionContext): Boolean {
