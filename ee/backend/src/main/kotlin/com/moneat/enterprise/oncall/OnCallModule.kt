@@ -17,6 +17,7 @@ import com.moneat.enterprise.alertroutes.routes.alertGroupRoutes
 import com.moneat.enterprise.alertroutes.services.EnterpriseAlertRouteFanout
 import com.moneat.enterprise.alertroutes.services.AlertRouteExecutionService
 import com.moneat.enterprise.alertroutes.services.AlertRouteRecoveryWorker
+import com.moneat.enterprise.alertroutes.services.AlertRouteSlackActionService
 import com.moneat.enterprise.incidents.commands.DeclareIncidentCommand
 import com.moneat.enterprise.incidents.commands.IncidentCommandActor
 import com.moneat.enterprise.incidents.events.IncidentOutboxService
@@ -135,6 +136,12 @@ class OnCallModule :
         OnCallAlertService(
             escalationEngine = escalationEngine,
             responseActivationService = incidentResponseActivationService,
+        )
+    }
+    private val alertRouteSlackActionService by lazy {
+        AlertRouteSlackActionService(
+            slackInstallationService = slackInstallationService,
+            onCallAlertServiceProvider = { onCallAlertService },
         )
     }
     private val slackUserGroupSyncServiceDelegate =
@@ -339,6 +346,9 @@ class OnCallModule :
             root?.get(key)?.jsonPrimitive?.contentOrNull ?: form[key]
         }
         val type = root?.get("type")?.jsonPrimitive?.contentOrNull
+        if (requestType == "interactions" && type == "block_actions") {
+            return alertRouteSlackActionService.handle(payload, deliveryId)
+        }
         if (requestType == "interactions" && type == "view_submission") {
             return submitSlackIncident(root, value, deliveryId)
         }
