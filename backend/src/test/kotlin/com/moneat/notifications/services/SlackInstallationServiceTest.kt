@@ -27,6 +27,7 @@ import com.moneat.testsupport.TestDatabaseHelper
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
+import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -168,6 +169,79 @@ class SlackInstallationServiceTest {
                 internalInstallationId,
                 "trigger-1",
                 buildJsonObject { put("type", "modal") },
+            ),
+        )
+    }
+
+    @Test
+    fun `does not open a modal for a disabled installation`() = runBlocking {
+        val organizationId = seedOrganization("Disabled modal")
+        service.storeOAuthGrant(
+            organizationId,
+            reauthorizeInstallationId = null,
+            capabilityIds = emptyList(),
+            grant = grant("T-DISABLED-MODAL", "Disabled", service.requestedScopes(emptyList())),
+        )
+        transaction {
+            SlackWorkspaceBindings.update({ SlackWorkspaceBindings.teamId eq "T-DISABLED-MODAL" }) {
+                it[enabled] = false
+            }
+        }
+        val slackService = SlackService(
+            HttpClient(MockEngine) {
+                engine { addHandler { respond("{}") } }
+            },
+            service,
+        )
+        assertFalse(slackService.openModal(organizationId, 1, "trigger-1", buildJsonObject { }))
+    }
+
+    @Test
+    fun `does not open a modal when Slack returns a non-OK response`() = runBlocking {
+        val organizationId = seedOrganization("Non OK modal")
+        service.storeOAuthGrant(
+            organizationId,
+            reauthorizeInstallationId = null,
+            capabilityIds = emptyList(),
+            grant = grant("T-NON-OK-MODAL", "Non OK", service.requestedScopes(emptyList())),
+        )
+        val installationId = assertNotNull(service.internalInstallationIdForTeam(organizationId, "T-NON-OK-MODAL"))
+        val client = HttpClient(MockEngine) {
+            engine {
+                addHandler { respond("{}", status = HttpStatusCode.BadRequest) }
+            }
+        }
+        assertFalse(
+            SlackService(client, service).openModal(
+                organizationId,
+                installationId,
+                "trigger-1",
+                buildJsonObject { },
+            ),
+        )
+    }
+
+    @Test
+    fun `does not open a modal when Slack rejects the view`() = runBlocking {
+        val organizationId = seedOrganization("Rejected modal")
+        service.storeOAuthGrant(
+            organizationId,
+            reauthorizeInstallationId = null,
+            capabilityIds = emptyList(),
+            grant = grant("T-REJECTED-MODAL", "Rejected", service.requestedScopes(emptyList())),
+        )
+        val installationId = assertNotNull(service.internalInstallationIdForTeam(organizationId, "T-REJECTED-MODAL"))
+        val client = HttpClient(MockEngine) {
+            engine {
+                addHandler { respond("{\"ok\":false}") }
+            }
+        }
+        assertFalse(
+            SlackService(client, service).openModal(
+                organizationId,
+                installationId,
+                "trigger-1",
+                buildJsonObject { },
             ),
         )
     }
