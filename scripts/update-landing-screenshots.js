@@ -74,16 +74,21 @@ const SCREENSHOT_MAPPING = {
 function updateLandingPage() {
   console.log('📝 Updating landing page with real screenshots...\n');
   
-  if (!fs.existsSync(VARIANT_FILE)) {
-    console.error(`❌ File not found: ${VARIANT_FILE}`);
-    console.error('   Tried:');
-    VARIANT_FILE_CANDIDATES.forEach((candidate) => {
-      console.error(`   - ${candidate}`);
-    });
-    process.exit(1);
+  let content;
+  try {
+    content = fs.readFileSync(VARIANT_FILE, 'utf8');
+  } catch (error) {
+    if (error && error.code === 'ENOENT') {
+      console.error(`❌ File not found: ${VARIANT_FILE}`);
+      console.error('   Tried:');
+      VARIANT_FILE_CANDIDATES.forEach((candidate) => {
+        console.error(`   - ${candidate}`);
+      });
+      process.exitCode = 1;
+      return;
+    }
+    throw error;
   }
-  
-  let content = fs.readFileSync(VARIANT_FILE, 'utf8');
   let changeCount = 0;
   
   // Replace each mock component with an img tag

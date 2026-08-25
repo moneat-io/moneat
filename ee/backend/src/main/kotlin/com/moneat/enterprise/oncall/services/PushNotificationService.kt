@@ -47,7 +47,6 @@ import org.slf4j.LoggerFactory
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 
-private const val TOKEN_LOG_SUFFIX_LENGTH = 4
 private const val IOS_PLATFORM = "IOS"
 private const val INCIDENT_CATEGORY_ID = "INCIDENT_ALERT"
 private const val DEVICE_NOT_REGISTERED_ERROR = "DeviceNotRegistered"
@@ -257,7 +256,7 @@ class PushNotificationService {
     ): PendingReceipt? {
         if (ticket.status == "error") {
             logger.error(
-                "Push failed for token ${redactToken(token)}: ${ticket.message} (details: ${ticket.details})",
+                "Push failed for user $userId: ${ticket.message} (details: ${ticket.details})",
             )
             if (ticket.details?.get("error") == DEVICE_NOT_REGISTERED_ERROR) {
                 removeDeviceToken(token)
@@ -270,7 +269,7 @@ class PushNotificationService {
             logger.warn("Expo accepted a push for user $userId without returning a receipt ticket")
             return null
         }
-        logger.info("Push ticket ok for user $userId, ticketId=${ticket.id}, token=${redactToken(token)}")
+        logger.info("Push ticket accepted for user $userId, ticketId=$ticketId")
         return PendingReceipt(ticketId, token)
     }
 
@@ -289,11 +288,6 @@ class PushNotificationService {
             idKey = "incidentId",
             body = "Tap to view incident details",
         )
-    }
-
-    private fun redactToken(token: String): String {
-        if (token.length <= TOKEN_LOG_SUFFIX_LENGTH) return "****"
-        return "****${token.takeLast(TOKEN_LOG_SUFFIX_LENGTH)}"
     }
 
     suspend fun sendOnCallAssignmentAlert(
@@ -523,7 +517,7 @@ class PushNotificationService {
                 UserDeviceTokens.deleteWhere {
                     (UserDeviceTokens.userId eq userId) and (UserDeviceTokens.deviceToken eq deviceToken)
                 }
-            logger.info("Unregistered device token: $deviceToken")
+            logger.info("Unregistered device token for user $userId (deleted=$deleted)")
             deleted > 0
         }
 

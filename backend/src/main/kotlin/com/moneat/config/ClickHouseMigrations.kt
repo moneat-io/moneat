@@ -335,6 +335,8 @@ object ClickHouseMigrations {
     }
 
     private fun calculateChecksum(content: String): String {
+        // MD5 is retained for compatibility with existing migration checksums;
+        // it is not used for authentication, secrecy, or signature verification.
         val digest = MessageDigest.getInstance("MD5")
         val hash = digest.digest(content.toByteArray())
         return hash.joinToString("") { "%02x".format(it) }

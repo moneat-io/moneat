@@ -413,7 +413,7 @@ describe('Integrations API', () => {
     it('uses fallback when base has no path after /v1', async () => {
       const { integrationsMethods } = await import('../integrations')
       const mockRequest = async <T,>(endpoint: string): Promise<T> => {
-        if (endpoint.includes('https://api.moneat.io/api/incident-providers')) {
+        if (endpoint === 'https://api.moneat.io/api/incident-providers') {
           return [{ id: INCIDENT_PROVIDER_FALLBACK_ID, name: 'PagerDuty', type: 'pagerduty' }] as T
         }
         throw new Error(`Unexpected endpoint: ${endpoint}`)
