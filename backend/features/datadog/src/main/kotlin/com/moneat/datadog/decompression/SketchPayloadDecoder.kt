@@ -16,6 +16,8 @@
 
 package com.moneat.datadog.decompression
 
+import com.moneat.datadog.decompression.ProtoWireConstants as Wire
+
 import com.google.protobuf.CodedInputStream
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_3
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_4
@@ -23,7 +25,6 @@ import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_5
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_6
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_7
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_8
-import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_SHIFT
 import com.moneat.datadog.models.DatadogSketch
 import com.moneat.datadog.models.DatadogSketchPayload
 import com.moneat.datadog.models.DatadogSketchPoint
@@ -62,7 +63,7 @@ object SketchPayloadDecoder {
             when (val tag = input.readTag()) {
                 0 -> break
                 // field 1 (LEN): repeated Sketch sketches
-                (1 shl FIELD_SHIFT) or 2 -> sketches += decodeSketch(input.readByteArray())
+                Wire.tag(1, Wire.WIRE_LENGTH_DELIMITED) -> sketches += decodeSketch(input.readByteArray())
                 else -> input.skipField(tag)
             }
         }
@@ -80,13 +81,14 @@ object SketchPayloadDecoder {
             when (val tag = input.readTag()) {
                 0 -> break
                 // field 1 (LEN): string metric
-                (1 shl FIELD_SHIFT) or 2 -> metric = input.readString()
+                Wire.tag(1, Wire.WIRE_LENGTH_DELIMITED) -> metric = input.readString()
                 // field 2 (LEN): string host
-                (2 shl FIELD_SHIFT) or 2 -> host = input.readString()
+                Wire.tag(2, Wire.WIRE_LENGTH_DELIMITED) -> host = input.readString()
                 // field 3 (LEN): repeated string tags
-                (FIELD_3 shl FIELD_SHIFT) or 2 -> tags += input.readString()
+                Wire.tag(FIELD_3, Wire.WIRE_LENGTH_DELIMITED) -> tags += input.readString()
                 // field 4 (LEN): repeated Distribution
-                (FIELD_4 shl FIELD_SHIFT) or 2 -> distributions += decodeDistribution(input.readByteArray())
+                Wire.tag(FIELD_4, Wire.WIRE_LENGTH_DELIMITED) ->
+                    distributions += decodeDistribution(input.readByteArray())
                 else -> input.skipField(tag)
             }
         }
@@ -108,25 +110,25 @@ object SketchPayloadDecoder {
             when (val tag = input.readTag()) {
                 0 -> break
                 // field 1 (VARINT): int64 ts
-                (1 shl FIELD_SHIFT) or 0 -> ts = input.readInt64()
+                Wire.tag(1, Wire.WIRE_VARINT) -> ts = input.readInt64()
                 // field 2 (VARINT): int64 cnt
-                (2 shl FIELD_SHIFT) or 0 -> cnt = input.readInt64()
+                Wire.tag(2, Wire.WIRE_VARINT) -> cnt = input.readInt64()
                 // field 3 (64-bit): double min
-                (FIELD_3 shl FIELD_SHIFT) or 1 -> min = input.readDouble()
+                Wire.tag(FIELD_3, Wire.WIRE_FIXED64) -> min = input.readDouble()
                 // field 4 (64-bit): double max
-                (FIELD_4 shl FIELD_SHIFT) or 1 -> max = input.readDouble()
+                Wire.tag(FIELD_4, Wire.WIRE_FIXED64) -> max = input.readDouble()
                 // field 5 (64-bit): double avg
-                (FIELD_5 shl FIELD_SHIFT) or 1 -> avg = input.readDouble()
+                Wire.tag(FIELD_5, Wire.WIRE_FIXED64) -> avg = input.readDouble()
                 // field 6 (64-bit): double sum
-                (FIELD_6 shl FIELD_SHIFT) or 1 -> sum = input.readDouble()
+                Wire.tag(FIELD_6, Wire.WIRE_FIXED64) -> sum = input.readDouble()
                 // field 7 (LEN): packed repeated sint32 k (zigzag)
-                (FIELD_7 shl FIELD_SHIFT) or 2 -> k += decodePackedSint32(input.readByteArray())
+                Wire.tag(FIELD_7, Wire.WIRE_LENGTH_DELIMITED) -> k += decodePackedSint32(input.readByteArray())
                 // field 7 (VARINT): non-packed sint32 k (single value)
-                (FIELD_7 shl FIELD_SHIFT) or 0 -> k += input.readSInt32()
+                Wire.tag(FIELD_7, Wire.WIRE_VARINT) -> k += input.readSInt32()
                 // field 8 (LEN): packed repeated uint32 n
-                (FIELD_8 shl FIELD_SHIFT) or 2 -> n += decodePackedUint32(input.readByteArray())
+                Wire.tag(FIELD_8, Wire.WIRE_LENGTH_DELIMITED) -> n += decodePackedUint32(input.readByteArray())
                 // field 8 (VARINT): non-packed uint32 n (single value)
-                (FIELD_8 shl FIELD_SHIFT) or 0 -> n += input.readUInt32()
+                Wire.tag(FIELD_8, Wire.WIRE_VARINT) -> n += input.readUInt32()
                 else -> input.skipField(tag)
             }
         }

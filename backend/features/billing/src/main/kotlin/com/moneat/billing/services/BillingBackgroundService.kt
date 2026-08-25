@@ -278,7 +278,7 @@ class BillingBackgroundService(
 
         var successfulSends = 0
         for (email in recipients) {
-            suspendRunCatching {
+            val sendSucceeded = suspendRunCatching {
                 emailService.sendBillingThresholdAlertEmail(
                     to = email,
                     subject = subject,
@@ -286,7 +286,8 @@ class BillingBackgroundService(
                 )
             }.onFailure { e ->
                 logger.error(e) { "Failed to send quota notification to $email" }
-            }.onSuccess {
+            }.isSuccess
+            if (sendSucceeded) {
                 successfulSends += 1
             }
         }
@@ -315,11 +316,12 @@ class BillingBackgroundService(
 
         var successfulSends = 0
         for (email in recipients) {
-            suspendRunCatching {
+            val sendSucceeded = suspendRunCatching {
                 emailService.sendBillingInsightsEmail(email, data)
             }.onFailure { e ->
                 logger.error(e) { "Failed to send billing insights digest to $email" }
-            }.onSuccess {
+            }.isSuccess
+            if (sendSucceeded) {
                 successfulSends += 1
             }
         }

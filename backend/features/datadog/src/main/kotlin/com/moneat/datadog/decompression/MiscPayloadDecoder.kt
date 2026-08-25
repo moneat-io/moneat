@@ -16,13 +16,15 @@
 
 package com.moneat.datadog.decompression
 
+import com.moneat.datadog.decompression.ProtoWireConstants as Wire
+
 import com.google.protobuf.CodedInputStream
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_3
+import com.moneat.datadog.decompression.ProtoWireConstants
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_4
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_5
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_7
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_8
-import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_SHIFT
 import com.moneat.datadog.models.DatadogEvent
 import com.moneat.datadog.models.DdContainerImagePayload
 import com.moneat.datadog.models.DdSbomPackage
@@ -77,9 +79,9 @@ object MiscPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (2 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> host = input.readString()
-                (FIELD_3 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> images += decodeContainerImage(input.readByteArray())
-                (FIELD_4 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> source = input.readString()
+                Wire.tag(2, FIELD_WIRE_LEN) -> host = input.readString()
+                Wire.tag(FIELD_3, FIELD_WIRE_LEN) -> images += decodeContainerImage(input.readByteArray())
+                Wire.tag(FIELD_4, FIELD_WIRE_LEN) -> source = input.readString()
                 else -> input.skipField(tag)
             }
         }
@@ -117,10 +119,10 @@ object MiscPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (2 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> host = input.readString()
-                (FIELD_3 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> source = input.readString()
-                (FIELD_4 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> entities += decodeSbomEntity(input.readByteArray())
-                (FIELD_5 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> env = input.readString()
+                Wire.tag(2, FIELD_WIRE_LEN) -> host = input.readString()
+                Wire.tag(FIELD_3, FIELD_WIRE_LEN) -> source = input.readString()
+                Wire.tag(FIELD_4, FIELD_WIRE_LEN) -> entities += decodeSbomEntity(input.readByteArray())
+                Wire.tag(FIELD_5, FIELD_WIRE_LEN) -> env = input.readString()
                 else -> input.skipField(tag)
             }
         }
@@ -165,11 +167,11 @@ object MiscPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (2 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> host = input.readString()
-                (FIELD_3 shl FIELD_SHIFT) or FIELD_WIRE_VARINT -> objectKind = input.readEnum()
-                (FIELD_4 shl FIELD_SHIFT) or FIELD_WIRE_LEN ->
+                Wire.tag(2, FIELD_WIRE_LEN) -> host = input.readString()
+                Wire.tag(FIELD_3, FIELD_WIRE_VARINT) -> objectKind = input.readEnum()
+                Wire.tag(FIELD_4, FIELD_WIRE_LEN) ->
                     events += decodeContainerLifecycleEvent(input.readByteArray())
-                (FIELD_5 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> clusterId = input.readString()
+                Wire.tag(FIELD_5, FIELD_WIRE_LEN) -> clusterId = input.readString()
                 else -> input.skipField(tag)
             }
         }
@@ -208,20 +210,20 @@ object MiscPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> image.id = input.readString()
-                (2 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> image.name = input.readString()
-                (FIELD_3 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> image.registry = input.readString()
-                (FIELD_4 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> image.shortName = input.readString()
-                (FIELD_5 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> image.repoTags += input.readString()
-                (FIELD_6 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> image.digest = input.readString()
-                (FIELD_7 shl FIELD_SHIFT) or FIELD_WIRE_VARINT -> image.sizeBytes = input.readInt64()
-                (FIELD_8 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> image.repoDigests += input.readString()
-                (FIELD_9 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> image.applyOs(input.readByteArray())
-                (FIELD_10 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> {
+                Wire.tag(1, FIELD_WIRE_LEN) -> image.id = input.readString()
+                Wire.tag(2, FIELD_WIRE_LEN) -> image.name = input.readString()
+                Wire.tag(FIELD_3, FIELD_WIRE_LEN) -> image.registry = input.readString()
+                Wire.tag(FIELD_4, FIELD_WIRE_LEN) -> image.shortName = input.readString()
+                Wire.tag(FIELD_5, FIELD_WIRE_LEN) -> image.repoTags += input.readString()
+                Wire.tag(FIELD_6, FIELD_WIRE_LEN) -> image.digest = input.readString()
+                Wire.tag(FIELD_7, FIELD_WIRE_VARINT) -> image.sizeBytes = input.readInt64()
+                Wire.tag(FIELD_8, FIELD_WIRE_LEN) -> image.repoDigests += input.readString()
+                Wire.tag(FIELD_9, FIELD_WIRE_LEN) -> image.applyOs(input.readByteArray())
+                Wire.tag(FIELD_10, FIELD_WIRE_LEN) -> {
                     input.readByteArray()
                     image.layerCount += 1
                 }
-                (FIELD_12 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> image.ddTags += input.readString()
+                Wire.tag(FIELD_12, FIELD_WIRE_LEN) -> image.ddTags += input.readString()
                 else -> input.skipField(tag)
             }
         }
@@ -236,17 +238,17 @@ object MiscPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl FIELD_SHIFT) or FIELD_WIRE_VARINT -> entity.type = input.readEnum()
-                (2 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> entity.id = input.readString()
-                (FIELD_4 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> entity.repoTags += input.readString()
-                (FIELD_7 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> entity.ddTags += input.readString()
-                (FIELD_10 shl FIELD_SHIFT) or FIELD_WIRE_LEN ->
+                Wire.tag(1, FIELD_WIRE_VARINT) -> entity.type = input.readEnum()
+                Wire.tag(2, FIELD_WIRE_LEN) -> entity.id = input.readString()
+                Wire.tag(FIELD_4, FIELD_WIRE_LEN) -> entity.repoTags += input.readString()
+                Wire.tag(FIELD_7, FIELD_WIRE_LEN) -> entity.ddTags += input.readString()
+                Wire.tag(FIELD_10, FIELD_WIRE_LEN) ->
                     entity.components += decodeCycloneDxComponents(input.readByteArray())
-                (FIELD_11 shl FIELD_SHIFT) or FIELD_WIRE_VARINT -> entity.status = input.readEnum()
-                (FIELD_12 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> entity.error = input.readString()
-                (FIELD_14 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> entity.repoDigests += input.readString()
-                (FIELD_15 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> entity.kernelVersion = input.readString()
-                (FIELD_16 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> entity.cpuArchitecture = input.readString()
+                Wire.tag(FIELD_11, FIELD_WIRE_VARINT) -> entity.status = input.readEnum()
+                Wire.tag(FIELD_12, FIELD_WIRE_LEN) -> entity.error = input.readString()
+                Wire.tag(FIELD_14, FIELD_WIRE_LEN) -> entity.repoDigests += input.readString()
+                Wire.tag(FIELD_15, FIELD_WIRE_LEN) -> entity.kernelVersion = input.readString()
+                Wire.tag(FIELD_16, FIELD_WIRE_LEN) -> entity.cpuArchitecture = input.readString()
                 else -> input.skipField(tag)
             }
         }
@@ -262,9 +264,9 @@ object MiscPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (FIELD_5 shl FIELD_SHIFT) or FIELD_WIRE_LEN ->
+                Wire.tag(FIELD_5, FIELD_WIRE_LEN) ->
                     components += decodeCycloneDxComponent(input.readByteArray())
-                (FIELD_10 shl FIELD_SHIFT) or FIELD_WIRE_LEN ->
+                Wire.tag(FIELD_10, FIELD_WIRE_LEN) ->
                     decodeCycloneDxVulnerability(input.readByteArray(), cvesByRef)
                 else -> input.skipField(tag)
             }
@@ -282,13 +284,13 @@ object MiscPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl FIELD_SHIFT) or FIELD_WIRE_VARINT -> component.classification = input.readEnum()
-                (FIELD_3 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> component.bomRef = input.readString()
-                (FIELD_7 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> component.group = input.readString()
-                (FIELD_8 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> component.name = input.readString()
-                (FIELD_9 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> component.version = input.readString()
-                (FIELD_16 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> component.purl = input.readString()
-                (FIELD_21 shl FIELD_SHIFT) or FIELD_WIRE_LEN ->
+                Wire.tag(1, FIELD_WIRE_VARINT) -> component.classification = input.readEnum()
+                Wire.tag(FIELD_3, FIELD_WIRE_LEN) -> component.bomRef = input.readString()
+                Wire.tag(FIELD_7, FIELD_WIRE_LEN) -> component.group = input.readString()
+                Wire.tag(FIELD_8, FIELD_WIRE_LEN) -> component.name = input.readString()
+                Wire.tag(FIELD_9, FIELD_WIRE_LEN) -> component.version = input.readString()
+                Wire.tag(FIELD_16, FIELD_WIRE_LEN) -> component.purl = input.readString()
+                Wire.tag(FIELD_21, FIELD_WIRE_LEN) ->
                     component.components += decodeCycloneDxComponent(input.readByteArray())
                 else -> input.skipField(tag)
             }
@@ -308,8 +310,8 @@ object MiscPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (2 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> vulnerabilityId = input.readString()
-                (FIELD_17 shl FIELD_SHIFT) or FIELD_WIRE_LEN ->
+                Wire.tag(2, FIELD_WIRE_LEN) -> vulnerabilityId = input.readString()
+                Wire.tag(FIELD_17, FIELD_WIRE_LEN) ->
                     refs += decodeVulnerabilityAffects(input.readByteArray())
                 else -> input.skipField(tag)
             }
@@ -326,7 +328,7 @@ object MiscPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> return input.readString()
+                Wire.tag(1, FIELD_WIRE_LEN) -> return input.readString()
                 else -> input.skipField(tag)
             }
         }
@@ -341,10 +343,10 @@ object MiscPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl FIELD_SHIFT) or FIELD_WIRE_VARINT -> eventType = input.readEnum()
-                (2 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> event = decodeContainerEvent(input.readByteArray())
-                (FIELD_3 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> event = decodePodEvent(input.readByteArray())
-                (FIELD_4 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> event = decodeTaskEvent(input.readByteArray())
+                Wire.tag(1, FIELD_WIRE_VARINT) -> eventType = input.readEnum()
+                Wire.tag(2, FIELD_WIRE_LEN) -> event = decodeContainerEvent(input.readByteArray())
+                Wire.tag(FIELD_3, FIELD_WIRE_LEN) -> event = decodePodEvent(input.readByteArray())
+                Wire.tag(FIELD_4, FIELD_WIRE_LEN) -> event = decodeTaskEvent(input.readByteArray())
                 else -> input.skipField(tag)
             }
         }
@@ -363,11 +365,11 @@ object MiscPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> event.objectId = input.readString()
-                (2 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> event.source = input.readString()
-                (FIELD_3 shl FIELD_SHIFT) or FIELD_WIRE_VARINT -> event.exitCode = input.readInt32()
-                (FIELD_4 shl FIELD_SHIFT) or FIELD_WIRE_VARINT -> event.exitTimestamp = input.readInt64()
-                (FIELD_5 shl FIELD_SHIFT) or FIELD_WIRE_LEN ->
+                Wire.tag(1, FIELD_WIRE_LEN) -> event.objectId = input.readString()
+                Wire.tag(2, FIELD_WIRE_LEN) -> event.source = input.readString()
+                Wire.tag(FIELD_3, FIELD_WIRE_VARINT) -> event.exitCode = input.readInt32()
+                Wire.tag(FIELD_4, FIELD_WIRE_VARINT) -> event.exitTimestamp = input.readInt64()
+                Wire.tag(FIELD_5, FIELD_WIRE_LEN) ->
                     event.extraTags += decodeLifecycleOwner(input.readByteArray())
                 else -> input.skipField(tag)
             }
@@ -383,9 +385,9 @@ object MiscPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> event.objectId = input.readString()
-                (2 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> event.source = input.readString()
-                (FIELD_3 shl FIELD_SHIFT) or FIELD_WIRE_VARINT -> event.exitTimestamp = input.readInt64()
+                Wire.tag(1, FIELD_WIRE_LEN) -> event.objectId = input.readString()
+                Wire.tag(2, FIELD_WIRE_LEN) -> event.source = input.readString()
+                Wire.tag(FIELD_3, FIELD_WIRE_VARINT) -> event.exitTimestamp = input.readInt64()
                 else -> input.skipField(tag)
             }
         }
@@ -400,9 +402,9 @@ object MiscPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> event.objectId = input.readString()
-                (2 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> event.source = input.readString()
-                (FIELD_3 shl FIELD_SHIFT) or FIELD_WIRE_VARINT -> event.exitTimestamp = input.readInt64()
+                Wire.tag(1, FIELD_WIRE_LEN) -> event.objectId = input.readString()
+                Wire.tag(2, FIELD_WIRE_LEN) -> event.source = input.readString()
+                Wire.tag(FIELD_3, FIELD_WIRE_VARINT) -> event.exitTimestamp = input.readInt64()
                 else -> input.skipField(tag)
             }
         }
@@ -418,8 +420,8 @@ object MiscPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl FIELD_SHIFT) or FIELD_WIRE_VARINT -> ownerType = objectKindName(input.readEnum())
-                (2 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> ownerUid = input.readString()
+                Wire.tag(1, FIELD_WIRE_VARINT) -> ownerType = objectKindName(input.readEnum())
+                Wire.tag(2, FIELD_WIRE_LEN) -> ownerUid = input.readString()
                 else -> input.skipField(tag)
             }
         }
@@ -449,8 +451,8 @@ object MiscPayloadDecoder {
             while (!input.isAtEnd) {
                 when (val tag = input.readTag()) {
                     0 -> break
-                    (1 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> osName = input.readString()
-                    (FIELD_3 shl FIELD_SHIFT) or FIELD_WIRE_LEN -> architecture = input.readString()
+                    Wire.tag(1, FIELD_WIRE_LEN) -> osName = input.readString()
+                    Wire.tag(FIELD_3, FIELD_WIRE_LEN) -> architecture = input.readString()
                     else -> input.skipField(tag)
                 }
             }

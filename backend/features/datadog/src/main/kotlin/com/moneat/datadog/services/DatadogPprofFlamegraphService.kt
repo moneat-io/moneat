@@ -16,14 +16,16 @@
 
 package com.moneat.datadog.services
 
+import com.moneat.datadog.decompression.ProtoWireConstants as Wire
+
 import com.google.protobuf.CodedInputStream
 import com.moneat.ingest.DecompressionService
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_14
+import com.moneat.datadog.decompression.ProtoWireConstants
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_3
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_4
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_5
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_6
-import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_SHIFT
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
@@ -359,25 +361,25 @@ object DatadogPprofFlamegraphService {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl FIELD_SHIFT) or 2 -> sampleTypes += decodeValueType(input.readByteArray())
-                (2 shl FIELD_SHIFT) or 2 -> samples += decodeSample(input.readByteArray())
-                (FIELD_3 shl FIELD_SHIFT) or 2 -> {
+                Wire.tag(1, Wire.WIRE_LENGTH_DELIMITED) -> sampleTypes += decodeValueType(input.readByteArray())
+                Wire.tag(2, Wire.WIRE_LENGTH_DELIMITED) -> samples += decodeSample(input.readByteArray())
+                Wire.tag(FIELD_3, Wire.WIRE_LENGTH_DELIMITED) -> {
                     val mapping = decodeMapping(input.readByteArray())
                     mappings[mapping.id] = mapping
                 }
-                (FIELD_4 shl FIELD_SHIFT) or 2 -> {
+                Wire.tag(FIELD_4, Wire.WIRE_LENGTH_DELIMITED) -> {
                     val location = decodeLocation(input.readByteArray())
                     if (location.id != 0L) {
                         locations[location.id] = location
                     }
                     locationList += location
                 }
-                (FIELD_5 shl FIELD_SHIFT) or 2 -> {
+                Wire.tag(FIELD_5, Wire.WIRE_LENGTH_DELIMITED) -> {
                     val fn = decodeFunction(input.readByteArray())
                     functions[fn.id] = fn
                 }
-                (FIELD_6 shl FIELD_SHIFT) or 2 -> strings += input.readString()
-                (FIELD_14 shl FIELD_SHIFT) or 0 -> defaultSampleType = input.readInt64()
+                Wire.tag(FIELD_6, Wire.WIRE_LENGTH_DELIMITED) -> strings += input.readString()
+                Wire.tag(FIELD_14, Wire.WIRE_VARINT) -> defaultSampleType = input.readInt64()
                 else -> input.skipField(tag)
             }
         }
@@ -401,8 +403,8 @@ object DatadogPprofFlamegraphService {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl FIELD_SHIFT) or 0 -> typeIdx = input.readInt64()
-                (2 shl FIELD_SHIFT) or 0 -> unitIdx = input.readInt64()
+                Wire.tag(1, Wire.WIRE_VARINT) -> typeIdx = input.readInt64()
+                Wire.tag(2, Wire.WIRE_VARINT) -> unitIdx = input.readInt64()
                 else -> input.skipField(tag)
             }
         }
@@ -419,13 +421,13 @@ object DatadogPprofFlamegraphService {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl FIELD_SHIFT) or 0 -> locationIds += input.readUInt64()
-                (1 shl FIELD_SHIFT) or 2 -> readPackedUInt64(input.readByteArray(), locationIds)
-                (2 shl FIELD_SHIFT) or 0 -> values += input.readInt64()
-                (2 shl FIELD_SHIFT) or 2 -> readPackedInt64(input.readByteArray(), values)
-                (FIELD_3 shl FIELD_SHIFT) or 2 -> labels += decodeLabel(input.readByteArray())
-                (FIELD_4 shl FIELD_SHIFT) or 0 -> locationIdx += input.readUInt64()
-                (FIELD_4 shl FIELD_SHIFT) or 2 -> readPackedUInt64(input.readByteArray(), locationIdx)
+                Wire.tag(1, Wire.WIRE_VARINT) -> locationIds += input.readUInt64()
+                Wire.tag(1, Wire.WIRE_LENGTH_DELIMITED) -> readPackedUInt64(input.readByteArray(), locationIds)
+                Wire.tag(2, Wire.WIRE_VARINT) -> values += input.readInt64()
+                Wire.tag(2, Wire.WIRE_LENGTH_DELIMITED) -> readPackedInt64(input.readByteArray(), values)
+                Wire.tag(FIELD_3, Wire.WIRE_LENGTH_DELIMITED) -> labels += decodeLabel(input.readByteArray())
+                Wire.tag(FIELD_4, Wire.WIRE_VARINT) -> locationIdx += input.readUInt64()
+                Wire.tag(FIELD_4, Wire.WIRE_LENGTH_DELIMITED) -> readPackedUInt64(input.readByteArray(), locationIdx)
                 else -> input.skipField(tag)
             }
         }
@@ -445,8 +447,8 @@ object DatadogPprofFlamegraphService {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl FIELD_SHIFT) or 0 -> keyIdx = input.readInt64()
-                (2 shl FIELD_SHIFT) or 0 -> strIdx = input.readInt64()
+                Wire.tag(1, Wire.WIRE_VARINT) -> keyIdx = input.readInt64()
+                Wire.tag(2, Wire.WIRE_VARINT) -> strIdx = input.readInt64()
                 else -> input.skipField(tag)
             }
         }
@@ -461,9 +463,9 @@ object DatadogPprofFlamegraphService {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl FIELD_SHIFT) or 0 -> id = input.readUInt64()
-                (FIELD_5 shl FIELD_SHIFT) or 0 -> filenameIdx = input.readInt64()
-                (FIELD_6 shl FIELD_SHIFT) or 0 -> buildIdIdx = input.readInt64()
+                Wire.tag(1, Wire.WIRE_VARINT) -> id = input.readUInt64()
+                Wire.tag(FIELD_5, Wire.WIRE_VARINT) -> filenameIdx = input.readInt64()
+                Wire.tag(FIELD_6, Wire.WIRE_VARINT) -> buildIdIdx = input.readInt64()
                 else -> input.skipField(tag)
             }
         }
@@ -480,10 +482,10 @@ object DatadogPprofFlamegraphService {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl FIELD_SHIFT) or 0 -> id = input.readUInt64()
-                (2 shl FIELD_SHIFT) or 0 -> mappingId = input.readUInt64()
-                (FIELD_3 shl FIELD_SHIFT) or 0 -> address = input.readUInt64()
-                (FIELD_4 shl FIELD_SHIFT) or 2 -> lines += decodeLine(input.readByteArray())
+                Wire.tag(1, Wire.WIRE_VARINT) -> id = input.readUInt64()
+                Wire.tag(2, Wire.WIRE_VARINT) -> mappingId = input.readUInt64()
+                Wire.tag(FIELD_3, Wire.WIRE_VARINT) -> address = input.readUInt64()
+                Wire.tag(FIELD_4, Wire.WIRE_LENGTH_DELIMITED) -> lines += decodeLine(input.readByteArray())
                 else -> input.skipField(tag)
             }
         }
@@ -502,8 +504,8 @@ object DatadogPprofFlamegraphService {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl FIELD_SHIFT) or 0 -> functionId = input.readUInt64()
-                (2 shl FIELD_SHIFT) or 0 -> line = input.readInt64()
+                Wire.tag(1, Wire.WIRE_VARINT) -> functionId = input.readUInt64()
+                Wire.tag(2, Wire.WIRE_VARINT) -> line = input.readInt64()
                 else -> input.skipField(tag)
             }
         }
@@ -520,10 +522,10 @@ object DatadogPprofFlamegraphService {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl FIELD_SHIFT) or 0 -> id = input.readUInt64()
-                (2 shl FIELD_SHIFT) or 0 -> nameIdx = input.readInt64()
-                (FIELD_3 shl FIELD_SHIFT) or 0 -> systemNameIdx = input.readInt64()
-                (FIELD_4 shl FIELD_SHIFT) or 0 -> filenameIdx = input.readInt64()
+                Wire.tag(1, Wire.WIRE_VARINT) -> id = input.readUInt64()
+                Wire.tag(2, Wire.WIRE_VARINT) -> nameIdx = input.readInt64()
+                Wire.tag(FIELD_3, Wire.WIRE_VARINT) -> systemNameIdx = input.readInt64()
+                Wire.tag(FIELD_4, Wire.WIRE_VARINT) -> filenameIdx = input.readInt64()
                 else -> input.skipField(tag)
             }
         }
