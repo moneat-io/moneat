@@ -590,11 +590,14 @@ class IncidentAnnouncementService(
             "At most $MAX_LINKS incident links may be configured"
         }
         conditions.quickActions.forEach { action ->
-            require(action.label.isNotBlank() && action.label.length <= MAX_LINK_LABEL_LENGTH) {
-                "Incident quick action labels must be non-empty and at most $MAX_LINK_LABEL_LENGTH characters"
+            require(action.label.isNotBlank() && action.label.length <= MAX_ACTION_LABEL_LENGTH) {
+                "Incident quick action labels must be non-empty and at most $MAX_ACTION_LABEL_LENGTH characters"
             }
             require(action.actionId.matches(ACTION_ID_PATTERN)) {
                 "Incident quick action IDs must use lowercase letters, numbers, underscores, colons, or hyphens"
+            }
+            require(action.value == null || action.value.length <= MAX_ACTION_VALUE_LENGTH) {
+                "Incident quick action values must be at most $MAX_ACTION_VALUE_LENGTH characters"
             }
         }
         conditions.links.forEach { link ->
@@ -613,10 +616,12 @@ class IncidentAnnouncementService(
         private const val MAX_TITLE_LENGTH = 120
         private const val MAX_SUMMARY_LENGTH = 1_500
         private const val MAX_FIELD_LENGTH = 200
-        private const val MAX_CUSTOM_FIELDS = 6
+        private const val MAX_CUSTOM_FIELDS = 3
         private const val MAX_QUICK_ACTIONS = 5
         private const val MAX_LINKS = 5
         private const val MAX_LINK_LABEL_LENGTH = 80
+        private const val MAX_ACTION_LABEL_LENGTH = 75
+        private const val MAX_ACTION_VALUE_LENGTH = 2_000
         private const val MAX_NUDGES = 7
         private val ACTION_ID_PATTERN = Regex("^[a-z][a-z0-9_:-]{1,63}$")
         private val TERMINAL_STATUSES = setOf("RESOLVED", "CLOSED", "CANCELLED", "DECLINED", "MERGED")
