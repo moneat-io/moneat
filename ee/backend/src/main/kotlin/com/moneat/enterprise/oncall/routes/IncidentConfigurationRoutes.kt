@@ -5,6 +5,9 @@
 package com.moneat.enterprise.oncall.routes
 
 import com.moneat.enterprise.incidents.commands.IncidentCommandException
+import com.moneat.enterprise.incidents.announcements.CreateIncidentAnnouncementRule
+import com.moneat.enterprise.incidents.announcements.CreateIncidentAnnouncementRuleRequest
+import com.moneat.enterprise.incidents.announcements.IncidentAnnouncementService
 import com.moneat.enterprise.incidents.commands.IncidentEntitlement
 import com.moneat.enterprise.incidents.config.CreateIncidentCustomField
 import com.moneat.enterprise.incidents.config.CreateIncidentForm
@@ -87,11 +90,13 @@ data class CreateIncidentRoleRequest(
 internal fun Route.registerIncidentConfigurationRoutes(
     service: IncidentConfigurationService,
     responderService: IncidentResponderService,
+    announcementService: IncidentAnnouncementService,
     incidentEntitlement: IncidentEntitlement,
 ) {
     route("/v1/on-call/incident-configuration") {
         authenticate("auth-jwt") {
             installNativeIncidentEntitlementGate("NativeIncidentConfigurationGate", incidentEntitlement)
+            registerIncidentAnnouncementRuleRoutes(announcementService)
             route("/types") {
                 get {
                     val context = call.requireUserContext() ?: return@get
@@ -232,6 +237,38 @@ internal fun Route.registerIncidentConfigurationRoutes(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+private fun Route.registerIncidentAnnouncementRuleRoutes(service: IncidentAnnouncementService) {
+    route("/announcement-rules") {
+        get {
+            val context = call.requireUserContext() ?: return@get
+            call.respond(service.listRules(context.organizationId))
+        }
+        post {
+            val context = call.requireIncidentAdminContext() ?: return@post
+            val request = call.receive<CreateIncidentAnnouncementRuleRequest>()
+            call.respondConfigurationFailure {
+                call.respond(
+                    HttpStatusCode.Created,
+                    service.createRule(
+                        organizationId = context.organizationId,
+                        actorUserId = context.userId,
+                        request = CreateIncidentAnnouncementRule(
+                            name = request.name,
+                            teamId = request.teamId,
+                            channelId = request.channelId,
+                            enabled = request.enabled,
+                            announceTriage = request.announceTriage,
+                            allowPrivate = request.allowPrivate,
+                            allowTest = request.allowTest,
+                            conditions = request.conditions,
+                        ),
+                    ),
+                )
             }
         }
     }
