@@ -22,6 +22,7 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
@@ -153,6 +154,42 @@ class IncidentAnnouncementServiceTest {
         assertTrue(payload.contains("Response nudges"))
         assertTrue(payload.contains("Assign an incident lead"))
         assertTrue(payload.contains("Activate the response escalation"))
+    }
+
+    @Test
+    fun `announcement rules reject duplicate and reserved action IDs`() = runBlocking {
+        val service = IncidentAnnouncementService(enqueue = { Uuid.random().toString() })
+        val request = CreateIncidentAnnouncementRule(
+            name = "Validated actions",
+            teamId = "T-announcements",
+            channelId = "C-announcements",
+            enabled = true,
+            announceTriage = false,
+            allowPrivate = false,
+            allowTest = false,
+            conditions = IncidentAnnouncementRuleConditions(
+                quickActions = listOf(
+                    IncidentAnnouncementQuickAction("First", "incident_update"),
+                    IncidentAnnouncementQuickAction("Second", "incident_update"),
+                ),
+            ),
+        )
+
+        assertFailsWith<IllegalArgumentException> {
+            service.createRule(member.organizationId, member.userId, request)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.createRule(
+                member.organizationId,
+                member.userId,
+                request.copy(
+                    conditions = request.conditions.copy(
+                        quickActions = listOf(IncidentAnnouncementQuickAction("Reserved", "incident_accept:custom")),
+                    ),
+                ),
+            )
+        }
+        Unit
     }
 
     private fun seedIncident(status: String): Uuid = transaction {

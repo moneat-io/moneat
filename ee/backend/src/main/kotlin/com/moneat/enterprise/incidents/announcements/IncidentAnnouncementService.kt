@@ -423,28 +423,12 @@ class IncidentAnnouncementService(
                     add(buildJsonObject {
                         put("type", "context")
                         put("elements", buildJsonArray {
-                            add(buildJsonObject {
-                                put("type", "mrkdwn")
-                                put("text", "<${homepage(snapshot.resourceId)}|Open incident homepage>")
-                            })
+                            contextLink(homepage(snapshot.resourceId), "Open incident homepage")?.let(::add)
                             destination.conditions.links.take(MAX_LINKS).forEach { link ->
-                                add(buildJsonObject {
-                                    put("type", "mrkdwn")
-                                    put("text", "<${link.url}|${link.label.take(MAX_LINK_LABEL_LENGTH)}>")
-                                })
+                                contextLink(link.url, link.label)?.let(::add)
                             }
-                            snapshot.fields["call_url"]?.let { url ->
-                                add(buildJsonObject {
-                                    put("type", "mrkdwn")
-                                    put("text", "<$url|Join incident call>")
-                                })
-                            }
-                            snapshot.fields["status_page_url"]?.let { url ->
-                                add(buildJsonObject {
-                                    put("type", "mrkdwn")
-                                    put("text", "<$url|View status page>")
-                                })
-                            }
+                            contextLink(snapshot.fields["call_url"], "Join incident call")?.let(::add)
+                            contextLink(snapshot.fields["status_page_url"], "View status page")?.let(::add)
                         })
                     })
                     add(buildJsonObject {
@@ -471,6 +455,14 @@ class IncidentAnnouncementService(
     private fun field(label: String, value: String): JsonObject = buildJsonObject {
         put("type", "mrkdwn")
         put("text", "*$label:*\n${value.take(MAX_FIELD_LENGTH)}")
+    }
+
+    private fun contextLink(url: String?, label: String): JsonObject? {
+        if (url.isNullOrBlank() || !isHttpUrl(url) || url.length > MAX_CONTEXT_LINK_LENGTH) return null
+        return buildJsonObject {
+            put("type", "mrkdwn")
+            put("text", "<$url|${label.take(MAX_LINK_LABEL_LENGTH)}>")
+        }
     }
 
     private fun action(
@@ -600,15 +592,24 @@ class IncidentAnnouncementService(
                 "Incident quick action values must be at most $MAX_ACTION_VALUE_LENGTH characters"
             }
         }
+        val actionIds = conditions.quickActions.map { it.actionId }
+        require(actionIds.size == actionIds.toSet().size) {
+            "Incident quick action IDs must be unique"
+        }
+        require(actionIds.none { actionId -> RESERVED_ACTION_PREFIXES.any(actionId::startsWith) }) {
+            "Incident quick action IDs may not use reserved incident action prefixes"
+        }
         conditions.links.forEach { link ->
             require(link.label.isNotBlank() && link.label.length <= MAX_LINK_LABEL_LENGTH) {
                 "Incident link labels must be non-empty and at most $MAX_LINK_LABEL_LENGTH characters"
             }
-            require(link.url.startsWith("https://") || link.url.startsWith("http://")) {
+            require(isHttpUrl(link.url) && link.url.length <= MAX_CONTEXT_LINK_LENGTH) {
                 "Incident links must use http or https URLs"
             }
         }
     }
+
+    private fun isHttpUrl(url: String): Boolean = url.startsWith("https://") || url.startsWith("http://")
 
     companion object {
         private const val MAX_RULE_NAME_LENGTH = 160
@@ -620,10 +621,12 @@ class IncidentAnnouncementService(
         private const val MAX_QUICK_ACTIONS = 5
         private const val MAX_LINKS = 5
         private const val MAX_LINK_LABEL_LENGTH = 80
+        private const val MAX_CONTEXT_LINK_LENGTH = 2_000
         private const val MAX_ACTION_LABEL_LENGTH = 75
         private const val MAX_ACTION_VALUE_LENGTH = 2_000
         private const val MAX_NUDGES = 7
         private val ACTION_ID_PATTERN = Regex("^[a-z][a-z0-9_:-]{1,63}$")
+        private val RESERVED_ACTION_PREFIXES = setOf("incident_accept:", "incident_merge:", "incident_decline:")
         private val TERMINAL_STATUSES = setOf("RESOLVED", "CLOSED", "CANCELLED", "DECLINED", "MERGED")
         private val TERMINAL_EVENT_TYPES =
             setOf("INCIDENT_RESOLVE", "INCIDENT_CLOSE", "INCIDENT_CANCEL", "INCIDENT_DECLINE", "INCIDENT_MERGE")
