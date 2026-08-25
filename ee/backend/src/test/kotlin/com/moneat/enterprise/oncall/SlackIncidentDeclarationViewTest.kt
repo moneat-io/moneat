@@ -72,4 +72,17 @@ class SlackIncidentDeclarationViewTest {
         assertTrue(slashResponse?.contains("workspace and user context") == true)
         assertTrue(interactionResponse?.contains("Link your Slack identity") == true)
     }
+
+    @Test
+    fun `alert-card interactions require a linked Slack identity`() = runBlocking {
+        val module = OnCallModule()
+        val response = module.handleSlackInbound(
+            "interactions",
+            "payload=%7B%22type%22%3A%22block_actions%22%2C%22actions%22%3A" +
+                "%5B%7B%22action_id%22%3A%22acknowledge_alert%22%2C%22value%22%3A%22episode%22%7D%5D%7D",
+            "delivery-1",
+        )
+
+        assertTrue(response?.contains("not linked") == true)
+    }
 }
