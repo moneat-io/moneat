@@ -813,6 +813,17 @@ class SlackInstallationService internal constructor(
             ?.get(SlackWorkspaceBindings.slackInstallationId)
     }
 
+    fun organizationIdForTeam(teamId: String): Int? = transaction {
+        SlackWorkspaceBindings
+            .selectAll()
+            .where {
+                (SlackWorkspaceBindings.teamId eq teamId) and
+                    (SlackWorkspaceBindings.enabled eq true)
+            }
+            .firstOrNull()
+            ?.get(SlackWorkspaceBindings.organizationId)
+    }
+
     fun bindEnterpriseWorkspace(
         organizationId: Int,
         installationId: String,

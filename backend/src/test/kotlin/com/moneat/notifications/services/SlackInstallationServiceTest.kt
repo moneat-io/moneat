@@ -24,13 +24,20 @@ import com.moneat.shared.models.SlackInstallationGrants
 import com.moneat.shared.models.SlackInstallations
 import com.moneat.shared.models.SlackWorkspaceBindings
 import com.moneat.testsupport.TestDatabaseHelper
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.respond
+import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.util.Base64
@@ -38,6 +45,7 @@ import java.time.LocalTime
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -115,6 +123,127 @@ class SlackInstallationServiceTest {
             assertNotEquals(ciphertexts[0], ciphertexts[1])
             assertEquals(2, SlackWorkspaceBindings.selectAll().count())
         }
+    }
+
+    @Test
+    fun `resolves only enabled workspace bindings to their organization`() {
+        val organizationId = seedOrganization("Workspace lookup")
+        service.storeOAuthGrant(
+            organizationId,
+            reauthorizeInstallationId = null,
+            capabilityIds = emptyList(),
+            grant = grant("T-LOOKUP", "Lookup", service.requestedScopes(emptyList())),
+        )
+
+        assertEquals(organizationId, service.organizationIdForTeam("T-LOOKUP"))
+        transaction {
+            SlackWorkspaceBindings.update({ SlackWorkspaceBindings.teamId eq "T-LOOKUP" }) {
+                it[enabled] = false
+            }
+        }
+        assertNull(service.organizationIdForTeam("T-LOOKUP"))
+    }
+
+    @Test
+    fun `opens an incident modal through the Slack views API`() = runBlocking {
+        val organizationId = seedOrganization("Modal lookup")
+        service.storeOAuthGrant(
+            organizationId,
+            reauthorizeInstallationId = null,
+            capabilityIds = emptyList(),
+            grant = grant("T-MODAL", "Modal", service.requestedScopes(emptyList())),
+        )
+        val client = HttpClient(MockEngine) {
+            engine {
+                addHandler {
+                    respond("{\"ok\":true}")
+                }
+            }
+        }
+        val slackService = SlackService(client, service)
+        val internalInstallationId = assertNotNull(service.internalInstallationIdForTeam(organizationId, "T-MODAL"))
+
+        assertTrue(
+            slackService.openModal(
+                organizationId,
+                internalInstallationId,
+                "trigger-1",
+                buildJsonObject { put("type", "modal") },
+            ),
+        )
+    }
+
+    @Test
+    fun `does not open a modal for a disabled installation`() = runBlocking {
+        val organizationId = seedOrganization("Disabled modal")
+        service.storeOAuthGrant(
+            organizationId,
+            reauthorizeInstallationId = null,
+            capabilityIds = emptyList(),
+            grant = grant("T-DISABLED-MODAL", "Disabled", service.requestedScopes(emptyList())),
+        )
+        transaction {
+            SlackWorkspaceBindings.update({ SlackWorkspaceBindings.teamId eq "T-DISABLED-MODAL" }) {
+                it[enabled] = false
+            }
+        }
+        val slackService = SlackService(
+            HttpClient(MockEngine) {
+                engine { addHandler { respond("{}") } }
+            },
+            service,
+        )
+        assertFalse(slackService.openModal(organizationId, 1, "trigger-1", buildJsonObject { }))
+    }
+
+    @Test
+    fun `does not open a modal when Slack returns a non-OK response`() = runBlocking {
+        val organizationId = seedOrganization("Non OK modal")
+        service.storeOAuthGrant(
+            organizationId,
+            reauthorizeInstallationId = null,
+            capabilityIds = emptyList(),
+            grant = grant("T-NON-OK-MODAL", "Non OK", service.requestedScopes(emptyList())),
+        )
+        val installationId = assertNotNull(service.internalInstallationIdForTeam(organizationId, "T-NON-OK-MODAL"))
+        val client = HttpClient(MockEngine) {
+            engine {
+                addHandler { respond("{}", status = HttpStatusCode.BadRequest) }
+            }
+        }
+        assertFalse(
+            SlackService(client, service).openModal(
+                organizationId,
+                installationId,
+                "trigger-1",
+                buildJsonObject { },
+            ),
+        )
+    }
+
+    @Test
+    fun `does not open a modal when Slack rejects the view`() = runBlocking {
+        val organizationId = seedOrganization("Rejected modal")
+        service.storeOAuthGrant(
+            organizationId,
+            reauthorizeInstallationId = null,
+            capabilityIds = emptyList(),
+            grant = grant("T-REJECTED-MODAL", "Rejected", service.requestedScopes(emptyList())),
+        )
+        val installationId = assertNotNull(service.internalInstallationIdForTeam(organizationId, "T-REJECTED-MODAL"))
+        val client = HttpClient(MockEngine) {
+            engine {
+                addHandler { respond("{\"ok\":false}") }
+            }
+        }
+        assertFalse(
+            SlackService(client, service).openModal(
+                organizationId,
+                installationId,
+                "trigger-1",
+                buildJsonObject { },
+            ),
+        )
     }
 
     @Test

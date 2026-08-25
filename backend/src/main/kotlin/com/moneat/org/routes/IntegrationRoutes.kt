@@ -18,6 +18,7 @@ package com.moneat.org.routes
 
 import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.config.EnvConfig
+import com.moneat.enterprise.FeatureRegistry
 import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.SlackInboundGateway
 import com.moneat.notifications.services.SlackInboundRequestException
@@ -38,6 +39,7 @@ import com.moneat.shared.models.SlackUserMappings
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.MessageResponse
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.ContentType
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
@@ -48,6 +50,7 @@ import io.ktor.server.request.receive
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondRedirect
+import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
@@ -1278,6 +1281,17 @@ fun Route.integrationCallbackRoutes() {
                     val accepted = slackInboundGateway.accept(call.request.headers, rawBody, requestType)
                     if (accepted.challenge != null) {
                         call.respond(mapOf("challenge" to accepted.challenge))
+                    } else if (!accepted.duplicate) {
+                        val bridgeResponse = FeatureRegistry.getOnCallBridge()?.handleSlackInbound(
+                            requestType = requestType.wire,
+                            payload = rawBody,
+                            deliveryId = accepted.deliveryId,
+                        )
+                        if (bridgeResponse != null) {
+                            call.respondText(bridgeResponse, ContentType.Application.Json)
+                        } else {
+                            call.respond(HttpStatusCode.Accepted, accepted)
+                        }
                     } else {
                         call.respond(HttpStatusCode.Accepted, accepted)
                     }

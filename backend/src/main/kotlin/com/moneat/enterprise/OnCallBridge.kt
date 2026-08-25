@@ -74,6 +74,13 @@ interface OnCallBridge {
     /** Declare an operational incident and return the declared incident resource ID. */
     suspend fun declareIncident(declaration: OnCallIncidentDeclaration): String?
 
+    /** Handle an authenticated Slack command, shortcut, or interaction. */
+    suspend fun handleSlackInbound(
+        requestType: String,
+        payload: String,
+        deliveryId: String?,
+    ): String? = null
+
     /** Get a declared incident by ID for a user. */
     fun getIncident(
         incidentId: Int,
@@ -107,6 +114,7 @@ data class OnCallIncidentDeclaration(
     val description: String?,
     val severity: String,
     val commandKey: String,
+    val origin: String = "WORKFLOW",
 )
 
 /** Lightweight data carrier for priority info, avoiding enterprise model dependency. */
