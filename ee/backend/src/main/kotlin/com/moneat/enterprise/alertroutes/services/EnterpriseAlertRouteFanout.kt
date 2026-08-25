@@ -14,6 +14,7 @@ import com.moneat.enterprise.FeatureRegistry
 /** Enterprise route-evaluation arm. Action execution is added by the downstream execution task. */
 class EnterpriseAlertRouteFanout(
     private val executionService: AlertRouteExecutionService = AlertRouteExecutionService(),
+    private val slackCardService: AlertRouteSlackCardService = AlertRouteSlackCardService(),
     private val enabled: (Int) -> Boolean = FeatureRegistry::isNativeIncidentResponseEntitled,
 ) : AlertRouteFanout, AlertRouteOutcomeFanout {
     override suspend fun process(context: AlertFanoutContext) {
@@ -27,6 +28,8 @@ class EnterpriseAlertRouteFanout(
                 reason = "Alert Route entitlement is unavailable for this organization",
             )
         }
-        return executionService.executeWithOutcome(context)
+        val outcome = executionService.executeWithOutcome(context)
+        slackCardService.publish(context, outcome)
+        return outcome
     }
 }
