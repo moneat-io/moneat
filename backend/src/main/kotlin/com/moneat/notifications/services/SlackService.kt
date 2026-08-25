@@ -63,22 +63,25 @@ private const val SLACK_CHANNEL_FETCH_LIMIT = 200
 private const val SLACK_COLOR_RED = "#E01E5A"
 private const val SLACK_COLOR_GREEN = "#2EB67D"
 private const val SLACK_COLOR_YELLOW = "#ECB22E"
+private const val SLACK_HTTP_TIMEOUT_MILLIS = 10_000L
 
 internal fun encodeSlackIssueIdPathSegment(value: String): String =
     URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20")
 
-class SlackService {
+private fun createSlackHttpClient(): HttpClient =
+    HttpClient(CIO) {
+        install(HttpTimeout) {
+            socketTimeoutMillis = SLACK_HTTP_TIMEOUT_MILLIS
+            connectTimeoutMillis = SLACK_HTTP_TIMEOUT_MILLIS
+            requestTimeoutMillis = SLACK_HTTP_TIMEOUT_MILLIS
+        }
+    }
+
+class SlackService(
+    private val httpClient: HttpClient = createSlackHttpClient(),
+) {
     private val logger = LoggerFactory.getLogger(SlackService::class.java)
     private val json = Json { ignoreUnknownKeys = true }
-
-    private val httpClient =
-        HttpClient(CIO) {
-            install(HttpTimeout) {
-                socketTimeoutMillis = 10_000
-                connectTimeoutMillis = 10_000
-                requestTimeoutMillis = 10_000
-            }
-        }
 
     @Serializable
     data class SlackBlock(
@@ -340,8 +343,11 @@ class SlackService {
 
     private fun JsonObject.providerId(): String? {
         val channel = this["channel"]
-        return channel?.jsonPrimitive?.contentOrNull
-            ?: channel?.jsonObject?.get("id")?.jsonPrimitive?.contentOrNull
+        return when (channel) {
+            is JsonPrimitive -> channel.contentOrNull
+            is JsonObject -> channel["id"]?.jsonPrimitive?.contentOrNull
+            else -> null
+        }
     }
 
     private fun getSlackAccessToken(organizationId: Int): String? = transaction {

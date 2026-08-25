@@ -46,7 +46,7 @@ class SlackOutboundWorker(
         logger.info { "Slack outbound worker stopped" }
     }
 
-    private suspend fun processMessage(workerId: Int, value: String) {
+    internal suspend fun processMessage(workerId: Int, value: String) {
         deliveryService.process(value, sender)
         OperationalMetrics.recordWorkerMessageProcessed(IngestionPipeline.SLACK_OUTBOUND.workerName, workerId)
     }

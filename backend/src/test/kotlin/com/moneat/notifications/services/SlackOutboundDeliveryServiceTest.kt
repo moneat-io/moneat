@@ -17,10 +17,17 @@
 package com.moneat.notifications.services
 
 import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.OrganizationIntegrations
 import com.moneat.shared.models.SlackOutboundDeliveryStatus
 import com.moneat.shared.models.SlackOutboundDeliveries
 import com.moneat.shared.models.SlackOutboundOperation
 import com.moneat.testsupport.TestDatabaseHelper
+import io.ktor.client.HttpClient
+import io.ktor.client.request.HttpResponseData
+import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.MockRequestHandleScope
+import io.ktor.client.engine.mock.respond
+import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -36,6 +43,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Instant
+import kotlin.time.Duration.Companion.seconds
 
 class SlackOutboundDeliveryServiceTest {
     companion object {
@@ -53,7 +61,7 @@ class SlackOutboundDeliveryServiceTest {
             )
         }
         TransactionManager.defaultDatabase = database
-        TestDatabaseHelper.resetSchema(Organizations, SlackOutboundDeliveries)
+        TestDatabaseHelper.resetSchema(Organizations, OrganizationIntegrations, SlackOutboundDeliveries)
         transaction {
             Organizations.insert {
                 it[name] = "Outbound test"
@@ -92,6 +100,7 @@ class SlackOutboundDeliveryServiceTest {
         assertEquals("M1", row[SlackOutboundDeliveries.providerMessageId])
         assertEquals(1, row[SlackOutboundDeliveries.deliveredVersion])
         assertNotNull(service.metrics().lastSuccessfulDelivery)
+        Unit
     }
 
     @Test
@@ -120,6 +129,7 @@ class SlackOutboundDeliveryServiceTest {
         val row = transaction { SlackOutboundDeliveries.selectAll().single() }
         assertEquals(SlackOutboundDeliveryStatus.SUPERSEDED.wire, row[SlackOutboundDeliveries.status])
         assertNotNull(row[SlackOutboundDeliveries.supersededAt])
+        Unit
     }
 
     @Test
@@ -228,14 +238,15 @@ class SlackOutboundDeliveryServiceTest {
     }
 
     @Test
-    fun `unsupported outbound operation fails before workspace access`() = runBlocking {
+    fun `message without a destination fails before outbound transport`() = runBlocking {
+        seedSlackIntegration()
         val result = SlackService().sendOutboundDelivery(
             SlackOutboundDelivery(
                 resourceId = "delivery",
                 organizationId = 1,
                 teamId = "T-outbound",
-                channelId = "C-outbound",
-                operation = SlackOutboundOperation.CHANNEL_CREATE,
+                channelId = null,
+                operation = SlackOutboundOperation.MESSAGE,
                 idempotencyKey = "channel:create",
                 payload = "{}",
                 desiredVersion = 1,
@@ -244,7 +255,141 @@ class SlackOutboundDeliveryServiceTest {
         )
 
         assertIs<SlackOutboundSendResult.Failed>(result)
+        Unit
     }
+
+    @Test
+    fun `worker processes a queued delivery and records the durable result`() = runBlocking {
+        val service = SlackOutboundDeliveryService(clock = clock)
+        val resourceId = service.enqueue(request())
+        val worker = SlackOutboundWorker(
+            queueKey = "slack-outbound",
+            dlqKey = "slack-outbound-dlq",
+            workerCount = 1,
+            deliveryService = service,
+            sender = SlackOutboundSender { SlackOutboundSendResult.Delivered(providerMessageId = "M-worker") },
+        )
+
+        worker.processMessage(workerId = 1, value = resourceId)
+
+        val row = transaction { SlackOutboundDeliveries.selectAll().single() }
+        assertEquals(SlackOutboundDeliveryStatus.DELIVERED.wire, row[SlackOutboundDeliveries.status])
+        assertEquals("M-worker", row[SlackOutboundDeliveries.providerMessageId])
+        Unit
+    }
+
+    @Test
+    fun `outbound message injects idempotency and returns provider ids`() = runBlocking {
+        seedSlackIntegration()
+        val service = SlackService(
+            mockSlackClient {
+                respond("""{"ok":true,"channel":{"id":"C-created"},"ts":"123.456"}""")
+            },
+        )
+
+        val result = service.sendOutboundDelivery(
+            SlackOutboundDelivery(
+                resourceId = "delivery",
+                organizationId = 1,
+                teamId = "T-outbound",
+                channelId = "C-outbound",
+                operation = SlackOutboundOperation.MESSAGE,
+                idempotencyKey = "delivery-key",
+                payload = "{\"text\":\"hello\"}",
+                desiredVersion = 1,
+                attemptCount = 1,
+            ),
+        )
+
+        val delivered = assertIs<SlackOutboundSendResult.Delivered>(result)
+        assertEquals("C-created", delivered.providerMessageId)
+        assertEquals("123.456", delivered.providerMessageTs)
+    }
+
+    @Test
+    fun `outbound response classifications preserve retry and failure semantics`() = runBlocking {
+        seedSlackIntegration()
+        val statuses = listOf(
+            HttpStatusCode.TooManyRequests to SlackOutboundSendResult.Retry::class,
+            HttpStatusCode.InternalServerError to SlackOutboundSendResult.Retry::class,
+            HttpStatusCode.BadRequest to SlackOutboundSendResult.Failed::class,
+        )
+        statuses.forEach { (status, expectedType) ->
+            val service = SlackService(
+                mockSlackClient {
+                    respond("{\"ok\":false,\"error\":\"bad_request\"}", status)
+                },
+            )
+            val result = service.sendOutboundDelivery(outboundDelivery())
+            assertTrue(expectedType.isInstance(result), "Expected $expectedType for $status")
+        }
+
+        val rateLimitedBodyService = SlackService(
+            mockSlackClient {
+                respond("{\"ok\":false,\"error\":\"ratelimited\"}")
+            },
+        )
+        assertIs<SlackOutboundSendResult.Retry>(
+            rateLimitedBodyService.sendOutboundDelivery(outboundDelivery()),
+        )
+    }
+
+    @Test
+    fun `outbound response supports nested provider id and default rate limit delay`() = runBlocking {
+        seedSlackIntegration()
+        val service = SlackService(
+            mockSlackClient {
+                respond("{\"ok\":true,\"channel\":{\"id\":\"C-nested\"}}")
+            },
+        )
+        val delivered = assertIs<SlackOutboundSendResult.Delivered>(service.sendOutboundDelivery(outboundDelivery()))
+        assertEquals("C-nested", delivered.providerMessageId)
+        assertEquals(null, delivered.providerMessageTs)
+
+        val rateLimitedService = SlackService(
+            mockSlackClient {
+                respond("", HttpStatusCode.TooManyRequests)
+            },
+        )
+        val rateLimited = rateLimitedService.sendOutboundDelivery(outboundDelivery())
+        val retry = assertIs<SlackOutboundSendResult.Retry>(rateLimited)
+        assertTrue(retry.rateLimited)
+        assertTrue(retry.retryAt!! > Clock.System.now() + 1.seconds)
+    }
+
+    private fun seedSlackIntegration() {
+        transaction {
+            OrganizationIntegrations.insert {
+                it[organization_id] = 1
+                it[integration_type] = "slack"
+                it[access_token] = "xoxb-test-token"
+                it[team_id] = "T-outbound"
+                it[enabled] = true
+                it[created_at] = clock.now()
+                it[updated_at] = clock.now()
+            }
+        }
+    }
+
+    private fun outboundDelivery(): SlackOutboundDelivery =
+        SlackOutboundDelivery(
+            resourceId = "delivery",
+            organizationId = 1,
+            teamId = "T-outbound",
+            channelId = "C-outbound",
+            operation = SlackOutboundOperation.CHANNEL_CREATE,
+            idempotencyKey = "delivery-key",
+            payload = "{\"name\":\"incident\"}",
+            desiredVersion = 1,
+            attemptCount = 1,
+        )
+
+    private fun mockSlackClient(handler: MockRequestHandleScope.() -> HttpResponseData): HttpClient =
+        HttpClient(MockEngine) {
+            engine {
+                addHandler { handler() }
+            }
+        }
 
     private fun request(version: Int = 1): SlackOutboundEnqueueRequest =
         SlackOutboundEnqueueRequest(
