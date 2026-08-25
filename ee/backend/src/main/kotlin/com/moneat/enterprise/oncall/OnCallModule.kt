@@ -30,6 +30,12 @@ import com.moneat.enterprise.incidents.response.IncidentResponseActivationServic
 import com.moneat.enterprise.incidents.response.IncidentResponsePager
 import com.moneat.enterprise.incidents.response.IncidentResponsePageRequest
 import com.moneat.enterprise.incidents.response.IncidentResponsePolicyService
+import com.moneat.enterprise.incidents.config.IncidentConfigurationService
+import com.moneat.enterprise.incidents.config.IncidentFormDefinition
+import com.moneat.enterprise.incidents.config.IncidentFormFieldDefinition
+import com.moneat.enterprise.incidents.config.ResolvedIncidentForm
+import com.moneat.enterprise.incidents.models.IncidentCustomFieldValueType
+import com.moneat.enterprise.incidents.models.IncidentFormStage
 import com.moneat.enterprise.oncall.routes.deviceRoutes
 import com.moneat.enterprise.oncall.routes.escalationRoutes
 import com.moneat.enterprise.oncall.routes.incidentRoutes
@@ -61,10 +67,12 @@ import io.ktor.server.application.Application
 import io.ktor.http.parseQueryString
 import io.ktor.server.routing.Route
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -82,6 +90,14 @@ import kotlin.uuid.Uuid
 
 private val logger = KotlinLogging.logger {}
 private const val SLACK_TITLE_PREFILL_MAX_CHARS = 150
+private const val SLACK_FORM_LABEL_MAX_CHARS = 75
+private const val SLACK_FORM_HINT_MAX_CHARS = 200
+private const val SLACK_FORM_OPTION_MAX_CHARS = 75
+
+private data class SlackIncidentSubmitter(
+    val organizationId: Int,
+    val userId: Int,
+)
 
 /**
  * Enterprise module for on-call management, escalation, and incident response.
@@ -98,6 +114,7 @@ class OnCallModule :
     private val escalationPathService = EscalationPathService()
     private val onCallScheduleService = OnCallScheduleService()
     private val onCallIncidentService = OnCallIncidentService()
+    private val incidentConfigurationService by lazy { IncidentConfigurationService() }
     private val pushNotificationService by lazy { PushNotificationService() }
     private val slackInstallationService by lazy { SlackInstallationService() }
     private val slackService by lazy { SlackService(installationService = slackInstallationService) }
@@ -331,6 +348,9 @@ class OnCallModule :
                     title = declaration.title,
                     description = declaration.description,
                     severity = declaration.severity,
+                    formDefinitionId = declaration.formDefinitionId,
+                    formDefinitionSnapshot = declaration.formDefinitionSnapshot,
+                    formValues = declaration.formValues,
                     onCallAlertId = declaration.alertId,
                 ),
             ).id
@@ -390,7 +410,11 @@ class OnCallModule :
             organizationId = organizationId,
             installationId = installationId,
             triggerId = triggerId,
-            view = slackIncidentDeclarationView(contextText),
+            view = slackIncidentDeclarationView(
+                contextText,
+                incidentConfigurationService.listForms(organizationId, IncidentFormStage.DECLARATION)
+                    .firstOrNull { it.incidentTypeId == null },
+            ),
         )
         return if (opened) "{}" else slackEphemeral("Moneat could not open the incident declaration form.")
     }
@@ -400,39 +424,23 @@ class OnCallModule :
         value: (String) -> String?,
         deliveryId: String?,
     ): String {
-        val teamId = root?.get("team")?.jsonObject?.get("id")?.jsonPrimitive?.contentOrNull
-            ?: value("team_id")
-        val slackUserId = root?.get("user")?.jsonObject?.get("id")?.jsonPrimitive?.contentOrNull
-            ?: value("user_id")
-        val organizationId = teamId?.let(slackInstallationService::organizationIdForTeam)
-        val installationId = if (organizationId != null) {
-            slackInstallationService.internalInstallationIdForTeam(organizationId, requireNotNull(teamId))
-        } else {
-            null
-        }
-        val userId = if (organizationId != null && installationId != null && !slackUserId.isNullOrBlank()) {
-            transaction {
-                SlackUserMappings
-                    .selectAll()
-                    .where {
-                        (SlackUserMappings.slackInstallationId eq installationId) and
-                            (SlackUserMappings.slackUserId eq slackUserId) and
-                            (SlackUserMappings.slackTeamId eq teamId)
-                    }
-                    .firstOrNull()
-                    ?.get(SlackUserMappings.userId)
-            }
-        } else {
-            null
-        }
-        if (organizationId == null || userId == null) {
+        val submitter = resolveSlackSubmitter(root, value, slackInstallationService)
+        if (submitter == null) {
             return slackEphemeral("Link your Slack identity in Moneat before declaring an incident.")
         }
+        val organizationId = submitter.organizationId
+        val userId = submitter.userId
         val state = root?.get("view")?.jsonObject?.get("state")?.jsonObject?.get("values")?.jsonObject
         val title = slackViewValue(state, "title")?.trim().orEmpty()
         val description = slackViewValue(state, "description")?.trim()?.takeIf(String::isNotEmpty)
         val severity = slackViewValue(state, "severity")?.trim()?.takeIf(String::isNotEmpty) ?: "SEV-3"
         if (title.isBlank()) return slackViewErrors(mapOf("title" to "Incident title is required."))
+        val resolvedForm = try {
+            resolveSlackDeclarationForm(organizationId, state, incidentConfigurationService)
+        } catch (error: IllegalArgumentException) {
+            val missingField = missingSlackFormField(organizationId, state, incidentConfigurationService) ?: "title"
+            return slackViewErrors(mapOf(missingField to (error.message ?: "Check this value.")))
+        }
         val resourceId = declareIncident(
             OnCallIncidentDeclaration(
                 organizationId = organizationId,
@@ -443,6 +451,9 @@ class OnCallModule :
                 severity = severity,
                 commandKey = "slack:${deliveryId ?: Uuid.random()}",
                 origin = "SLACK",
+                formDefinitionId = resolvedForm?.formDefinitionId,
+                formDefinitionSnapshot = resolvedForm?.definitionSnapshot ?: emptyMap(),
+                formValues = resolvedForm?.values ?: emptyMap(),
             ),
         )
         logger.info { "Declared incident $resourceId from Slack for organization $organizationId" }
@@ -517,7 +528,37 @@ internal fun slackViewValue(values: JsonObject?, blockId: String): String? {
         ?: action["selected_option"]?.jsonObject?.get("value")?.jsonPrimitive?.contentOrNull
 }
 
-internal fun slackIncidentDeclarationView(prefill: String?): JsonObject =
+private fun resolveSlackSubmitter(
+    root: JsonObject?,
+    value: (String) -> String?,
+    installationService: SlackInstallationService,
+): SlackIncidentSubmitter? {
+    val teamId = root?.get("team")?.jsonObject?.get("id")?.jsonPrimitive?.contentOrNull
+        ?: value("team_id")
+    val slackUserId = root?.get("user")?.jsonObject?.get("id")?.jsonPrimitive?.contentOrNull
+        ?: value("user_id")
+    val organizationId = teamId?.let(installationService::organizationIdForTeam) ?: return null
+    val installationId = installationService.internalInstallationIdForTeam(organizationId, requireNotNull(teamId))
+        ?: return null
+    if (slackUserId.isNullOrBlank()) return null
+    val userId = transaction {
+        SlackUserMappings
+            .selectAll()
+            .where {
+                (SlackUserMappings.slackInstallationId eq installationId) and
+                    (SlackUserMappings.slackUserId eq slackUserId) and
+                    (SlackUserMappings.slackTeamId eq teamId)
+            }
+            .firstOrNull()
+            ?.get(SlackUserMappings.userId)
+    }
+    return userId?.let { SlackIncidentSubmitter(organizationId, it) }
+}
+
+internal fun slackIncidentDeclarationView(
+    prefill: String?,
+    declarationForm: IncidentFormDefinition? = null,
+): JsonObject =
     buildJsonObject {
         put("type", "modal")
         put("callback_id", "moneat_incident_declaration")
@@ -588,5 +629,121 @@ internal fun slackIncidentDeclarationView(prefill: String?): JsonObject =
                     }
                 }
             }
+            declarationForm?.fields
+                ?.filter(IncidentFormFieldDefinition::visible)
+                ?.sortedBy(IncidentFormFieldDefinition::position)
+                ?.forEach { add(slackFormFieldBlock(it)) }
         }
     }
+
+private fun slackFormFieldBlock(formField: IncidentFormFieldDefinition): JsonObject =
+    buildJsonObject {
+        put("type", "input")
+        put("block_id", "field_${formField.field.key}")
+        putJsonObject("label") {
+            put("type", "plain_text")
+            put("text", formField.field.name.take(SLACK_FORM_LABEL_MAX_CHARS))
+        }
+        formField.helpText?.takeIf(String::isNotBlank)?.let { hint ->
+            putJsonObject("hint") {
+                put("type", "plain_text")
+                put("text", hint.take(SLACK_FORM_HINT_MAX_CHARS))
+            }
+        }
+        put("optional", !formField.required)
+        putJsonObject("element") {
+            put("action_id", "value")
+            when (formField.field.valueType) {
+                IncidentCustomFieldValueType.SELECT -> {
+                    put("type", "static_select")
+                    putJsonArray("options") {
+                        formField.field.options.forEach { option -> add(slackOption(option.value, option.label)) }
+                    }
+                    formField.defaultValue?.let { default ->
+                        formField.field.options.firstOrNull { it.value == default.jsonPrimitive.contentOrNull }
+                            ?.let { option -> put("initial_option", slackOption(option.value, option.label)) }
+                    }
+                }
+                IncidentCustomFieldValueType.MULTI_SELECT -> {
+                    put("type", "multi_static_select")
+                    putJsonArray("options") {
+                        formField.field.options.forEach { option -> add(slackOption(option.value, option.label)) }
+                    }
+                }
+                IncidentCustomFieldValueType.NUMBER -> put("type", "number_input")
+                else -> {
+                    put("type", "plain_text_input")
+                    if (formField.field.valueType == IncidentCustomFieldValueType.LINK) put("url_only", true)
+                    formField.defaultValue?.jsonPrimitive?.contentOrNull?.let { put("initial_value", it) }
+                }
+            }
+        }
+    }
+
+private fun slackOption(value: String, label: String): JsonObject =
+    buildJsonObject {
+        putJsonObject("text") {
+            put("type", "plain_text")
+            put("text", label.take(SLACK_FORM_LABEL_MAX_CHARS))
+        }
+        put("value", value.take(SLACK_FORM_OPTION_MAX_CHARS))
+    }
+
+private fun resolveSlackDeclarationForm(
+    organizationId: Int,
+    state: JsonObject?,
+    configurationService: IncidentConfigurationService,
+): ResolvedIncidentForm? {
+    val declarationForm = genericSlackDeclarationForm(organizationId, configurationService) ?: return null
+    return configurationService.resolveForm(
+        organizationId = organizationId,
+        incidentTypeResourceId = null,
+        stage = IncidentFormStage.DECLARATION,
+        submittedValues = slackFormValues(state, declarationForm),
+    )
+}
+
+private fun missingSlackFormField(
+    organizationId: Int,
+    state: JsonObject?,
+    configurationService: IncidentConfigurationService,
+): String? {
+    val declarationForm = genericSlackDeclarationForm(organizationId, configurationService) ?: return null
+    val submittedValues = slackFormValues(state, declarationForm)
+    return declarationForm.fields
+        .firstOrNull { it.required && !submittedValues.containsKey(it.field.key) }
+        ?.let { "field_${it.field.key}" }
+}
+
+private fun genericSlackDeclarationForm(
+    organizationId: Int,
+    configurationService: IncidentConfigurationService,
+): IncidentFormDefinition? =
+    configurationService.listForms(organizationId, IncidentFormStage.DECLARATION)
+        .firstOrNull { it.incidentTypeId == null }
+
+private fun slackFormValues(
+    values: JsonObject?,
+    form: IncidentFormDefinition,
+): Map<String, kotlinx.serialization.json.JsonElement> =
+    form.fields.filter(IncidentFormFieldDefinition::visible).mapNotNull { field ->
+        slackViewJsonValue(values, "field_${field.field.key}", field.field.valueType)
+            ?.let { field.field.key to it }
+    }.toMap()
+
+private fun slackViewJsonValue(
+    values: JsonObject?,
+    blockId: String,
+    valueType: IncidentCustomFieldValueType,
+): kotlinx.serialization.json.JsonElement? {
+    val block = values?.get(blockId)?.jsonObject ?: return null
+    val action = block.values.firstOrNull()?.jsonObject ?: return null
+    return when (valueType) {
+        IncidentCustomFieldValueType.SELECT ->
+            action["selected_option"]?.jsonObject?.get("value")?.jsonPrimitive
+        IncidentCustomFieldValueType.MULTI_SELECT ->
+            action["selected_options"]?.jsonArray?.mapNotNull { it.jsonObject["value"]?.jsonPrimitive }
+                ?.let(::JsonArray)
+        else -> action["value"]?.jsonPrimitive?.takeIf { it.contentOrNull?.isNotBlank() == true }
+    }
+}

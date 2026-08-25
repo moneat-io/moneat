@@ -16,6 +16,8 @@
 
 package com.moneat.enterprise
 
+import kotlinx.serialization.json.JsonElement
+
 /**
  * Bridge interface for on-call escalation features.
  * Core code calls these methods optionally; the enterprise module
@@ -115,6 +117,9 @@ data class OnCallIncidentDeclaration(
     val severity: String,
     val commandKey: String,
     val origin: String = "WORKFLOW",
+    val formDefinitionId: Int? = null,
+    val formDefinitionSnapshot: Map<String, JsonElement> = emptyMap(),
+    val formValues: Map<String, JsonElement> = emptyMap(),
 )
 
 /** Lightweight data carrier for priority info, avoiding enterprise model dependency. */

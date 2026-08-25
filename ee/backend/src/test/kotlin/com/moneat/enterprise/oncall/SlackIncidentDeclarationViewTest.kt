@@ -4,7 +4,14 @@
 
 package com.moneat.enterprise.oncall
 
+import com.moneat.enterprise.incidents.config.IncidentCustomFieldDefinition
+import com.moneat.enterprise.incidents.config.IncidentCustomFieldOption
+import com.moneat.enterprise.incidents.config.IncidentFormDefinition
+import com.moneat.enterprise.incidents.config.IncidentFormFieldDefinition
+import com.moneat.enterprise.incidents.models.IncidentCustomFieldValueType
+import com.moneat.enterprise.incidents.models.IncidentFormStage
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import org.junit.jupiter.api.Test
@@ -25,6 +32,66 @@ class SlackIncidentDeclarationViewTest {
             ?.jsonObject?.get("initial_value")?.toString()?.trim('"'))
         assertEquals(3, blocks?.size)
         assertNotNull(blocks?.last()?.jsonObject?.get("element")?.jsonObject?.get("options"))
+    }
+
+    @Test
+    fun `declaration modal renders configured fields`() {
+        val form = IncidentFormDefinition(
+            id = "declaration-form",
+            stage = IncidentFormStage.DECLARATION,
+            version = 1,
+            name = "Incident declaration",
+            fields = listOf(
+                IncidentFormFieldDefinition(
+                    id = "impact-field",
+                    field = IncidentCustomFieldDefinition(
+                        id = "impact",
+                        key = "customer_impact",
+                        version = 1,
+                        name = "Customer impact",
+                        valueType = IncidentCustomFieldValueType.SELECT,
+                        options = listOf(
+                            IncidentCustomFieldOption("customer", "customer", "Customer", 1),
+                            IncidentCustomFieldOption("internal", "internal", "Internal", 2),
+                        ),
+                    ),
+                    position = 1,
+                    visible = true,
+                    required = true,
+                    defaultValue = JsonPrimitive("customer"),
+                    helpText = "Who is affected?",
+                ),
+                IncidentFormFieldDefinition(
+                    id = "accounts-field",
+                    field = IncidentCustomFieldDefinition(
+                        id = "accounts",
+                        key = "named_accounts",
+                        version = 1,
+                        name = "Named accounts",
+                        valueType = IncidentCustomFieldValueType.MULTI_SELECT,
+                        options = listOf(
+                            IncidentCustomFieldOption("acme", "acme", "Acme", 1),
+                        ),
+                    ),
+                    position = 2,
+                    visible = true,
+                    required = false,
+                ),
+            ),
+        )
+
+        val blocks = slackIncidentDeclarationView(null, form)["blocks"]?.jsonArray
+
+        assertEquals(5, blocks?.size)
+        assertEquals("field_customer_impact", blocks?.get(3)?.jsonObject?.get("block_id")?.toString()?.trim('"'))
+        assertEquals("static_select", blocks?.get(3)?.jsonObject?.get("element")?.jsonObject?.get("type")
+            ?.toString()?.trim('"'))
+        assertEquals(false, blocks?.get(3)?.jsonObject?.get("optional")?.toString()?.toBoolean())
+        assertEquals("Who is affected?", blocks?.get(3)?.jsonObject?.get("hint")?.jsonObject?.get("text")
+            ?.toString()?.trim('"'))
+        assertEquals("field_named_accounts", blocks?.get(4)?.jsonObject?.get("block_id")?.toString()?.trim('"'))
+        assertEquals("multi_static_select", blocks?.get(4)?.jsonObject?.get("element")?.jsonObject?.get("type")
+            ?.toString()?.trim('"'))
     }
 
     @Test
