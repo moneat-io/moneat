@@ -24,6 +24,7 @@ import kotlin.uuid.Uuid
 
 enum class SlackOutboundOperation(val wire: String, val endpoint: String) {
     MESSAGE("MESSAGE", "chat.postMessage"),
+    MESSAGE_UPDATE("MESSAGE_UPDATE", "chat.update"),
     CHANNEL_CREATE("CHANNEL_CREATE", "conversations.create"),
     CHANNEL_UPDATE("CHANNEL_UPDATE", "conversations.rename"),
     INVITE("INVITE", "conversations.invite"),

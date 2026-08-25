@@ -59,6 +59,7 @@ data class SlackOutboundDelivery(
     val payload: String,
     val desiredVersion: Int,
     val attemptCount: Int,
+    val providerMessageTs: String? = null,
 )
 
 sealed interface SlackOutboundSendResult {
@@ -234,6 +235,14 @@ class SlackOutboundDeliveryService(
         return resourceId
     }
 
+    fun find(resourceId: String): SlackOutboundDelivery? = transaction {
+        SlackOutboundDeliveries
+            .selectAll()
+            .where { SlackOutboundDeliveries.resourceId eq Uuid.parse(resourceId) }
+            .singleOrNull()
+            ?.toDelivery()
+    }
+
     suspend fun process(resourceId: String, sender: SlackOutboundSender): Boolean {
         val delivery = claim(resourceId) ?: return false
         return when (val result = sender.send(delivery)) {
@@ -399,6 +408,7 @@ class SlackOutboundDeliveryService(
             payload = this[SlackOutboundDeliveries.payload],
             desiredVersion = this[SlackOutboundDeliveries.desiredVersion],
             attemptCount = this[SlackOutboundDeliveries.attemptCount] + 1,
+            providerMessageTs = this[SlackOutboundDeliveries.providerMessageTs],
         )
 
     companion object {

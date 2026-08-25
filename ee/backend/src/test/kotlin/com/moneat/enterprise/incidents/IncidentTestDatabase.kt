@@ -18,6 +18,8 @@ import com.moneat.enterprise.alertroutes.models.EnterpriseAlertRouteRevisions
 import com.moneat.enterprise.alertroutes.models.EnterpriseAlertRouteTargets
 import com.moneat.enterprise.alertroutes.models.EnterpriseAlertRoutes
 import com.moneat.enterprise.incidents.models.NativeIncidentAlertEpisodeLinks
+import com.moneat.enterprise.incidents.announcements.NativeIncidentAnnouncementRules
+import com.moneat.enterprise.incidents.announcements.NativeIncidentAnnouncements
 import com.moneat.enterprise.incidents.models.NativeIncidentCommands
 import com.moneat.enterprise.incidents.models.NativeIncidentCustomFieldOptions
 import com.moneat.enterprise.incidents.models.NativeIncidentCustomFields
@@ -101,6 +103,8 @@ object IncidentTestDatabase {
             NativeIncidentResponseActivations,
             NativeIncidentResponseTargets,
             NativeIncidentSlackChannels,
+            NativeIncidentAnnouncementRules,
+            NativeIncidentAnnouncements,
             EnterpriseAlertRoutes,
             EnterpriseAlertRouteConditionGroups,
             EnterpriseAlertRouteConditions,

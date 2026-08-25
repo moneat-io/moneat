@@ -10,6 +10,7 @@ import com.moneat.alerts.models.AlertEpisodes
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.enterprise.NativeIncidentEntitlementStatus
 import com.moneat.enterprise.incidents.commands.AcceptIncidentCommand
+import com.moneat.enterprise.incidents.announcements.IncidentAnnouncementService
 import com.moneat.enterprise.incidents.commands.DeclareIncidentCommand
 import com.moneat.enterprise.incidents.commands.DeclineIncidentCommand
 import com.moneat.enterprise.incidents.commands.MergeIncidentCommand
@@ -221,6 +222,7 @@ private data class IncidentRouteServices(
     val alertServiceProvider: () -> OnCallAlertService,
     val incidentService: OnCallIncidentService,
     val configurationService: IncidentConfigurationService,
+    val announcementService: IncidentAnnouncementService,
     val responderService: IncidentResponderService,
     val timelineService: IncidentTimelineService,
     val responseService: IncidentResponseActivationService?,
@@ -241,6 +243,7 @@ fun Route.incidentRoutes(
             alertServiceProvider = alertServiceProvider,
             incidentService = onCallIncidentService,
             configurationService = IncidentConfigurationService(),
+            announcementService = IncidentAnnouncementService(),
             responderService = IncidentResponderService(),
             timelineService = IncidentTimelineService(),
             responseService = incidentResponseActivationService,
@@ -252,6 +255,7 @@ fun Route.incidentRoutes(
     registerIncidentConfigurationRoutes(
         services.configurationService,
         services.responderService,
+        services.announcementService,
         incidentEntitlement,
     )
 }

@@ -22,6 +22,7 @@ import com.moneat.enterprise.incidents.commands.IncidentCommandActor
 import com.moneat.enterprise.incidents.events.IncidentOutboxService
 import com.moneat.enterprise.incidents.events.IncidentOutboxWorker
 import com.moneat.enterprise.incidents.events.IncidentResponseEventConsumer
+import com.moneat.enterprise.incidents.events.IncidentAnnouncementEventConsumer
 import com.moneat.enterprise.incidents.events.IncidentSlackChannelEventConsumer
 import com.moneat.enterprise.incidents.events.WorkflowIncidentEventConsumer
 import com.moneat.enterprise.incidents.response.IncidentResponseActivationService
@@ -154,6 +155,7 @@ class OnCallModule :
                         WorkflowIncidentEventConsumer(),
                         IncidentResponseEventConsumer(incidentResponseActivationService),
                         IncidentSlackChannelEventConsumer(),
+                        IncidentAnnouncementEventConsumer(),
                     ),
                 ),
             )
