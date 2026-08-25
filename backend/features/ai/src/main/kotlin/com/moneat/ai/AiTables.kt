@@ -18,6 +18,7 @@ package com.moneat.ai
 
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
+import com.moneat.shared.models.jsonb
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.datetime.timestamp
@@ -29,6 +30,9 @@ object AiConversations : Table("ai_conversations") {
     val organization_id = integer("organization_id").references(Organizations.id)
     val user_id = integer("user_id").references(Users.id)
     val title = varchar("title", 255).nullable()
+    val project_id = long("project_id").nullable()
+    val channel = varchar("channel", 32).default("chat")
+    val state_version = long("state_version").default(0)
     val created_at = timestamp("created_at")
     val updated_at = timestamp("updated_at")
     override val primaryKey = PrimaryKey(id)
@@ -50,6 +54,10 @@ object AiMessages : Table("ai_messages") {
     val output_tokens = integer("output_tokens").nullable()
     val cost_usd = decimal("cost_usd", 10, 6).nullable()
     val provider = varchar("provider", 20).nullable()
+    val run_id = long("run_id").nullable()
+    val tool_call_id = varchar("tool_call_id", 255).nullable()
+    val tool_calls = jsonb("tool_calls").nullable()
+    val sequence_number = long("sequence_number").nullable()
     val created_at = timestamp("created_at")
     override val primaryKey = PrimaryKey(id)
 }
