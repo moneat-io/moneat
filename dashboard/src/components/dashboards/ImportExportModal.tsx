@@ -46,6 +46,47 @@ const IMPORT_FORMAT_DETAILS: Record<DashboardImportFormat, {
   },
 }
 
+const resolveStringDataSource = (
+  dataSource: string,
+  templateToPluginId: Record<string, string>,
+  mapping: Record<string, string>,
+): unknown => {
+  const varMatch = /^\$\{(\w+)\}$/.exec(dataSource)
+  if (varMatch) {
+    const pluginId = templateToPluginId[varMatch[1]]
+    if (pluginId && mapping[pluginId]) return mapping[pluginId]
+  }
+  return mapping[dataSource] ?? dataSource
+}
+
+const resolveObjectDataSource = (
+  dataSource: Record<string, unknown>,
+  mapping: Record<string, string>,
+): unknown => {
+  if (typeof dataSource.type === 'string' && mapping[dataSource.type]) {
+    return mapping[dataSource.type]
+  }
+  if (typeof dataSource.uid === 'string' && mapping[dataSource.uid]) {
+    return mapping[dataSource.uid]
+  }
+  return dataSource
+}
+
+const mapDataSourceValue = (
+  dataSource: unknown,
+  templateToPluginId: Record<string, string>,
+  mapping: Record<string, string>,
+): unknown => {
+  if (!dataSource) return dataSource
+  if (typeof dataSource === 'string') {
+    return resolveStringDataSource(dataSource, templateToPluginId, mapping)
+  }
+  if (typeof dataSource === 'object') {
+    return resolveObjectDataSource(dataSource as Record<string, unknown>, mapping)
+  }
+  return dataSource
+}
+
 interface ImportExportModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -283,41 +324,14 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
           }
         }
 
-        const mapDatasource = (ds: unknown): unknown => {
-          if (!ds) return ds
-          
-          if (typeof ds === 'string') {
-            // Resolve ${DS_...} template variables via __inputs
-            const varMatch = /^\$\{(\w+)\}$/.exec(ds)
-            if (varMatch) {
-              const pluginId = templateToPluginId[varMatch[1]]
-              if (pluginId && mapping[pluginId]) {
-                return mapping[pluginId]
-              }
-            }
-            // Direct string match
-            if (mapping[ds]) return mapping[ds]
-          } else if (typeof ds === 'object') {
-            const dsObj = ds as Record<string, unknown>
-            if (typeof dsObj.type === 'string' && mapping[dsObj.type]) {
-              return mapping[dsObj.type]
-            }
-            if (typeof dsObj.uid === 'string' && mapping[dsObj.uid]) {
-              return mapping[dsObj.uid]
-            }
-          }
-          
-          return ds
-        }
-        
         const applyMapping = (panel: Record<string, unknown>) => {
           if (panel.datasource) {
-            panel.datasource = mapDatasource(panel.datasource)
+            panel.datasource = mapDataSourceValue(panel.datasource, templateToPluginId, mapping)
           }
           if (Array.isArray(panel.targets)) {
             for (const target of panel.targets as Record<string, unknown>[]) {
               if (target.datasource) {
-                target.datasource = mapDatasource(target.datasource)
+                target.datasource = mapDataSourceValue(target.datasource, templateToPluginId, mapping)
               }
             }
           }
