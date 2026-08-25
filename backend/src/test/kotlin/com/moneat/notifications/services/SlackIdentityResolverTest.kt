@@ -86,6 +86,21 @@ class SlackIdentityResolverTest {
     }
 
     @Test
+    fun `missing or blank Slack identifiers fail closed without a database lookup`() {
+        val missingTeam = SlackIdentityResolver().resolve(
+            SlackIdentityRequest(teamId = " ", userId = "U-user"),
+        )
+        val missingUser = SlackIdentityResolver().resolve(
+            SlackIdentityRequest(teamId = "T-team", userId = null),
+        )
+
+        assertEquals(SlackIdentityStatus.UNMAPPED, missingTeam.status)
+        assertEquals(SlackIdentityStatus.UNMAPPED, missingUser.status)
+        assertFalse(missingTeam.canRespond)
+        assertFalse(missingUser.canRespond)
+    }
+
+    @Test
     fun `guest and external identities fail closed before database lookup`() {
         val guest = SlackIdentityResolver().resolve(
             SlackIdentityRequest(teamId = "T-guest", userId = "U-guest", isGuest = true),
