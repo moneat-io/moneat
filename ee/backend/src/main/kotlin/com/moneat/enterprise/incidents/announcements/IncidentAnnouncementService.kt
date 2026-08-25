@@ -495,23 +495,23 @@ class IncidentAnnouncementService(
     private fun nudgeMessages(
         snapshot: IncidentSnapshot,
         policy: IncidentAnnouncementNudgePolicy,
-    ): List<String> = buildList {
-        if (policy.missingLead && snapshot.roles.none { it.startsWith("Incident Commander:") }) {
-            add("Assign an incident lead")
-        }
-        if (policy.missingSummary && snapshot.summary.isNullOrBlank()) add("Add an incident summary")
-        if (policy.missingUpdate && snapshot.fields["next_update_at"].isNullOrBlank()) {
-            add("Set the next update time")
-        }
-        if (policy.missingStatusPage && snapshot.fields["status_page_url"].isNullOrBlank()) {
-            add("Publish a status page update")
-        }
-        if (policy.missingTriageDecision && snapshot.status == NativeIncidentStatus.TRIAGE.wire) {
-            add("Make the triage decision")
-        }
-        if (policy.missingEscalation && snapshot.escalation == null) add("Activate the response escalation")
-        if (policy.missingClosure) add("Keep the closure checklist current")
-    }
+    ): List<String> = listOfNotNull(
+        "Assign an incident lead".takeIf {
+            policy.missingLead && snapshot.roles.none { it.startsWith("Incident Commander:") }
+        },
+        "Add an incident summary".takeIf { policy.missingSummary && snapshot.summary.isNullOrBlank() },
+        "Set the next update time".takeIf {
+            policy.missingUpdate && snapshot.fields["next_update_at"].isNullOrBlank()
+        },
+        "Publish a status page update".takeIf {
+            policy.missingStatusPage && snapshot.fields["status_page_url"].isNullOrBlank()
+        },
+        "Make the triage decision".takeIf {
+            policy.missingTriageDecision && snapshot.status == NativeIncidentStatus.TRIAGE.wire
+        },
+        "Activate the response escalation".takeIf { policy.missingEscalation && snapshot.escalation == null },
+        "Keep the closure checklist current".takeIf { policy.missingClosure },
+    )
 
     private fun JsonElement.asText(): String = (this as? JsonPrimitive)?.contentOrNull.orEmpty()
 
