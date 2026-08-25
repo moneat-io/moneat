@@ -24,6 +24,9 @@ import java.nio.charset.StandardCharsets
 import com.moneat.config.EnvConfig
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OrganizationIntegrations
+import com.moneat.shared.models.SlackOutboundOperation
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.seconds
 import com.moneat.workflows.models.WorkflowStepPreview
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
@@ -41,6 +44,12 @@ import io.ktor.http.contentType
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -137,7 +146,9 @@ class SlackService {
     @Serializable
     data class SlackPostMessageResponse(
         val ok: Boolean,
-        val error: String? = null
+        val error: String? = null,
+        val channel: String? = null,
+        val ts: String? = null,
     )
 
     @Serializable
@@ -261,6 +272,89 @@ class SlackService {
             logger.error("Error sending to Slack", e)
             false to "Error: ${e.message}"
         }
+    }
+
+    suspend fun sendOutboundDelivery(delivery: SlackOutboundDelivery): SlackOutboundSendResult {
+        val accessToken = getSlackAccessToken(delivery.organizationId)
+            ?: return SlackOutboundSendResult.Retry("Slack workspace is not configured")
+        if (delivery.operation == SlackOutboundOperation.MESSAGE && delivery.channelId.isNullOrBlank()) {
+            return SlackOutboundSendResult.Failed("Slack message is missing a destination channel")
+        }
+        return sendOutboundOperation(delivery, accessToken)
+    }
+
+    private suspend fun sendOutboundOperation(
+        delivery: SlackOutboundDelivery,
+        accessToken: String,
+    ): SlackOutboundSendResult = try {
+        val response = httpClient.post("https://slack.com/api/${delivery.operation.endpoint}") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", "Bearer $accessToken")
+            setBody(prepareOutboundPayload(delivery))
+        }
+        classifyOutboundResponse(response)
+    } catch (error: IOException) {
+        SlackOutboundSendResult.Retry(error.message ?: "Slack connection failed")
+    } catch (error: SerializationException) {
+        SlackOutboundSendResult.Retry(error.message ?: "Slack response could not be decoded")
+    }
+
+    private suspend fun classifyOutboundResponse(response: HttpResponse): SlackOutboundSendResult {
+        if (response.status == HttpStatusCode.TooManyRequests) {
+            val retryAfter = response.headers["Retry-After"]?.toLongOrNull()
+                ?.coerceAtLeast(MIN_RATE_LIMIT_RETRY_SECONDS) ?: DEFAULT_RATE_LIMIT_RETRY_SECONDS
+            return SlackOutboundSendResult.Retry(
+                reason = "Slack rate limit",
+                retryAt = Clock.System.now() + retryAfter.seconds,
+                rateLimited = true,
+            )
+        }
+        if (response.status.value >= SLACK_SERVER_ERROR_STATUS) {
+            return SlackOutboundSendResult.Retry("Slack returned ${response.status}")
+        }
+        if (response.status != HttpStatusCode.OK) {
+            return SlackOutboundSendResult.Failed("Slack returned ${response.status}")
+        }
+        val result = json.parseToJsonElement(response.bodyAsText()).jsonObject
+        val ok = result["ok"]?.jsonPrimitive?.booleanOrNull == true
+        return if (ok) {
+            SlackOutboundSendResult.Delivered(
+                providerMessageId = result.providerId(),
+                providerMessageTs = result["ts"]?.jsonPrimitive?.contentOrNull,
+            )
+        } else if (result["error"]?.jsonPrimitive?.contentOrNull == "ratelimited") {
+            SlackOutboundSendResult.Retry("Slack rate limit", rateLimited = true)
+        } else {
+            SlackOutboundSendResult.Failed(
+                result["error"]?.jsonPrimitive?.contentOrNull ?: "Slack rejected the operation",
+            )
+        }
+    }
+
+    private fun prepareOutboundPayload(delivery: SlackOutboundDelivery): String {
+        if (delivery.operation != SlackOutboundOperation.MESSAGE) return delivery.payload
+        val payload = json.parseToJsonElement(delivery.payload).jsonObject.toMutableMap()
+        payload["client_msg_id"] = JsonPrimitive(delivery.idempotencyKey)
+        return JsonObject(payload).toString()
+    }
+
+    private fun JsonObject.providerId(): String? {
+        val channel = this["channel"]
+        return channel?.jsonPrimitive?.contentOrNull
+            ?: channel?.jsonObject?.get("id")?.jsonPrimitive?.contentOrNull
+    }
+
+    private fun getSlackAccessToken(organizationId: Int): String? = transaction {
+        OrganizationIntegrations
+            .selectAll()
+            .where {
+                (OrganizationIntegrations.organization_id eq organizationId) and
+                    (OrganizationIntegrations.integration_type eq "slack") and
+                    (OrganizationIntegrations.enabled eq true)
+            }
+            .limit(1)
+            .singleOrNull()
+            ?.get(OrganizationIntegrations.access_token)
     }
 
     suspend fun sendHostAlert(
@@ -1159,5 +1253,8 @@ class SlackService {
 
     companion object {
         private const val ERROR_SENDING_ON_CALL_SLACK_ALERT = "Error sending on-call Slack alert"
+        private const val SLACK_SERVER_ERROR_STATUS = 500
+        private const val MIN_RATE_LIMIT_RETRY_SECONDS = 1L
+        private const val DEFAULT_RATE_LIMIT_RETRY_SECONDS = 30L
     }
 }
