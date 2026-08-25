@@ -30,6 +30,7 @@ import com.moneat.enterprise.incidents.models.NativeIncidentOutboxEvents
 import com.moneat.enterprise.incidents.response.NativeIncidentResponseActivations
 import com.moneat.enterprise.incidents.response.NativeIncidentResponsePolicies
 import com.moneat.enterprise.incidents.response.NativeIncidentResponseTargets
+import com.moneat.enterprise.incidents.slack.NativeIncidentSlackChannels
 import com.moneat.enterprise.incidents.models.NativeIncidentParticipants
 import com.moneat.enterprise.incidents.models.NativeIncidentRoleAssignments
 import com.moneat.enterprise.incidents.models.NativeIncidentRoleDefinitions
@@ -44,6 +45,7 @@ import com.moneat.enterprise.sso.support.EnterpriseTestDatabaseHelper
 import com.moneat.shared.models.EscalationPolicies
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OnCallSchedules
+import com.moneat.shared.models.OrganizationIntegrations
 import com.moneat.shared.models.OrganizationTeams
 import com.moneat.shared.models.Organizations
 import com.moneat.monitor.repositories.ResourceOwnership
@@ -68,6 +70,7 @@ object IncidentTestDatabase {
         EnterpriseTestDatabaseHelper.resetSchema(
             Users,
             Organizations,
+            OrganizationIntegrations,
             Memberships,
             OnCallSchedules,
             EscalationPolicies,
@@ -97,6 +100,7 @@ object IncidentTestDatabase {
             NativeIncidentResponsePolicies,
             NativeIncidentResponseActivations,
             NativeIncidentResponseTargets,
+            NativeIncidentSlackChannels,
             EnterpriseAlertRoutes,
             EnterpriseAlertRouteConditionGroups,
             EnterpriseAlertRouteConditions,
