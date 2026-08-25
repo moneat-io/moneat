@@ -27,8 +27,6 @@ import com.moneat.testsupport.TestDatabaseHelper
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
-import io.ktor.http.ContentType
-import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -46,6 +44,7 @@ import java.time.LocalTime
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -156,13 +155,12 @@ class SlackInstallationServiceTest {
         val client = HttpClient(MockEngine) {
             engine {
                 addHandler {
-                    respond("{\"ok\":true}", ContentType.Application.Json, HttpStatusCode.OK)
+                    respond("{\"ok\":true}")
                 }
             }
         }
         val slackService = SlackService(client, service)
-        val internalInstallationId = service.internalInstallationIdForTeam(organizationId, "T-MODAL")
-        assertNotNull(internalInstallationId)
+        val internalInstallationId = assertNotNull(service.internalInstallationIdForTeam(organizationId, "T-MODAL"))
 
         assertTrue(
             slackService.openModal(
