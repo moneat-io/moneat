@@ -416,7 +416,7 @@ class FeatureFlagEvaluator {
             val actualNumber = readNumber(actualPrimitive)
             val expectedNumber = readNumber(expectedPrimitive)
             if (actualNumber != null && expectedNumber != null) {
-                return actualNumber == expectedNumber
+                return actualNumber.compareTo(expectedNumber) == 0
             }
         }
         return actual == expected

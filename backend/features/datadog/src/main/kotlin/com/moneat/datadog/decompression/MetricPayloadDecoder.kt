@@ -16,13 +16,14 @@
 
 package com.moneat.datadog.decompression
 
+import com.moneat.datadog.decompression.ProtoWireConstants as Wire
+
 import com.google.protobuf.CodedInputStream
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_3
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_4
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_5
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_6
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_7
-import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_SHIFT
 import com.moneat.datadog.models.DatadogMetricSeriesV1
 import com.moneat.datadog.models.DatadogMetricV1
 
@@ -58,7 +59,7 @@ object MetricPayloadDecoder {
             when (val tag = input.readTag()) {
                 0 -> break
                 // field 1 (LEN): repeated MetricSeries series
-                (1 shl FIELD_SHIFT) or 2 -> series += decodeSeries(input.readByteArray())
+                Wire.tag(1, Wire.WIRE_LENGTH_DELIMITED) -> series += decodeSeries(input.readByteArray())
                 else -> input.skipField(tag)
             }
         }
@@ -79,22 +80,22 @@ object MetricPayloadDecoder {
             when (val tag = input.readTag()) {
                 0 -> break
                 // field 1 (LEN): repeated Resource
-                (1 shl FIELD_SHIFT) or 2 -> {
+                Wire.tag(1, Wire.WIRE_LENGTH_DELIMITED) -> {
                     val resource = decodeResource(input.readByteArray())
                     if (resource.first == "host") host = resource.second
                 }
                 // field 2 (LEN): string metric
-                (2 shl FIELD_SHIFT) or 2 -> metric = input.readString()
+                Wire.tag(2, Wire.WIRE_LENGTH_DELIMITED) -> metric = input.readString()
                 // field 3 (LEN): repeated string tags
-                (FIELD_3 shl FIELD_SHIFT) or 2 -> tags += input.readString()
+                Wire.tag(FIELD_3, Wire.WIRE_LENGTH_DELIMITED) -> tags += input.readString()
                 // field 4 (LEN): repeated MetricPoint
-                (FIELD_4 shl FIELD_SHIFT) or 2 -> points += decodeMetricPoint(input.readByteArray())
+                Wire.tag(FIELD_4, Wire.WIRE_LENGTH_DELIMITED) -> points += decodeMetricPoint(input.readByteArray())
                 // field 5 (VARINT): MetricType
-                (FIELD_5 shl FIELD_SHIFT) or 0 -> typeInt = input.readEnum()
+                Wire.tag(FIELD_5, Wire.WIRE_VARINT) -> typeInt = input.readEnum()
                 // field 6 (LEN): string unit
-                (FIELD_6 shl FIELD_SHIFT) or 2 -> unit = input.readString()
+                Wire.tag(FIELD_6, Wire.WIRE_LENGTH_DELIMITED) -> unit = input.readString()
                 // field 7 (LEN): string source_type_name
-                (FIELD_7 shl FIELD_SHIFT) or 2 -> sourceTypeName = input.readString()
+                Wire.tag(FIELD_7, Wire.WIRE_LENGTH_DELIMITED) -> sourceTypeName = input.readString()
                 else -> input.skipField(tag)
             }
         }
@@ -118,8 +119,8 @@ object MetricPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl FIELD_SHIFT) or 2 -> type = input.readString()
-                (2 shl FIELD_SHIFT) or 2 -> name = input.readString()
+                Wire.tag(1, Wire.WIRE_LENGTH_DELIMITED) -> type = input.readString()
+                Wire.tag(2, Wire.WIRE_LENGTH_DELIMITED) -> name = input.readString()
                 else -> input.skipField(tag)
             }
         }
@@ -134,8 +135,8 @@ object MetricPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl FIELD_SHIFT) or 1 -> value = input.readDouble() // wire type 1 = 64-bit
-                (2 shl FIELD_SHIFT) or 0 -> timestamp = input.readInt64() // wire type 0 = varint
+                Wire.tag(1, Wire.WIRE_FIXED64) -> value = input.readDouble() // wire type 1 = 64-bit
+                Wire.tag(2, Wire.WIRE_VARINT) -> timestamp = input.readInt64() // wire type 0 = varint
                 else -> input.skipField(tag)
             }
         }

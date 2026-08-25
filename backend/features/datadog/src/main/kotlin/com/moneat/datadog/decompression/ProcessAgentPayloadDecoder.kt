@@ -16,6 +16,8 @@
 
 package com.moneat.datadog.decompression
 
+import com.moneat.datadog.decompression.ProtoWireConstants as Wire
+
 import com.google.protobuf.CodedInputStream
 import com.google.protobuf.CodedOutputStream
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_3
@@ -24,7 +26,6 @@ import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_5
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_6
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_7
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_8
-import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_SHIFT
 import com.moneat.datadog.models.DatadogConnection
 import com.moneat.datadog.models.DatadogConnectionsPayload
 import com.moneat.datadog.models.DatadogContainer
@@ -165,9 +166,9 @@ object ProcessAgentPayloadDecoder {
             when (val tag = input.readTag()) {
                 0 -> break
                 // field 1, LEN: hostName
-                (1 shl FIELD_SHIFT) or 2 -> hostName = input.readString()
+                Wire.tag(1, Wire.WIRE_LENGTH_DELIMITED) -> hostName = input.readString()
                 // field 3, LEN: repeated Container
-                (FIELD_3 shl FIELD_SHIFT) or 2 ->
+                Wire.tag(FIELD_3, Wire.WIRE_LENGTH_DELIMITED) ->
                     containers += decodeContainer(input.readByteArray())
                 else -> input.skipField(tag)
             }
@@ -188,8 +189,8 @@ object ProcessAgentPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (2 shl FIELD_SHIFT) or 2 -> hostName = input.readString()
-                (FIELD_3 shl FIELD_SHIFT) or 2 ->
+                Wire.tag(2, Wire.WIRE_LENGTH_DELIMITED) -> hostName = input.readString()
+                Wire.tag(FIELD_3, Wire.WIRE_LENGTH_DELIMITED) ->
                     connections += decodeConnection(input.readByteArray())
                 else -> input.skipField(tag)
             }
@@ -220,14 +221,14 @@ object ProcessAgentPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl FIELD_SHIFT) or 0 -> pid = input.readInt32()
-                (FIELD_5 shl FIELD_SHIFT) or 2 -> localAddr = decodeAddr(input.readByteArray())
-                (FIELD_6 shl FIELD_SHIFT) or 2 -> remoteAddr = decodeAddr(input.readByteArray())
-                (PROTO_FIELD_10 shl FIELD_SHIFT) or 0 -> family = input.readEnum()
-                (PROTO_FIELD_11 shl FIELD_SHIFT) or 0 -> type = input.readEnum()
-                (PROTO_FIELD_16 shl FIELD_SHIFT) or 0 -> bytesSent = input.readUInt64()
-                (PROTO_FIELD_17 shl FIELD_SHIFT) or 0 -> bytesReceived = input.readUInt64()
-                (PROTO_FIELD_19 shl FIELD_SHIFT) or 0 -> direction = input.readEnum()
+                Wire.tag(1, Wire.WIRE_VARINT) -> pid = input.readInt32()
+                Wire.tag(FIELD_5, Wire.WIRE_LENGTH_DELIMITED) -> localAddr = decodeAddr(input.readByteArray())
+                Wire.tag(FIELD_6, Wire.WIRE_LENGTH_DELIMITED) -> remoteAddr = decodeAddr(input.readByteArray())
+                Wire.tag(PROTO_FIELD_10, Wire.WIRE_VARINT) -> family = input.readEnum()
+                Wire.tag(PROTO_FIELD_11, Wire.WIRE_VARINT) -> type = input.readEnum()
+                Wire.tag(PROTO_FIELD_16, Wire.WIRE_VARINT) -> bytesSent = input.readUInt64()
+                Wire.tag(PROTO_FIELD_17, Wire.WIRE_VARINT) -> bytesReceived = input.readUInt64()
+                Wire.tag(PROTO_FIELD_19, Wire.WIRE_VARINT) -> direction = input.readEnum()
                 else -> input.skipField(tag)
             }
         }
@@ -263,8 +264,8 @@ object ProcessAgentPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (2 shl FIELD_SHIFT) or 2 -> ip = input.readString()
-                (FIELD_3 shl FIELD_SHIFT) or 0 -> port = input.readInt32()
+                Wire.tag(2, Wire.WIRE_LENGTH_DELIMITED) -> ip = input.readString()
+                Wire.tag(FIELD_3, Wire.WIRE_VARINT) -> port = input.readInt32()
                 else -> input.skipField(tag)
             }
         }
@@ -303,16 +304,16 @@ object ProcessAgentPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (2 shl FIELD_SHIFT) or 2 -> id = input.readString()
-                (FIELD_3 shl FIELD_SHIFT) or 2 -> name = input.readString()
-                (FIELD_4 shl FIELD_SHIFT) or 2 -> image = input.readString()
-                (FIELD_6 shl FIELD_SHIFT) or 0 -> memLimit = input.readUInt64()
-                (FIELD_8 shl FIELD_SHIFT) or 0 -> state = input.readEnum()
-                (PROTO_FIELD_16 shl FIELD_SHIFT) or PROTO_WIRE_FLOAT -> netRcvdBps = input.readFloat()
-                (PROTO_FIELD_17 shl FIELD_SHIFT) or PROTO_WIRE_FLOAT -> netSentBps = input.readFloat()
-                (PROTO_FIELD_20 shl FIELD_SHIFT) or PROTO_WIRE_FLOAT -> totalPct = input.readFloat()
-                (PROTO_FIELD_21 shl FIELD_SHIFT) or 0 -> memRss = input.readUInt64()
-                (PROTO_FIELD_26 shl FIELD_SHIFT) or 2 -> tags += input.readString()
+                Wire.tag(2, Wire.WIRE_LENGTH_DELIMITED) -> id = input.readString()
+                Wire.tag(FIELD_3, Wire.WIRE_LENGTH_DELIMITED) -> name = input.readString()
+                Wire.tag(FIELD_4, Wire.WIRE_LENGTH_DELIMITED) -> image = input.readString()
+                Wire.tag(FIELD_6, Wire.WIRE_VARINT) -> memLimit = input.readUInt64()
+                Wire.tag(FIELD_8, Wire.WIRE_VARINT) -> state = input.readEnum()
+                Wire.tag(PROTO_FIELD_16, PROTO_WIRE_FLOAT) -> netRcvdBps = input.readFloat()
+                Wire.tag(PROTO_FIELD_17, PROTO_WIRE_FLOAT) -> netSentBps = input.readFloat()
+                Wire.tag(PROTO_FIELD_20, PROTO_WIRE_FLOAT) -> totalPct = input.readFloat()
+                Wire.tag(PROTO_FIELD_21, Wire.WIRE_VARINT) -> memRss = input.readUInt64()
+                Wire.tag(PROTO_FIELD_26, Wire.WIRE_LENGTH_DELIMITED) -> tags += input.readString()
                 else -> input.skipField(tag)
             }
         }
@@ -343,8 +344,8 @@ object ProcessAgentPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (2 shl FIELD_SHIFT) or 2 -> hostName = input.readString()
-                (FIELD_3 shl FIELD_SHIFT) or 2 ->
+                Wire.tag(2, Wire.WIRE_LENGTH_DELIMITED) -> hostName = input.readString()
+                Wire.tag(FIELD_3, Wire.WIRE_LENGTH_DELIMITED) ->
                     processes += decodeProcess(input.readByteArray())
                 else -> input.skipField(tag)
             }
@@ -365,8 +366,8 @@ object ProcessAgentPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl FIELD_SHIFT) or 2 -> hostName = input.readString()
-                (FIELD_4 shl FIELD_SHIFT) or 2 ->
+                Wire.tag(1, Wire.WIRE_LENGTH_DELIMITED) -> hostName = input.readString()
+                Wire.tag(FIELD_4, Wire.WIRE_LENGTH_DELIMITED) ->
                     processes += decodeProcessDiscovery(input.readByteArray())
                 else -> input.skipField(tag)
             }
@@ -385,14 +386,14 @@ object ProcessAgentPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl FIELD_SHIFT) or 0 -> pid = input.readInt32()
-                (2 shl FIELD_SHIFT) or 0 -> nsPid = input.readInt32()
-                (FIELD_4 shl FIELD_SHIFT) or 2 -> {
+                Wire.tag(1, Wire.WIRE_VARINT) -> pid = input.readInt32()
+                Wire.tag(2, Wire.WIRE_VARINT) -> nsPid = input.readInt32()
+                Wire.tag(FIELD_4, Wire.WIRE_LENGTH_DELIMITED) -> {
                     val command = decodeCommand(input.readByteArray())
                     cmdName = command.first
                     cmdFull = command.second
                 }
-                (FIELD_5 shl FIELD_SHIFT) or 2 -> userName = decodeProcessUser(input.readByteArray())
+                Wire.tag(FIELD_5, Wire.WIRE_LENGTH_DELIMITED) -> userName = decodeProcessUser(input.readByteArray())
                 else -> input.skipField(tag)
             }
         }
@@ -431,32 +432,32 @@ object ProcessAgentPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (2 shl FIELD_SHIFT) or 0 -> pid = input.readInt32()
-                (FIELD_4 shl FIELD_SHIFT) or 2 -> {
+                Wire.tag(2, Wire.WIRE_VARINT) -> pid = input.readInt32()
+                Wire.tag(FIELD_4, Wire.WIRE_LENGTH_DELIMITED) -> {
                     val r = decodeCommand(
                         input.readByteArray()
                     )
                     cmdName = r.first
                     cmdFull = r.second
                 }
-                (FIELD_5 shl FIELD_SHIFT) or 2 -> userName = decodeProcessUser(input.readByteArray())
-                (FIELD_7 shl FIELD_SHIFT) or 2 -> {
+                Wire.tag(FIELD_5, Wire.WIRE_LENGTH_DELIMITED) -> userName = decodeProcessUser(input.readByteArray())
+                Wire.tag(FIELD_7, Wire.WIRE_LENGTH_DELIMITED) -> {
                     val r = decodeMemoryStat(
                         input.readByteArray()
                     )
                     memRss = r.first
                     memVms = r.second
                 }
-                (FIELD_8 shl FIELD_SHIFT) or 2 -> {
+                Wire.tag(FIELD_8, Wire.WIRE_LENGTH_DELIMITED) -> {
                     val r = decodeCpuStat(
                         input.readByteArray()
                     )
                     cpuTotalPct = r.first
                     numThreads = r.second
                 }
-                (PROTO_FIELD_11 shl FIELD_SHIFT) or 0 -> openFdCount = input.readInt32()
-                (PROTO_FIELD_12 shl FIELD_SHIFT) or 0 -> state = input.readEnum()
-                (PROTO_FIELD_23 shl FIELD_SHIFT) or 2 -> tags += input.readString()
+                Wire.tag(PROTO_FIELD_11, Wire.WIRE_VARINT) -> openFdCount = input.readInt32()
+                Wire.tag(PROTO_FIELD_12, Wire.WIRE_VARINT) -> state = input.readEnum()
+                Wire.tag(PROTO_FIELD_23, Wire.WIRE_LENGTH_DELIMITED) -> tags += input.readString()
                 else -> input.skipField(tag)
             }
         }
@@ -483,8 +484,8 @@ object ProcessAgentPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl FIELD_SHIFT) or 2 -> args += input.readString()
-                (FIELD_8 shl FIELD_SHIFT) or 2 -> exe = input.readString()
+                Wire.tag(1, Wire.WIRE_LENGTH_DELIMITED) -> args += input.readString()
+                Wire.tag(FIELD_8, Wire.WIRE_LENGTH_DELIMITED) -> exe = input.readString()
                 else -> input.skipField(tag)
             }
         }
@@ -498,7 +499,7 @@ object ProcessAgentPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl FIELD_SHIFT) or 2 -> return input.readString()
+                Wire.tag(1, Wire.WIRE_LENGTH_DELIMITED) -> return input.readString()
                 else -> input.skipField(tag)
             }
         }
@@ -513,8 +514,8 @@ object ProcessAgentPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (1 shl FIELD_SHIFT) or 0 -> rss = input.readUInt64()
-                (2 shl FIELD_SHIFT) or 0 -> vms = input.readUInt64()
+                Wire.tag(1, Wire.WIRE_VARINT) -> rss = input.readUInt64()
+                Wire.tag(2, Wire.WIRE_VARINT) -> vms = input.readUInt64()
                 else -> input.skipField(tag)
             }
         }
@@ -529,8 +530,8 @@ object ProcessAgentPayloadDecoder {
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
                 0 -> break
-                (2 shl FIELD_SHIFT) or PROTO_WIRE_FLOAT -> totalPct = input.readFloat()
-                (FIELD_5 shl FIELD_SHIFT) or 0 -> numThreads = input.readInt32()
+                Wire.tag(2, PROTO_WIRE_FLOAT) -> totalPct = input.readFloat()
+                Wire.tag(FIELD_5, Wire.WIRE_VARINT) -> numThreads = input.readInt32()
                 else -> input.skipField(tag)
             }
         }

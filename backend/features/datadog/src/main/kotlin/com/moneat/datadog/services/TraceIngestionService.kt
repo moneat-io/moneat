@@ -16,6 +16,8 @@
 
 package com.moneat.datadog.services
 
+import com.moneat.datadog.decompression.ProtoWireConstants as Wire
+
 import com.google.protobuf.CodedInputStream
 import com.moneat.apm.services.ApmServiceMapRollups
 import com.moneat.apm.services.ApmServiceMapSpan
@@ -26,7 +28,6 @@ import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_5
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_6
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_7
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_8
-import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_SHIFT
 import com.moneat.datadog.models.DdApmErrorGroup
 import com.moneat.datadog.models.DdApmErrorsResponse
 import com.moneat.datadog.models.DdApmFacetItem
@@ -1802,7 +1803,7 @@ object TraceIngestionService {
         val traces = mutableListOf<List<DdSpan>>()
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
-                (FIELD_5 shl FIELD_SHIFT) or 2 -> {
+                Wire.tag(FIELD_5, Wire.WIRE_LENGTH_DELIMITED) -> {
                     val payloadBytes = input.readBytes().toByteArray()
                     traces.addAll(decodeTracerPayload(payloadBytes))
                 }
@@ -1818,7 +1819,7 @@ object TraceIngestionService {
         val traces = mutableListOf<List<DdSpan>>()
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
-                (FIELD_6 shl FIELD_SHIFT) or 2 -> {
+                Wire.tag(FIELD_6, Wire.WIRE_LENGTH_DELIMITED) -> {
                     val chunkBytes = input.readBytes().toByteArray()
                     val spans = decodeTraceChunk(chunkBytes)
                     if (spans.isNotEmpty()) traces.add(spans)
@@ -1835,7 +1836,7 @@ object TraceIngestionService {
         val spans = mutableListOf<DdSpan>()
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
-                (FIELD_3 shl FIELD_SHIFT) or 2 -> {
+                Wire.tag(FIELD_3, Wire.WIRE_LENGTH_DELIMITED) -> {
                     val spanBytes = input.readBytes().toByteArray()
                     spans.add(decodeProtobufSpan(spanBytes))
                 }
@@ -1865,24 +1866,24 @@ object TraceIngestionService {
         val metrics = mutableMapOf<String, Double>()
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
-                (1 shl FIELD_SHIFT) or 2 -> service = input.readString()
-                (2 shl FIELD_SHIFT) or 2 -> name = input.readString()
-                (FIELD_3 shl FIELD_SHIFT) or 2 -> resource = input.readString()
-                (FIELD_4 shl FIELD_SHIFT) or 0 -> traceId = input.readUInt64().toULong()
-                (FIELD_5 shl FIELD_SHIFT) or 0 -> spanId = input.readUInt64().toULong()
-                (FIELD_6 shl FIELD_SHIFT) or 0 -> parentId = input.readUInt64().toULong()
-                (FIELD_7 shl FIELD_SHIFT) or 0 -> start = input.readInt64()
-                (FIELD_8 shl FIELD_SHIFT) or 0 -> duration = input.readInt64()
-                (PROTO_FIELD_9 shl FIELD_SHIFT) or 0 -> error = input.readInt32()
-                (PROTO_FIELD_10 shl FIELD_SHIFT) or 2 -> {
+                Wire.tag(1, Wire.WIRE_LENGTH_DELIMITED) -> service = input.readString()
+                Wire.tag(2, Wire.WIRE_LENGTH_DELIMITED) -> name = input.readString()
+                Wire.tag(FIELD_3, Wire.WIRE_LENGTH_DELIMITED) -> resource = input.readString()
+                Wire.tag(FIELD_4, Wire.WIRE_VARINT) -> traceId = input.readUInt64().toULong()
+                Wire.tag(FIELD_5, Wire.WIRE_VARINT) -> spanId = input.readUInt64().toULong()
+                Wire.tag(FIELD_6, Wire.WIRE_VARINT) -> parentId = input.readUInt64().toULong()
+                Wire.tag(FIELD_7, Wire.WIRE_VARINT) -> start = input.readInt64()
+                Wire.tag(FIELD_8, Wire.WIRE_VARINT) -> duration = input.readInt64()
+                Wire.tag(PROTO_FIELD_9, Wire.WIRE_VARINT) -> error = input.readInt32()
+                Wire.tag(PROTO_FIELD_10, Wire.WIRE_LENGTH_DELIMITED) -> {
                     val (k, v) = decodeStringStringEntry(input.readBytes().toByteArray())
                     meta[k] = v
                 }
-                (PROTO_FIELD_11 shl FIELD_SHIFT) or 2 -> {
+                Wire.tag(PROTO_FIELD_11, Wire.WIRE_LENGTH_DELIMITED) -> {
                     val (k, v) = decodeStringDoubleEntry(input.readBytes().toByteArray())
                     metrics[k] = v
                 }
-                (PROTO_FIELD_12 shl FIELD_SHIFT) or 2 -> type = input.readString()
+                Wire.tag(PROTO_FIELD_12, Wire.WIRE_LENGTH_DELIMITED) -> type = input.readString()
                 else -> input.skipField(tag)
             }
         }
@@ -1901,8 +1902,8 @@ object TraceIngestionService {
         var value = ""
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
-                (1 shl FIELD_SHIFT) or 2 -> key = input.readString()
-                (2 shl FIELD_SHIFT) or 2 -> value = input.readString()
+                Wire.tag(1, Wire.WIRE_LENGTH_DELIMITED) -> key = input.readString()
+                Wire.tag(2, Wire.WIRE_LENGTH_DELIMITED) -> value = input.readString()
                 else -> input.skipField(tag)
             }
         }
@@ -1916,8 +1917,8 @@ object TraceIngestionService {
         var value = 0.0
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
-                (1 shl FIELD_SHIFT) or 2 -> key = input.readString()
-                (2 shl FIELD_SHIFT) or 1 -> value = input.readDouble()
+                Wire.tag(1, Wire.WIRE_LENGTH_DELIMITED) -> key = input.readString()
+                Wire.tag(2, Wire.WIRE_FIXED64) -> value = input.readDouble()
                 else -> input.skipField(tag)
             }
         }

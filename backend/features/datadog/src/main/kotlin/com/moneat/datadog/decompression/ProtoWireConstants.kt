@@ -18,6 +18,10 @@ package com.moneat.datadog.decompression
 
 object ProtoWireConstants {
     const val FIELD_SHIFT = 3
+    const val WIRE_VARINT = 0
+    const val WIRE_FIXED64 = 1
+    const val WIRE_LENGTH_DELIMITED = 2
+    const val WIRE_FIXED32 = 5
     const val FIELD_3 = 3
     const val FIELD_4 = 4
     const val FIELD_5 = 5
@@ -25,4 +29,6 @@ object ProtoWireConstants {
     const val FIELD_7 = 7
     const val FIELD_8 = 8
     const val FIELD_14 = 14
+
+    fun tag(fieldNumber: Int, wireType: Int): Int = (fieldNumber shl FIELD_SHIFT) or wireType
 }
