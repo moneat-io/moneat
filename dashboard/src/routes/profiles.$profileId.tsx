@@ -246,14 +246,12 @@ function ProfileDetailPage() {
               <h1 className="text-xl font-semibold tracking-tight leading-tight">
                 {profile.service}
               </h1>
-              {profile && (
-                <Badge
-                  variant="outline"
-                  className={`text-[11px] border ${profileTypeBadgeClass(profile.profileType)}`}
-                >
-                  {profile.profileType}
-                </Badge>
-              )}
+              <Badge
+                variant="outline"
+                className={`text-[11px] border ${profileTypeBadgeClass(profile.profileType)}`}
+              >
+                {profile.profileType}
+              </Badge>
               {profile?.language && (
                 <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
                   {profile.language}
