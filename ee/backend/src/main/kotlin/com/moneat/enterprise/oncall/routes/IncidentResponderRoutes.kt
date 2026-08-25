@@ -65,7 +65,7 @@ private fun Route.registerIncidentRoleRoutes(
     get("/{id}/roles") {
         val context = call.requireUserContext() ?: return@get
         val incidentId = call.requireIncidentId(context.organizationId) ?: return@get
-        call.respond(responderService.listAssignments(context.organizationId, incidentId))
+        call.respond(responderService.listAssignments(context.organizationId, incidentId, context.userId))
     }
     post("/{id}/roles/{roleId}/assign") {
         val context = call.requireUserContext() ?: return@post
@@ -84,7 +84,7 @@ private fun Route.registerIncidentRoleRoutes(
                     expectedVersion = request.expectedVersion,
                 ),
             )
-            call.respond(responderService.listAssignments(context.organizationId, incidentId))
+            call.respond(responderService.listAssignments(context.organizationId, incidentId, context.userId))
         }
     }
     post("/{id}/roles/{roleId}/claim") {
@@ -102,7 +102,7 @@ private fun Route.registerIncidentRoleRoutes(
                     expectedVersion = request.expectedVersion,
                 ),
             )
-            call.respond(responderService.listAssignments(context.organizationId, incidentId))
+            call.respond(responderService.listAssignments(context.organizationId, incidentId, context.userId))
         }
     }
     delete("/{id}/roles/{roleId}") {
@@ -146,7 +146,7 @@ private fun Route.registerIncidentRoleRoutes(
                     expectedVersion = request.expectedVersion,
                 ),
             )
-            call.respond(responderService.listAssignments(context.organizationId, incidentId))
+            call.respond(responderService.listAssignments(context.organizationId, incidentId, context.userId))
         }
     }
 }

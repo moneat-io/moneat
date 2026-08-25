@@ -280,7 +280,7 @@ class IncidentRoutesTest {
             "claim-commander",
         ).jsonArray()
         assertEquals(1, assignments.size)
-        assertTrue("privateInstructions" !in assignments.single().jsonObject.getValue("role").jsonObject)
+        assertTrue("privateInstructions" in assignments.single().jsonObject.getValue("role").jsonObject)
 
         val participants = postJson(
             "/v1/on-call/incidents/$incidentId/participants",
