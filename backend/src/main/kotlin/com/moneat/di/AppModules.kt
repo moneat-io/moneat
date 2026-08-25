@@ -59,7 +59,7 @@ val sharedModule = module {
 
     single { EmailService() }
     single { SlackInstallationService() }
-    single { SlackService(get()) }
+    single { SlackService(installationService = get()) }
     single { SlackInboundGateway() }
     single { SlackIdentityResolver() }
     single { SlackOutboundDeliveryService() }

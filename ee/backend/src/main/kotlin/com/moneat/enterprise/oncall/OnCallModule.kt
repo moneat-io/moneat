@@ -81,7 +81,7 @@ class OnCallModule :
     private val onCallIncidentService = OnCallIncidentService()
     private val pushNotificationService by lazy { PushNotificationService() }
     private val slackInstallationService by lazy { SlackInstallationService() }
-    private val slackService by lazy { SlackService(slackInstallationService) }
+    private val slackService by lazy { SlackService(installationService = slackInstallationService) }
     private val redisClient by lazy { RedisClient() }
     private val escalationEngineDelegate =
         lazy {
