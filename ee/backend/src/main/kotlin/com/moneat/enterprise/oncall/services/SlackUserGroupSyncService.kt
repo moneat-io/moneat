@@ -137,7 +137,7 @@ class SlackUserGroupSyncService(
             buildList {
                 add(slackConfig.botUserId)
                 responders.forEach { responder ->
-                    val slackId = getSlackUserId(responder.internalUserId)
+                    val slackId = getSlackUserId(responder.internalUserId, schedule.slackInstallationId)
                     if (slackId != null) {
                         add(slackId)
                     } else {

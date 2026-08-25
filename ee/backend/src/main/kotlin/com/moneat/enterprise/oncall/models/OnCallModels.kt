@@ -352,7 +352,10 @@ data class OnCallSchedule(
     val slackInstallationId: String?,
     val createdAt: String,
     val updatedAt: String,
-)
+) {
+    @Transient
+    var organizationId: Int = 0
+}
 
 // ===== On-Call Incidents (User Declared) =====
 
