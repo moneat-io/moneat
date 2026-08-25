@@ -11,8 +11,9 @@ import com.moneat.enterprise.incidents.models.NativeIncidentStatus
 import com.moneat.enterprise.incidents.models.NativeIncidentUpdateRequests
 import com.moneat.enterprise.oncall.models.OnCallIncidents
 import kotlinx.serialization.json.JsonPrimitive
-import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
@@ -29,11 +30,11 @@ class IncidentUpdateReminderService(
         transaction {
             NativeIncidentUpdateRequests
                 .selectAll()
-                .where { NativeIncidentUpdateRequests.status eq IncidentUpdateRequestStatus.OPEN.wire }
-                .mapNotNull { request ->
-                    if (request[NativeIncidentUpdateRequests.dueAt] > now) return@mapNotNull null
-                    processRequest(request[NativeIncidentUpdateRequests.id].value, now)
+                .where {
+                    (NativeIncidentUpdateRequests.status eq IncidentUpdateRequestStatus.OPEN.wire) and
+                        (NativeIncidentUpdateRequests.dueAt lessEq now)
                 }
+                .map { request -> processRequest(request[NativeIncidentUpdateRequests.id].value, now) }
                 .count { it }
         }
 

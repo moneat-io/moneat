@@ -376,14 +376,7 @@ class IncidentCommandService(
         require(command.message?.length ?: 0 <= MAX_UPDATE_MESSAGE_LENGTH) {
             "Incident update request message is too long"
         }
-        NativeIncidentUpdateRequests.update({
-            (NativeIncidentUpdateRequests.organizationId eq command.actor.organizationId) and
-                (NativeIncidentUpdateRequests.incidentId eq command.incidentId) and
-                (NativeIncidentUpdateRequests.status eq IncidentUpdateRequestStatus.OPEN.wire)
-        }) {
-            it[status] = IncidentUpdateRequestStatus.CANCELLED.wire
-            it[updatedAt] = now
-        }
+        cancelActiveUpdateRequests(command.actor.organizationId, command.incidentId, now)
         NativeIncidentUpdateRequests.insert {
             it[resourceId] = Uuid.random()
             it[organizationId] = command.actor.organizationId
@@ -409,9 +402,16 @@ class IncidentCommandService(
     }
 
     private fun pauseUpdateReminders(command: PauseIncidentUpdateRemindersCommand): IncidentMutation {
-        requireIncident(command)
+        val current = requireIncident(command)
         val now = Clock.System.now()
+        val nextVersion = current[OnCallIncidents.version] + 1
         val target = if (command.paused) IncidentUpdateRequestStatus.PAUSED else IncidentUpdateRequestStatus.OPEN
+        val updated = OnCallIncidents.update({ versionPredicate(command, current) }) {
+            it[OnCallIncidents.updateReminderPaused] = command.paused
+            it[version] = nextVersion
+            it[updatedAt] = now
+        }
+        requireVersionUpdate(updated, command.incidentId)
         setUpdateRequestStatus(
             UpdateRequestStatusChange(
                 organizationId = command.actor.organizationId,
@@ -422,14 +422,21 @@ class IncidentCommandService(
                 dueAt = command.rescheduleAt,
             ),
         )
-        return appendVersionedEvent(
+        val details = buildMap {
+            put("paused", JsonPrimitive(command.paused))
+            command.rescheduleAt?.let { put("rescheduleAt", JsonPrimitive(it.toString())) }
+        } + ("origin" to JsonPrimitive(command.actor.origin))
+        insertTimelineEvent(
             command,
-            "UPDATE_REMINDERS_${if (command.paused) "PAUSED" else "RESUMED"}",
-            buildMap {
-                put("paused", JsonPrimitive(command.paused))
-                command.rescheduleAt?.let { put("rescheduleAt", JsonPrimitive(it.toString())) }
-            },
+            CommandTimelineEvent(
+                command.incidentId,
+                command.commandKey,
+                "UPDATE_REMINDERS_${if (command.paused) "PAUSED" else "RESUMED"}",
+                details,
+                now,
+            ),
         )
+        return loadMutation(command.incidentId)
     }
 
     private fun fulfillUpdateRequests(organizationId: Int, incidentId: Int, now: kotlin.time.Instant) {
@@ -453,6 +460,20 @@ class IncidentCommandService(
             it[status] = change.to.wire
             change.dueAt?.let { value -> it[NativeIncidentUpdateRequests.dueAt] = value }
             it[updatedAt] = change.now
+        }
+    }
+
+    private fun cancelActiveUpdateRequests(organizationId: Int, incidentId: Int, now: kotlin.time.Instant) {
+        NativeIncidentUpdateRequests.update({
+            (NativeIncidentUpdateRequests.organizationId eq organizationId) and
+                (NativeIncidentUpdateRequests.incidentId eq incidentId) and
+                (NativeIncidentUpdateRequests.status inList listOf(
+                    IncidentUpdateRequestStatus.OPEN.wire,
+                    IncidentUpdateRequestStatus.PAUSED.wire,
+                ))
+        }) {
+            it[status] = IncidentUpdateRequestStatus.CANCELLED.wire
+            it[updatedAt] = now
         }
     }
 
@@ -494,16 +515,7 @@ class IncidentCommandService(
                 NativeIncidentStatus.MERGED,
                 NativeIncidentStatus.CLOSED,
             )) {
-            setUpdateRequestStatus(
-                UpdateRequestStatusChange(
-                    organizationId = command.actor.organizationId,
-                    incidentId = command.incidentId,
-                    from = IncidentUpdateRequestStatus.OPEN,
-                    to = IncidentUpdateRequestStatus.CANCELLED,
-                    now = now,
-                    dueAt = null,
-                ),
-            )
+            cancelActiveUpdateRequests(command.actor.organizationId, command.incidentId, now)
         }
         insertTimelineEvent(
             command,

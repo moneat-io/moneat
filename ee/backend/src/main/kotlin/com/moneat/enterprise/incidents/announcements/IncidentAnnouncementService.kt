@@ -545,6 +545,7 @@ class IncidentAnnouncementService(
             "INCIDENT_ACCEPT",
             "INCIDENT_UPDATE",
             "INCIDENT_REQUEST_UPDATE",
+            "INCIDENT_UPDATE_REMINDER",
             "INCIDENT_PAUSE_UPDATE_REMINDERS",
             "INCIDENT_TRANSITION",
             "INCIDENT_RESOLVE",

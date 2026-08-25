@@ -205,7 +205,9 @@ class IncidentCommandServiceTest {
             assertNotNull(request[NativeIncidentUpdateRequests.lastRemindedAt])
             assertEquals(
                 "INCIDENT_UPDATE_REMINDER",
-                NativeIncidentOutboxEvents.selectAll().last()[NativeIncidentOutboxEvents.eventType],
+                NativeIncidentOutboxEvents.selectAll()
+                    .where { NativeIncidentOutboxEvents.eventType eq "INCIDENT_UPDATE_REMINDER" }
+                    .single()[NativeIncidentOutboxEvents.eventType],
             )
         }
 
@@ -224,6 +226,7 @@ class IncidentCommandServiceTest {
                 IncidentUpdateRequestStatus.PAUSED.wire,
                 NativeIncidentUpdateRequests.selectAll().single()[NativeIncidentUpdateRequests.status],
             )
+            assertTrue(OnCallIncidents.selectAll().single()[OnCallIncidents.updateReminderPaused])
         }
     }
 

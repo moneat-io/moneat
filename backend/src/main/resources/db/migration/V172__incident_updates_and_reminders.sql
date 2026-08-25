@@ -28,5 +28,7 @@ CREATE TABLE native_incident_update_requests (
 
 CREATE INDEX idx_native_incident_update_request_due
     ON native_incident_update_requests(organization_id, status, due_at);
+CREATE INDEX idx_native_incident_update_request_worker_due
+    ON native_incident_update_requests(status, due_at);
 CREATE INDEX idx_native_incident_update_request_incident
     ON native_incident_update_requests(incident_id, status);
