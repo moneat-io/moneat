@@ -46,6 +46,8 @@ object IncidentTriageCapabilityPolicy {
             IncidentCommandType.DECLINE,
             IncidentCommandType.MERGE,
             IncidentCommandType.UPDATE,
+            IncidentCommandType.REQUEST_UPDATE,
+            IncidentCommandType.PAUSE_UPDATE_REMINDERS,
             IncidentCommandType.TRANSITION,
             IncidentCommandType.RESOLVE,
             IncidentCommandType.CANCEL,

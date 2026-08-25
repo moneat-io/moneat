@@ -14,6 +14,9 @@ import com.moneat.enterprise.incidents.announcements.IncidentAnnouncementService
 import com.moneat.enterprise.incidents.commands.DeclareIncidentCommand
 import com.moneat.enterprise.incidents.commands.DeclineIncidentCommand
 import com.moneat.enterprise.incidents.commands.MergeIncidentCommand
+import com.moneat.enterprise.incidents.commands.UpdateIncidentCommand
+import com.moneat.enterprise.incidents.commands.RequestIncidentUpdateCommand
+import com.moneat.enterprise.incidents.commands.PauseIncidentUpdateRemindersCommand
 import com.moneat.enterprise.incidents.commands.IncidentCommand
 import com.moneat.enterprise.incidents.commands.IncidentCommandActor
 import com.moneat.enterprise.incidents.commands.IncidentCommandConflictException
@@ -76,6 +79,7 @@ import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.uuid.Uuid
+import kotlin.time.Instant
 
 private const val JWT_AUTH_PROVIDER = "auth-jwt"
 
@@ -210,6 +214,34 @@ data class MergeIncidentRequest(
 )
 
 @Serializable
+data class IncidentUpdateRequest(
+    val message: String? = null,
+    val title: String? = null,
+    val description: String? = null,
+    val summary: String? = null,
+    val severity: String? = null,
+    val customerImpact: String? = null,
+    val nextUpdateAt: String? = null,
+    val clearNextUpdateAt: Boolean = false,
+    val pauseUpdateReminders: Boolean? = null,
+    val status: String? = null,
+    val expectedVersion: Int? = null,
+)
+
+@Serializable
+data class IncidentUpdateRequestRequest(
+    val message: String? = null,
+    val dueAt: String? = null,
+    val expectedVersion: Int? = null,
+)
+
+@Serializable
+data class IncidentUpdateReminderRequest(
+    val rescheduleAt: String? = null,
+    val expectedVersion: Int? = null,
+)
+
+@Serializable
 data class IncidentResponsePolicyRequest(
     val commanderPolicyId: String? = null,
     val ownershipPolicyId: String? = null,
@@ -325,6 +357,7 @@ private fun Route.registerDeclaredIncidentRoutes(
             registerDeclareIncidentRoute(services.incidentService, services.configurationService)
             registerListDeclaredIncidentsRoute(services.incidentService)
             registerGetDeclaredIncidentRoute(services.incidentService)
+            registerIncidentUpdateRoutes(services.incidentService)
             registerResolveDeclaredIncidentRoute(services.incidentService)
             registerTriageCommandRoutes(services.incidentService)
             registerAddAlertToIncidentRoute(services.alertServiceProvider, services.incidentService)
@@ -1087,6 +1120,83 @@ private fun Route.registerTriageCommandRoutes(onCallIncidentService: OnCallIncid
     registerAcceptIncidentRoute(onCallIncidentService)
     registerDeclineIncidentRoute(onCallIncidentService)
     registerMergeIncidentRoute(onCallIncidentService)
+}
+
+private fun Route.registerIncidentUpdateRoutes(onCallIncidentService: OnCallIncidentService) {
+    post("/{id}/updates") {
+        val context = call.requireUserContext() ?: return@post
+        val incidentId = call.requireIncidentId(context.organizationId) ?: return@post
+        val request = call.receive<IncidentUpdateRequest>()
+        val status = request.status?.let {
+            NativeIncidentStatus.fromWire(it.trim().uppercase())
+                ?: throw IllegalArgumentException("Invalid incident status")
+        }
+        val nextUpdateAt = request.nextUpdateAt?.let(Instant::parse)
+        call.runIncidentCommand(onCallIncidentService, incidentId) {
+            UpdateIncidentCommand(
+                commandKey = call.incidentCommandKey("update"),
+                actor = IncidentCommandActor(context.organizationId, context.userId, "REST"),
+                incidentId = incidentId,
+                expectedVersion = request.expectedVersion,
+                title = request.title,
+                description = request.description,
+                summary = request.summary,
+                severity = request.severity,
+                message = request.message,
+                customerImpact = request.customerImpact,
+                nextUpdateAt = nextUpdateAt,
+                clearNextUpdateAt = request.clearNextUpdateAt,
+                pauseUpdateReminders = request.pauseUpdateReminders,
+                status = status,
+            )
+        }
+    }
+    post("/{id}/update-requests") {
+        val context = call.requireUserContext() ?: return@post
+        val incidentId = call.requireIncidentId(context.organizationId) ?: return@post
+        val request = call.receive<IncidentUpdateRequestRequest>()
+        val dueAt = request.dueAt?.let(Instant::parse)
+        call.runIncidentCommand(onCallIncidentService, incidentId) {
+            RequestIncidentUpdateCommand(
+                commandKey = call.incidentCommandKey("request-update"),
+                actor = IncidentCommandActor(context.organizationId, context.userId, "REST"),
+                incidentId = incidentId,
+                message = request.message,
+                dueAt = dueAt,
+                expectedVersion = request.expectedVersion,
+            )
+        }
+    }
+    post("/{id}/update-reminders/pause") {
+        val context = call.requireUserContext() ?: return@post
+        val incidentId = call.requireIncidentId(context.organizationId) ?: return@post
+        val request = call.receiveNullable<IncidentUpdateReminderRequest>() ?: IncidentUpdateReminderRequest()
+        call.runIncidentCommand(onCallIncidentService, incidentId) {
+            PauseIncidentUpdateRemindersCommand(
+                commandKey = call.incidentCommandKey("pause-update-reminders"),
+                actor = IncidentCommandActor(context.organizationId, context.userId, "REST"),
+                incidentId = incidentId,
+                paused = true,
+                rescheduleAt = request.rescheduleAt?.let(Instant::parse),
+                expectedVersion = request.expectedVersion,
+            )
+        }
+    }
+    post("/{id}/update-reminders/resume") {
+        val context = call.requireUserContext() ?: return@post
+        val incidentId = call.requireIncidentId(context.organizationId) ?: return@post
+        val request = call.receiveNullable<IncidentUpdateReminderRequest>() ?: IncidentUpdateReminderRequest()
+        call.runIncidentCommand(onCallIncidentService, incidentId) {
+            PauseIncidentUpdateRemindersCommand(
+                commandKey = call.incidentCommandKey("resume-update-reminders"),
+                actor = IncidentCommandActor(context.organizationId, context.userId, "REST"),
+                incidentId = incidentId,
+                paused = false,
+                rescheduleAt = request.rescheduleAt?.let(Instant::parse),
+                expectedVersion = request.expectedVersion,
+            )
+        }
+    }
 }
 
 private fun Route.registerAcceptIncidentRoute(onCallIncidentService: OnCallIncidentService) {

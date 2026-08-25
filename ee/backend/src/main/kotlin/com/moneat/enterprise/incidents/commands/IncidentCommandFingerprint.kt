@@ -31,6 +31,8 @@ internal object IncidentCommandFingerprint {
             is DeclineIncidentCommand,
             is MergeIncidentCommand,
             is UpdateIncidentCommand,
+            is RequestIncidentUpdateCommand,
+            is PauseIncidentUpdateRemindersCommand,
             is TransitionIncidentCommand,
             -> primaryParts(command)
             is AssignIncidentRoleCommand,
@@ -80,7 +82,17 @@ internal object IncidentCommandFingerprint {
                     command.mode?.wire,
                     command.visibility?.wire,
                     command.incidentType,
+                    command.message,
+                    command.customerImpact,
+                    command.nextUpdateAt?.toString(),
+                    command.clearNextUpdateAt.toString(),
+                    command.pauseUpdateReminders?.toString(),
+                    command.status?.wire,
                 )
+            is RequestIncidentUpdateCommand ->
+                listOf(command.incidentId.toString(), command.message, command.dueAt?.toString())
+            is PauseIncidentUpdateRemindersCommand ->
+                listOf(command.incidentId.toString(), command.paused.toString(), command.rescheduleAt?.toString())
             is TransitionIncidentCommand ->
                 listOf(command.incidentId.toString(), command.targetStatus.wire, command.note)
             else -> error("Unsupported primary incident command")

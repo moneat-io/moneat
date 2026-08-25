@@ -215,6 +215,10 @@ export interface OnCallIncident {
   title: string
   description?: string
   summary?: string
+  customerImpact?: string
+  nextUpdateAt?: string
+  updateReminderPaused?: boolean
+  lastUpdateAt?: string
   // Triage incidents stay unclassified until they are accepted.
   severity?: string
   status: OnCallIncidentStatus
@@ -240,6 +244,31 @@ export interface OnCallIncident {
   alerts?: Array<{ id: string; title: string; status: string; priority?: string }>
   createdAt: string
   updatedAt: string
+}
+
+export interface IncidentUpdateInput {
+  message?: string
+  title?: string
+  description?: string
+  summary?: string
+  severity?: string
+  customerImpact?: string
+  nextUpdateAt?: string
+  clearNextUpdateAt?: boolean
+  pauseUpdateReminders?: boolean
+  status?: OnCallIncidentStatus
+  expectedVersion?: number
+}
+
+export interface IncidentUpdateRequestInput {
+  message?: string
+  dueAt?: string
+  expectedVersion?: number
+}
+
+export interface IncidentUpdateReminderInput {
+  rescheduleAt?: string
+  expectedVersion?: number
 }
 
 export interface OnCallIncidentDetail extends OnCallIncident {

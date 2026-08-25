@@ -9,6 +9,8 @@ import com.moneat.enterprise.incidents.models.NativeIncidentRoleAssignments
 import com.moneat.enterprise.incidents.models.NativeIncidentRoleDefinitions
 import com.moneat.enterprise.incidents.response.NativeIncidentResponseActivations
 import com.moneat.enterprise.incidents.models.NativeIncidentStatus
+import com.moneat.enterprise.incidents.models.IncidentUpdateRequestStatus
+import com.moneat.enterprise.incidents.models.NativeIncidentUpdateRequests
 import com.moneat.enterprise.oncall.models.OnCallIncidents
 import com.moneat.config.EnvConfig
 import com.moneat.notifications.services.SlackOutboundDeliveryService
@@ -304,6 +306,11 @@ class IncidentAnnouncementService(
                 (NativeIncidentResponseActivations.organizationId eq event.organizationId) and
                     (NativeIncidentResponseActivations.incidentId eq event.incidentId)
             }.maxByOrNull { it[NativeIncidentResponseActivations.createdAt] }
+            val openUpdateRequest = NativeIncidentUpdateRequests.selectAll().where {
+                (NativeIncidentUpdateRequests.organizationId eq event.organizationId) and
+                    (NativeIncidentUpdateRequests.incidentId eq event.incidentId) and
+                    (NativeIncidentUpdateRequests.status eq IncidentUpdateRequestStatus.OPEN.wire)
+            }.maxByOrNull { it[NativeIncidentUpdateRequests.createdAt] }
             IncidentSnapshot(
                 resourceId = row[OnCallIncidents.resourceId].toString(),
                 title = row[OnCallIncidents.title],
@@ -314,7 +321,12 @@ class IncidentAnnouncementService(
                 mode = row[OnCallIncidents.mode],
                 visibility = row[OnCallIncidents.visibility],
                 reporter = row[OnCallIncidents.declaredBy].toString(),
-                fields = fields,
+                fields = fields + mapOf(
+                    "customer_impact" to (row[OnCallIncidents.customerImpact] ?: ""),
+                    "next_update_at" to (row[OnCallIncidents.nextUpdateAt]?.toString() ?: ""),
+                    "update_reminder_paused" to row[OnCallIncidents.updateReminderPaused].toString(),
+                    "update_requested" to (openUpdateRequest?.get(NativeIncidentUpdateRequests.message) ?: ""),
+                ),
                 roles = roles,
                 escalation = activation?.let {
                     "${it[NativeIncidentResponseActivations.acknowledgedCount]}/" +
@@ -405,7 +417,17 @@ class IncidentAnnouncementService(
                             add(field("Channel", destination.channelId))
                             add(field("Escalation", snapshot.escalation ?: "Not activated"))
                             add(field("Roles", snapshot.roles.ifEmpty { listOf("Unassigned") }.joinToString("; ")))
+                            snapshot.fields["customer_impact"]?.takeIf(String::isNotBlank)?.let {
+                                add(field("Customer impact", it))
+                            }
+                            snapshot.fields["next_update_at"]?.takeIf(String::isNotBlank)?.let {
+                                add(field("Next update", it))
+                            }
+                            snapshot.fields["update_requested"]?.takeIf(String::isNotBlank)?.let {
+                                add(field("Update requested", it))
+                            }
                             snapshot.fields.entries.take(MAX_CUSTOM_FIELDS).forEach { (key, value) ->
+                                if (key in RESERVED_INCIDENT_FIELDS) return@forEach
                                 add(field(key.replace('_', ' ').replaceFirstChar(Char::uppercase), value))
                             }
                         })
@@ -522,6 +544,8 @@ class IncidentAnnouncementService(
         eventType in setOf(
             "INCIDENT_ACCEPT",
             "INCIDENT_UPDATE",
+            "INCIDENT_REQUEST_UPDATE",
+            "INCIDENT_PAUSE_UPDATE_REMINDERS",
             "INCIDENT_TRANSITION",
             "INCIDENT_RESOLVE",
             "INCIDENT_CLOSE",
@@ -618,6 +642,12 @@ class IncidentAnnouncementService(
         private const val MAX_SUMMARY_LENGTH = 1_500
         private const val MAX_FIELD_LENGTH = 200
         private const val MAX_CUSTOM_FIELDS = 3
+        private val RESERVED_INCIDENT_FIELDS = setOf(
+            "customer_impact",
+            "next_update_at",
+            "update_reminder_paused",
+            "update_requested",
+        )
         private const val MAX_QUICK_ACTIONS = 5
         private const val MAX_LINKS = 5
         private const val MAX_LINK_LABEL_LENGTH = 80

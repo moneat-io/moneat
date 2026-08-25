@@ -9,6 +9,7 @@ import com.moneat.enterprise.incidents.models.NativeIncidentStatus
 import com.moneat.enterprise.incidents.models.NativeIncidentVisibility
 import com.moneat.enterprise.incidents.models.IncidentSourceType
 import kotlinx.serialization.json.JsonElement
+import kotlin.time.Instant
 
 data class IncidentCommandActor(
     val organizationId: Int,
@@ -22,6 +23,8 @@ enum class IncidentCommandType(val wire: String) {
     DECLINE("DECLINE"),
     MERGE("MERGE"),
     UPDATE("UPDATE"),
+    REQUEST_UPDATE("REQUEST_UPDATE"),
+    PAUSE_UPDATE_REMINDERS("PAUSE_UPDATE_REMINDERS"),
     TRANSITION("TRANSITION"),
     ASSIGN_ROLE("ASSIGN_ROLE"),
     CLAIM_ROLE("CLAIM_ROLE"),
@@ -121,8 +124,36 @@ data class UpdateIncidentCommand(
     val mode: NativeIncidentMode? = null,
     val visibility: NativeIncidentVisibility? = null,
     val incidentType: String? = null,
+    val message: String? = null,
+    val customerImpact: String? = null,
+    val nextUpdateAt: Instant? = null,
+    val clearNextUpdateAt: Boolean = false,
+    val pauseUpdateReminders: Boolean? = null,
+    val status: NativeIncidentStatus? = null,
 ) : ExistingIncidentCommand {
     override val type = IncidentCommandType.UPDATE
+}
+
+data class RequestIncidentUpdateCommand(
+    override val commandKey: String,
+    override val actor: IncidentCommandActor,
+    override val incidentId: Int,
+    val message: String? = null,
+    val dueAt: Instant? = null,
+    override val expectedVersion: Int? = null,
+) : ExistingIncidentCommand {
+    override val type = IncidentCommandType.REQUEST_UPDATE
+}
+
+data class PauseIncidentUpdateRemindersCommand(
+    override val commandKey: String,
+    override val actor: IncidentCommandActor,
+    override val incidentId: Int,
+    val paused: Boolean,
+    val rescheduleAt: Instant? = null,
+    override val expectedVersion: Int? = null,
+) : ExistingIncidentCommand {
+    override val type = IncidentCommandType.PAUSE_UPDATE_REMINDERS
 }
 
 data class TransitionIncidentCommand(

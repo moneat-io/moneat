@@ -371,6 +371,10 @@ object OnCallIncidents : IntIdTable("on_call_incidents") {
     val incidentTypeDefinitionId = integer("incident_type_definition_id").references(NativeIncidentTypes.id).nullable()
     val declarationSnapshot = requiredJsonb("declaration_snapshot").clientDefault { emptyMap() }
     val summary = text("summary").nullable()
+    val customerImpact = varchar("customer_impact", 64).nullable()
+    val nextUpdateAt = timestamp("next_update_at").nullable()
+    val updateReminderPaused = bool("update_reminder_paused").default(false)
+    val lastUpdateAt = timestamp("last_update_at").nullable()
     val version = integer("version").default(1)
     val declaredBy = integer("declared_by").references(Users.id)
     val declaredAt = timestamp("declared_at")
@@ -417,6 +421,10 @@ data class OnCallIncident(
     val visibility: String = "ORGANIZATION",
     val incidentType: String? = null,
     val summary: String? = null,
+    val customerImpact: String? = null,
+    val nextUpdateAt: String? = null,
+    val updateReminderPaused: Boolean = false,
+    val lastUpdateAt: String? = null,
     val version: Int = 1,
     @SerialName("declaredBy") val declaredByResourceId: String,
     val declaredByName: String? = null,
