@@ -19,15 +19,17 @@ package com.moneat.org.routes
 import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.config.EnvConfig
 import com.moneat.notifications.services.DiscordService
+import com.moneat.notifications.services.SlackInboundGateway
+import com.moneat.notifications.services.SlackInboundRequestException
+import com.moneat.notifications.services.SlackInboundRequestRejection
+import com.moneat.notifications.services.SlackInboundRequestType
 import com.moneat.notifications.services.SlackService
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OrganizationIntegrations
 import com.moneat.shared.models.SlackUserMappings
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.MessageResponse
-import io.ktor.http.Headers
 import io.ktor.http.HttpStatusCode
-import io.ktor.http.parseQueryString
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
@@ -43,9 +45,6 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
@@ -56,12 +55,10 @@ import org.jetbrains.exposed.v1.jdbc.update
 import org.koin.core.context.GlobalContext
 import org.slf4j.LoggerFactory
 import java.net.URLEncoder
-import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.Base64
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
-import kotlin.math.abs
 import kotlin.time.Clock
 import com.moneat.utils.suspendRunCatching
 
@@ -114,8 +111,6 @@ data class SlackChannel(
 )
 
 // Helper functions for secure state management
-private const val MILLIS_PER_SECOND = 1000
-private const val SLACK_REQUEST_MAX_AGE_SECONDS = 300
 private const val NONCE_BYTES_SIZE = 16
 private const val OAUTH_PARTS_COUNT = 5
 private const val OAUTH_STATE_NONCE_INDEX = 3
@@ -130,48 +125,6 @@ private fun getStateSecret(): String {
         .get("JWT_SECRET")
         ?.takeIf { it.isNotBlank() }
         ?: throw IllegalStateException("JWT_SECRET environment variable is required for integration state signing")
-}
-
-private fun getSlackSigningSecret(): String? {
-    return EnvConfig.get("SLACK_SIGNING_SECRET")?.takeIf { it.isNotBlank() }
-}
-
-private fun signSlackRequest(
-    secret: String,
-    timestamp: String,
-    rawBody: String
-): String {
-    val baseString = "v0:$timestamp:$rawBody"
-    val mac = Mac.getInstance("HmacSHA256")
-    mac.init(SecretKeySpec(secret.toByteArray(Charsets.UTF_8), "HmacSHA256"))
-    val digest = mac.doFinal(baseString.toByteArray(Charsets.UTF_8))
-    val hex = digest.joinToString("") { "%02x".format(it) }
-    return "v0=$hex"
-}
-
-private fun verifySlackRequestSignature(
-    headers: Headers,
-    rawBody: String
-): Boolean {
-    val timestamp = headers["X-Slack-Request-Timestamp"] ?: return false
-    val signature = headers["X-Slack-Signature"] ?: return false
-    val requestTs = timestamp.toLongOrNull() ?: return false
-    val nowTs = System.currentTimeMillis() / MILLIS_PER_SECOND
-
-    // Reject stale/replayed payloads.
-    if (abs(nowTs - requestTs) > SLACK_REQUEST_MAX_AGE_SECONDS) return false
-
-    val secret =
-        getSlackSigningSecret() ?: run {
-            logger.error("SLACK_SIGNING_SECRET is not configured; rejecting Slack interaction")
-            return false
-        }
-
-    val expected = signSlackRequest(secret, timestamp, rawBody)
-    return MessageDigest.isEqual(
-        expected.toByteArray(Charsets.UTF_8),
-        signature.toByteArray(Charsets.UTF_8)
-    )
 }
 
 private fun generateSecureState(
@@ -881,136 +834,39 @@ fun Route.integrationCallbackRoutes() {
             }
         }
 
-        // Slack Interactivity Endpoint (for interactive message buttons)
-        post("/slack/interactions") {
-            suspendRunCatching {
+        val slackInboundGateway = GlobalContext.get().get<SlackInboundGateway>()
+        fun Route.slackInboundEndpoint(
+            path: String,
+            requestType: SlackInboundRequestType,
+        ) {
+            post(path) {
                 val rawBody = call.receiveText()
-                if (!verifySlackRequestSignature(call.request.headers, rawBody)) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid Slack signature"))
-                    return@post
-                }
-
-                // Parse URL-encoded form data from Slack
-                val formParameters = parseQueryString(rawBody)
-                val payload =
-                    formParameters["payload"] ?: run {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing payload"))
-                        return@post
+                try {
+                    val accepted = slackInboundGateway.accept(call.request.headers, rawBody, requestType)
+                    if (accepted.challenge != null) {
+                        call.respond(mapOf("challenge" to accepted.challenge))
+                    } else {
+                        call.respond(HttpStatusCode.Accepted, accepted)
                     }
-
-                // Parse the JSON payload
-                val payloadJson =
-                    kotlinx.serialization.json.Json
-                        .parseToJsonElement(payload)
-                        .jsonObject
-                val type = payloadJson["type"]?.jsonPrimitive?.content
-
-                // Handle block actions (button clicks)
-                if (type == "block_actions") {
-                    val actions = payloadJson["actions"]?.jsonArray
-                    if (actions != null && actions.isNotEmpty()) {
-                        val action = actions[0].jsonObject
-                        val actionId = action["action_id"]?.jsonPrimitive?.content ?: ""
-
-                        // Parse action ID format: "incident_{action}_{alertResourceId}"
-                        if (actionId.startsWith("incident_acknowledge_")) {
-                            val alertResourceId = actionId.removePrefix("incident_acknowledge_")
-                            if (alertResourceId.isNotBlank()) {
-                                // Get user from Slack user ID
-                                val slackUserId =
-                                    payloadJson["user"]
-                                        ?.jsonObject
-                                        ?.get("id")
-                                        ?.jsonPrimitive
-                                        ?.content
-                                val slackTeamId =
-                                    payloadJson["team"]
-                                        ?.jsonObject
-                                        ?.get("id")
-                                        ?.jsonPrimitive
-                                        ?.content
-                                if (slackUserId != null && slackTeamId != null) {
-                                    val userId = getUserIdFromSlackUserId(slackUserId, slackTeamId)
-                                    if (userId != null) {
-                                        val bridge =
-                                            com.moneat.enterprise.FeatureRegistry
-                                                .getOnCallBridge()
-                                        if (bridge == null) {
-                                            call.respond(
-                                                mapOf(
-                                                    "response_type" to "ephemeral",
-                                                    "text" to "❌ On-call features not available"
-                                                )
-                                            )
-                                            return@post
-                                        }
-
-                                        val userOrgId =
-                                            transaction {
-                                                Memberships
-                                                    .selectAll()
-                                                    .where { Memberships.user_id eq userId }
-                                                    .singleOrNull()
-                                                    ?.get(Memberships.organization_id)
-                                            }
-                                        if (userOrgId == null) {
-                                            call.respond(
-                                                mapOf(
-                                                    "response_type" to "ephemeral",
-                                                    "text" to "❌ Alert not found or access denied"
-                                                )
-                                            )
-                                            return@post
-                                        }
-
-                                        val alertId = bridge.resolveAlertId(userOrgId, alertResourceId)
-                                        val alert = alertId?.let { bridge.getAlert(it, userId) }
-
-                                        if (alert == null ||
-                                            alert.organizationId != userOrgId
-                                        ) {
-                                            call.respond(
-                                                mapOf(
-                                                    "response_type" to "ephemeral",
-                                                    "text" to "❌ Alert not found or access denied"
-                                                )
-                                            )
-                                            return@post
-                                        }
-
-                                        val acknowledged = bridge.acknowledgeAlert(alertId, userId)
-
-                                        if (acknowledged) {
-                                            // Send success response
-                                            call.respond(
-                                                mapOf(
-                                                    "response_type" to "in_channel",
-                                                    "text" to "✅ Alert acknowledged by <@$slackUserId>"
-                                                )
-                                            )
-                                        } else {
-                                            call.respond(
-                                                mapOf(
-                                                    "response_type" to "ephemeral",
-                                                    "text" to "❌ Failed to acknowledge alert"
-                                                )
-                                            )
-                                        }
-                                        return@post
-                                    }
-                                }
-                            }
-                        }
+                } catch (error: SlackInboundRequestException) {
+                    val status = when (error.reason) {
+                        SlackInboundRequestRejection.INVALID_SIGNATURE -> HttpStatusCode.Unauthorized
+                        SlackInboundRequestRejection.INVALID_BODY -> HttpStatusCode.BadRequest
+                        SlackInboundRequestRejection.QUEUE_UNAVAILABLE -> HttpStatusCode.ServiceUnavailable
                     }
+                    call.respond(status, ErrorResponse(error.message))
+                } catch (error: Exception) {
+                    logger.error("Error accepting Slack inbound delivery", error)
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Internal error"))
                 }
-
-                // Default response for unhandled actions
-                call.respond(HttpStatusCode.OK, mapOf("text" to "Action received"))
-            }.getOrElse { e ->
-                logger.error("Error processing Slack interaction", e)
-                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Internal error"))
             }
         }
+
+        slackInboundEndpoint("/slack/commands", SlackInboundRequestType.COMMAND)
+        slackInboundEndpoint("/slack/events", SlackInboundRequestType.EVENT)
+        slackInboundEndpoint("/slack/shortcuts", SlackInboundRequestType.SHORTCUT)
+        slackInboundEndpoint("/slack/mentions", SlackInboundRequestType.MENTION)
+        slackInboundEndpoint("/slack/interactions", SlackInboundRequestType.INTERACTION)
 
         // Slack User Linking Endpoint
         authenticate("auth-jwt") {
@@ -1067,18 +923,3 @@ fun Route.integrationCallbackRoutes() {
         }
     }
 }
-
-// Helper function to get user ID from Slack user ID
-private fun getUserIdFromSlackUserId(
-    slackUserId: String,
-    slackTeamId: String
-): Int? =
-    transaction {
-        SlackUserMappings
-            .selectAll()
-            .where {
-                (SlackUserMappings.slackUserId eq slackUserId) and
-                    (SlackUserMappings.slackTeamId eq slackTeamId)
-            }.singleOrNull()
-            ?.get(SlackUserMappings.userId)
-    }

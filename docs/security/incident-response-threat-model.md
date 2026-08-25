@@ -39,7 +39,7 @@ The Backlog is authoritative for task boundaries. The security-relevant owners a
 |------|-------|--------|
 | TASK-1.2 | Incident command policy, authorization, concurrency, and idempotency | In progress |
 | TASK-1.7 | Slack installation, scopes, workspace bindings, token health, and privileged installation access | In progress |
-| TASK-1.8 | Durable authenticated inbound Slack gateway, including replay protection | Planned |
+| TASK-1.8 | Durable authenticated inbound Slack gateway, including replay protection | Implemented |
 | TASK-1.9 | Slack identity, responder permissions, and private-incident access | Planned |
 | TASK-1.10 | Durable outbound Slack delivery and reconciliation | Planned |
 | TASK-1.11–1.22 | Incident-channel provisioning and Slack responder feature surfaces; each task owns authorization and safe rendering for its own actions/messages | Planned |
@@ -83,7 +83,7 @@ The Backlog is authoritative for task boundaries. The security-relevant owners a
 | Entitlement gating of native incidents | **Implemented** (`IncidentCommandPolicy`) | Keep; add per-command authorization beyond "member of org" | TASK-1.2 / 1.50 |
 | Command authorization granularity | **Coarse**: authorizer allows any `org>0 && user>0` actor (`IncidentCommandPolicy.kt:21-23`) | Role/visibility-aware authorization per command type | TASK-1.2 / 1.9 |
 | Private incident visibility (`PRIVATE`) | **Stored, not enforced on read**: incident reads filter by org only (`OnCallIncidentService.kt:148-256`); timeline list/export/revisions resolve the incident in-org but do not apply caller or event visibility, and export includes deleted events (`IncidentTimelineRoutes.kt`, `IncidentTimelineService.export`) | Enforce membership-gated read/list/timeline/revision/export/metadata for `PRIVATE`, `PARTICIPANTS`, and deleted entries | TASK-1.9 |
-| Slack signature/timestamp/replay verification (inbound) | **Implemented** for `/slack/interactions` (`verifySlackRequestSignature`, 300s window, constant-time compare — `IntegrationRoutes.kt:152-175`) | Keep; extend to all inbound routes; add nonce replay cache | TASK-1.8 |
+| Slack signature/timestamp/replay verification (inbound) | **Implemented** for commands, events, shortcuts, mentions, and interactions through `SlackInboundGateway` (300s window, constant-time compare, durable delivery-key deduplication) | Keep; bind every delivery to the verified workspace identity and downstream command idempotency | TASK-1.7 / 1.9 |
 | Slack workspace install model | **Single bot token per org** in `organization_integrations.access_token`, plaintext (`IntegrationRoutes.kt:732`) | Workspace = explicit principal; **distinct bot vs user grants**; explicit workspace↔org bindings; encrypted at rest | TASK-1.7 |
 | Slack identity mapping | **Self-asserted, not workspace-verified, not org-scoped** (`SlackUserMappings`, `/slack/link-user` — `IntegrationRoutes.kt:1017-1084`) | Resolve `team_id` to a workspace binding, then key verified mappings and every lookup/write by `(workspace_binding_id, slack_user_id)`; handle guests/Connect/stale users | TASK-1.9 |
 | Token storage | **Plaintext** Slack token + OSS provider `api_key` (`incident_provider_configs.api_key`) | Encrypt integration secrets with dedicated per-purpose keys; never return plaintext from management APIs | TASK-1.7 / 1.48 |
@@ -149,7 +149,7 @@ The Backlog is authoritative for task boundaries. The security-relevant owners a
 |---|---|---|
 | REST incident commands | `ee/.../oncall/routes/IncidentRoutes.kt` (JWT) | Authenticated member |
 | Slack OAuth start/callback | `/slack/oauth/start`, `/slack/oauth/callback` (`IntegrationRoutes.kt:298,655`) | Signed-state CSRF-bound |
-| Slack interactivity | `POST /slack/interactions` (`IntegrationRoutes.kt:885`) | Slack-signed body |
+| Slack inbound gateway | `POST /slack/commands`, `/slack/events`, `/slack/shortcuts`, `/slack/mentions`, `/slack/interactions` (`IntegrationRoutes.kt`) | Slack-signed body; durable delivery record before asynchronous processing |
 | Slack user link | `POST /slack/link-user` (`IntegrationRoutes.kt:1017`) | Authenticated member (self-asserted mapping) |
 | Twilio webhooks | `/sms-status`, `/call-status`, `/gather` (`TwilioWebhookRoutes.kt`) | Twilio-signed (`X-Twilio-Signature`) |
 | AI chat / assistant | `ee/.../ai/routes/AiChatRoutes.kt`, `AiAssistantRoutes.kt` | Authenticated member |
@@ -188,7 +188,7 @@ flowchart TB
 
     subgraph edge["Moneat API edge (TLS)"]
         oauth["OAuth start/callback<br/>signed CSRF state<br/>IntegrationRoutes.kt:298,655"]
-        interact["POST /slack/interactions<br/>signature+timestamp verify<br/>IntegrationRoutes.kt:885"]
+        interact["Slack inbound gateway<br/>commands / events / shortcuts / mentions / interactions<br/>signature+timestamp verify"]
         linkuser["POST /slack/link-user<br/>(self-asserted today)"]
         rest["REST incident commands<br/>IncidentRoutes.kt"]
     end
