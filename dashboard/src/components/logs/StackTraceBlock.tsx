@@ -18,12 +18,7 @@ import {useEffect, useState} from 'react'
 import {Check, Copy} from 'lucide-react'
 import {Prism as SyntaxHighlighter} from 'react-syntax-highlighter'
 import {oneDark, oneLight} from 'react-syntax-highlighter/dist/esm/styles/prism'
-
-function detectLanguage(stacktrace: string): string {
-  if (/^\s+at\s+.+\(.+:\d+\)/.test(stacktrace) || /\tat\s/.test(stacktrace)) return 'javastacktrace'
-  if (/File ".+", line \d+/.test(stacktrace)) return 'python'
-  return 'log'
-}
+import {detectStacktraceLanguage} from '@/lib/stacktrace-language'
 
 function getIsDarkMode(): boolean {
   return globalThis.document?.documentElement.classList.contains('dark') ?? false
@@ -57,7 +52,7 @@ export function StackTraceBlock({stacktrace, language}: StackTraceBlockProps) {
     }
   }
 
-  const lang = language ?? detectLanguage(stacktrace)
+  const lang = language ?? detectStacktraceLanguage(stacktrace)
   const style = isDark ? oneDark : oneLight
 
   return (
