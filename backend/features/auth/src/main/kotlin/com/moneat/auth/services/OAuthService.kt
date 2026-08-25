@@ -51,6 +51,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import java.math.BigInteger
 import java.security.KeyFactory
+import java.security.SecureRandom
 import java.security.interfaces.RSAPublicKey
 import java.security.spec.RSAPublicKeySpec
 import java.util.Base64
@@ -115,6 +116,7 @@ class OAuthService(
     private val jwtAudience = config.property("jwt.audience").getString()
     private val backendUrl = EnvConfig.get("BACKEND_URL") ?: "https://api.moneat.io"
     private val frontendUrl = EnvConfig.get("FRONTEND_URL")!!
+    private val secureRandom = SecureRandom()
 
     companion object {
         private const val ORG_SLUG_SUFFIX_LENGTH = 8
@@ -541,7 +543,7 @@ class OAuthService(
 
     fun generateState(): String {
         val bytes = ByteArray(STATE_BYTE_LENGTH)
-        java.security.SecureRandom().nextBytes(bytes)
+        secureRandom.nextBytes(bytes)
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
     }
 }

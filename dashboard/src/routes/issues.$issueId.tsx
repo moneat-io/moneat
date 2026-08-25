@@ -103,7 +103,7 @@ function parseContextEntries(rawContexts: unknown): [string, unknown][] {
   if (!rawContexts) return []
 
   try {
-    const parsed = typeof rawContexts === 'string' ? JSON.parse(rawContexts || '{}') : rawContexts
+    const parsed = typeof rawContexts === 'string' ? JSON.parse(rawContexts) : rawContexts
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return []
     return Object.entries(parsed as Record<string, unknown>)
   } catch {

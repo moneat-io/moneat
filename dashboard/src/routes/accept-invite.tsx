@@ -194,7 +194,6 @@ function AcceptInvitePage() {
           <InviteRow label="Role" value={inviteDetails.role} capitalize />
           <InviteRow label="Your email" value={user.email} />
         </InviteCard>
-        {error && <AuthAlert tone="danger">{error}</AuthAlert>}
         <Button className={authPrimaryButtonClass} onClick={handleAccept} disabled={accepting}>
           {accepting ? (
             <>

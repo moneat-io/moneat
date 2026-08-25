@@ -16,6 +16,8 @@
 
 package com.moneat.config
 
+import io.lettuce.core.Range
+
 /**
  * Redis client wrapper for on-call escalation engine.
  * Provides helper methods for sorted set operations used in timeout tracking.
@@ -45,13 +47,12 @@ class RedisClient {
         return RedisConfig.sync().zrange(key, start, stop).toList()
     }
 
-    @Suppress("DEPRECATION")
     fun zrangebyscore(
         key: String,
         min: Double,
         max: Double
     ): List<String> {
-        return RedisConfig.sync().zrangebyscore(key, min, max).toList()
+        return RedisConfig.sync().zrangebyscore(key, Range.create(min, max)).toList()
     }
 
     fun zrangeWithScores(
