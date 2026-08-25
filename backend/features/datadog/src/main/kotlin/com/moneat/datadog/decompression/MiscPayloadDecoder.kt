@@ -20,7 +20,6 @@ import com.moneat.datadog.decompression.ProtoWireConstants as Wire
 
 import com.google.protobuf.CodedInputStream
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_3
-import com.moneat.datadog.decompression.ProtoWireConstants
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_4
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_5
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_7

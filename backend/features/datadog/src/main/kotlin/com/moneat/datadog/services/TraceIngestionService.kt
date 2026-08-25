@@ -23,7 +23,6 @@ import com.moneat.apm.services.ApmServiceMapRollups
 import com.moneat.apm.services.ApmServiceMapSpan
 import com.moneat.config.ClickHouseClient
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_3
-import com.moneat.datadog.decompression.ProtoWireConstants
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_4
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_5
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_6
