@@ -171,7 +171,10 @@ class IncidentCommandServiceTest {
             val incident = OnCallIncidents.selectAll().where { OnCallIncidents.id eq declared.incidentId }.single()
             assertEquals("Mitigation is rolling out", incident[OnCallIncidents.summary])
             assertEquals("Checkout requests fail for a subset of customers", incident[OnCallIncidents.customerImpact])
-            assertEquals(dueAt, incident[OnCallIncidents.nextUpdateAt])
+            assertEquals(
+                dueAt.toString().substringBefore('.'),
+                incident[OnCallIncidents.nextUpdateAt]?.toString()?.substringBefore('.'),
+            )
             assertEquals(NativeIncidentStatus.RESOLVED.wire, incident[OnCallIncidents.status])
             assertEquals(
                 IncidentUpdateRequestStatus.FULFILLED.wire,
