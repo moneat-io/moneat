@@ -39,6 +39,7 @@ enum class IngestionPipeline(
     DD_NDM("dd-ndm", "NDM"),
     DD_SECURITY("dd-security", "Security"),
     SLACK_INBOUND("slack-inbound", "Slack inbound"),
+    SLACK_OUTBOUND("slack-outbound", "Slack outbound"),
     CONNECTOR_EVENTS("connector-events", "Connector event"),
     CONNECTOR_IMPORTS("connector-imports", "Connector import");
 

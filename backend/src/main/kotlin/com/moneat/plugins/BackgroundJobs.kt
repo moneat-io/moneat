@@ -24,6 +24,9 @@ import com.moneat.ingestion.queue.IngestionPipeline
 import com.moneat.ingestion.queue.IngestionQueueSettings
 import com.moneat.config.EnvConfig
 import com.moneat.notifications.services.SlackInboundWorker
+import com.moneat.notifications.services.SlackOutboundSender
+import com.moneat.notifications.services.SlackOutboundWorker
+import com.moneat.notifications.services.SlackService
 import com.moneat.shared.services.ArtifactCleanupService
 import com.moneat.shared.services.DemoLivenessBackgroundService
 import com.moneat.shared.services.RetentionBackgroundService
@@ -117,6 +120,15 @@ private class CoreIngestionWorkers(application: Application) {
         workerCount = EnvConfig.get("SLACK_INBOUND_WORKER_COUNT")?.toIntOrNull()?.coerceAtLeast(1) ?: 1,
         gateway = koin.get(),
     )
+    private val slackOutboundWorker = SlackOutboundWorker(
+        queueKey = EnvConfig.get("SLACK_OUTBOUND_QUEUE_KEY") ?: "slack-outbound",
+        dlqKey = EnvConfig.get("SLACK_OUTBOUND_DLQ_KEY") ?: "slack-outbound-dlq",
+        workerCount = EnvConfig.get("SLACK_OUTBOUND_WORKER_COUNT")?.toIntOrNull()?.coerceAtLeast(1) ?: 1,
+        deliveryService = koin.get(),
+        sender = SlackOutboundSender { delivery ->
+            koin.get<SlackService>().sendOutboundDelivery(delivery)
+        },
+    )
 
     fun startSelected(startIngestionWorkers: Boolean) {
         if (shouldStartIngestionPipeline(startIngestionWorkers, IngestionPipeline.EVENTS)) {
@@ -125,11 +137,15 @@ private class CoreIngestionWorkers(application: Application) {
         if (shouldStartIngestionPipeline(startIngestionWorkers, IngestionPipeline.SLACK_INBOUND)) {
             slackInboundWorker.start()
         }
+        if (shouldStartIngestionPipeline(startIngestionWorkers, IngestionPipeline.SLACK_OUTBOUND)) {
+            slackOutboundWorker.start()
+        }
     }
 
     fun stop() {
         ingestionWorker.stop()
         slackInboundWorker.stop()
+        slackOutboundWorker.stop()
     }
 }
 
