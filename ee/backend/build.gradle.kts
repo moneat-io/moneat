@@ -79,12 +79,18 @@ tasks.jacocoTestReport {
     classDirectories.setFrom(
         sourceSets["main"].output.classesDirs.map { dir ->
             fileTree(dir) {
-                include("**/com/moneat/enterprise/sso/**")
+                include(
+                    "**/com/moneat/enterprise/sso/**",
+                    "**/com/moneat/enterprise/incidents/announcements/**",
+                )
             }
         }
     )
     sourceDirectories.setFrom(
-        files("$projectDir/src/main/kotlin/com/moneat/enterprise/sso")
+        files(
+            "$projectDir/src/main/kotlin/com/moneat/enterprise/sso",
+            "$projectDir/src/main/kotlin/com/moneat/enterprise/incidents/announcements",
+        )
     )
     reports {
         xml.required.set(true)
