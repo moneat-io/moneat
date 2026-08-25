@@ -165,24 +165,7 @@ class SlackOutboundDeliveryService(
             .selectAll()
             .where { SlackOutboundDeliveries.resourceId eq resourceId }
             .singleOrNull() ?: return@transaction null
-        val status = when (request.observation) {
-            SlackOutboundObservation.SUPERSEDED -> SlackOutboundDeliveryStatus.SUPERSEDED
-            SlackOutboundObservation.PRESENT -> {
-                val matches = request.observedVersion == null ||
-                    request.observedVersion >= row[SlackOutboundDeliveries.desiredVersion]
-                if (matches) SlackOutboundDeliveryStatus.DELIVERED else SlackOutboundDeliveryStatus.PENDING
-            }
-            SlackOutboundObservation.MISSING,
-            SlackOutboundObservation.EDITED,
-            SlackOutboundObservation.DELETED,
-            -> if (row[SlackOutboundDeliveries.status] == SlackOutboundDeliveryStatus.DEAD_LETTER.wire ||
-                row[SlackOutboundDeliveries.attemptCount] >= maxAttempts
-            ) {
-                SlackOutboundDeliveryStatus.DEAD_LETTER
-            } else {
-                SlackOutboundDeliveryStatus.PENDING
-            }
-        }
+        val status = reconciliationStatus(row, request)
         SlackOutboundDeliveries.update({ SlackOutboundDeliveries.id eq row[SlackOutboundDeliveries.id] }) {
             it[SlackOutboundDeliveries.status] = status.wire
             it[SlackOutboundDeliveries.providerMessageId] = request.providerMessageId
@@ -207,6 +190,40 @@ class SlackOutboundDeliveryService(
         }
         status
     }
+
+    private fun reconciliationStatus(
+        row: org.jetbrains.exposed.v1.core.ResultRow,
+        request: SlackOutboundReconciliationRequest,
+    ): SlackOutboundDeliveryStatus =
+        when (request.observation) {
+            SlackOutboundObservation.SUPERSEDED -> SlackOutboundDeliveryStatus.SUPERSEDED
+            SlackOutboundObservation.PRESENT -> presentObservationStatus(row, request.observedVersion)
+            SlackOutboundObservation.MISSING,
+            SlackOutboundObservation.EDITED,
+            SlackOutboundObservation.DELETED,
+            -> missingObservationStatus(row)
+        }
+
+    private fun presentObservationStatus(
+        row: org.jetbrains.exposed.v1.core.ResultRow,
+        observedVersion: Int?,
+    ): SlackOutboundDeliveryStatus =
+        if (observedVersion == null || observedVersion >= row[SlackOutboundDeliveries.desiredVersion]) {
+            SlackOutboundDeliveryStatus.DELIVERED
+        } else {
+            SlackOutboundDeliveryStatus.PENDING
+        }
+
+    private fun missingObservationStatus(
+        row: org.jetbrains.exposed.v1.core.ResultRow,
+    ): SlackOutboundDeliveryStatus =
+        if (row[SlackOutboundDeliveries.status] == SlackOutboundDeliveryStatus.DEAD_LETTER.wire ||
+            row[SlackOutboundDeliveries.attemptCount] >= maxAttempts
+        ) {
+            SlackOutboundDeliveryStatus.DEAD_LETTER
+        } else {
+            SlackOutboundDeliveryStatus.PENDING
+        }
 
     fun enqueueAndWake(
         request: SlackOutboundEnqueueRequest,

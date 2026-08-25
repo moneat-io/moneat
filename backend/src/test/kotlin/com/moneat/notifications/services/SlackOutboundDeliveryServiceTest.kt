@@ -159,6 +159,75 @@ class SlackOutboundDeliveryServiceTest {
     }
 
     @Test
+    fun `reconciliation handles stale observations, deletions, supersession, and unknown resources`() {
+        val service = SlackOutboundDeliveryService(clock = clock)
+        val resourceId = service.enqueue(request(version = 2))
+
+        assertEquals(
+            SlackOutboundDeliveryStatus.PENDING,
+            service.reconcile(
+                SlackOutboundReconciliationRequest(
+                    resourceId = resourceId,
+                    observation = SlackOutboundObservation.PRESENT,
+                    observedVersion = 1,
+                ),
+            ),
+        )
+        assertEquals(
+            SlackOutboundDeliveryStatus.PENDING,
+            service.reconcile(
+                SlackOutboundReconciliationRequest(
+                    resourceId = resourceId,
+                    observation = SlackOutboundObservation.EDITED,
+                ),
+            ),
+        )
+        assertEquals(
+            SlackOutboundDeliveryStatus.PENDING,
+            service.reconcile(
+                SlackOutboundReconciliationRequest(
+                    resourceId = resourceId,
+                    observation = SlackOutboundObservation.DELETED,
+                ),
+            ),
+        )
+        assertEquals(
+            SlackOutboundDeliveryStatus.SUPERSEDED,
+            service.reconcile(
+                SlackOutboundReconciliationRequest(
+                    resourceId = resourceId,
+                    observation = SlackOutboundObservation.SUPERSEDED,
+                ),
+            ),
+        )
+        assertEquals(
+            null,
+            service.reconcile(
+                SlackOutboundReconciliationRequest(
+                    resourceId = "00000000-0000-0000-0000-000000000000",
+                    observation = SlackOutboundObservation.PRESENT,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `failed sender result is retried and records failure metrics`() = runBlocking {
+        val service = SlackOutboundDeliveryService(clock = clock, maxAttempts = 2)
+        val resourceId = service.enqueue(request())
+
+        assertTrue(
+            service.process(
+                resourceId,
+                SlackOutboundSender { SlackOutboundSendResult.Failed("provider rejected message") },
+            ),
+        )
+        val row = transaction { SlackOutboundDeliveries.selectAll().single() }
+        assertEquals(SlackOutboundDeliveryStatus.RETRY.wire, row[SlackOutboundDeliveries.status])
+        assertTrue(service.metrics().failureCount >= 1)
+    }
+
+    @Test
     fun `unsupported outbound operation fails before workspace access`() = runBlocking {
         val result = SlackService().sendOutboundDelivery(
             SlackOutboundDelivery(
