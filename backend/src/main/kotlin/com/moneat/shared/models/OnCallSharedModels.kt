@@ -55,11 +55,18 @@ object EscalationPolicyAlertSources : IntIdTable("escalation_policy_alert_source
 
 object SlackUserMappings : IntIdTable("slack_user_mappings") {
     val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
-    val userId = integer("user_id").references(Users.id, onDelete = ReferenceOption.CASCADE).uniqueIndex()
+    val userId = integer("user_id").references(Users.id, onDelete = ReferenceOption.CASCADE)
+    val slackInstallationId = integer("slack_installation_id")
+        .references(SlackInstallations.id, onDelete = ReferenceOption.CASCADE)
+        .nullable()
     val slackUserId = varchar("slack_user_id", 100)
     val slackTeamId = varchar("slack_team_id", 100)
     val createdAt = timestamp("created_at")
     val updatedAt = timestamp("updated_at")
+
+    init {
+        uniqueIndex(slackInstallationId, userId)
+    }
 }
 
 object SsoConfigurations : Table("sso_configurations") {
@@ -102,6 +109,20 @@ object OnCallSchedules : IntIdTable("on_call_schedules") {
     val rotationType = varchar("rotation_type", 20)
     val handoffTime = time("handoff_time")
     val timezone = varchar("timezone", 100)
+    val createdAt = timestamp("created_at")
+    val updatedAt = timestamp("updated_at")
+}
+
+object OnCallScheduleUsergroups : IntIdTable("on_call_schedule_usergroups") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
+    val scheduleId = integer("schedule_id")
+        .references(OnCallSchedules.id, onDelete = ReferenceOption.CASCADE)
+        .uniqueIndex()
+    val slackUsergroupId = varchar("slack_usergroup_id", 100)
+    val slackUsergroupHandle = varchar("slack_usergroup_handle", 100)
+    val slackInstallationId = integer("slack_installation_id")
+        .references(SlackInstallations.id, onDelete = ReferenceOption.SET_NULL)
+        .nullable()
     val createdAt = timestamp("created_at")
     val updatedAt = timestamp("updated_at")
 }

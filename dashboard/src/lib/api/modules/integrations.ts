@@ -70,11 +70,12 @@ export function integrationsMethods(core: ApiClientCore) {
     setScheduleSlackUsergroup: (
       scheduleId: string,
       usergroupId: string,
-      usergroupHandle: string
+      usergroupHandle: string,
+      slackInstallationId?: string
     ) =>
       core.request<void>(`${base}/on-call/schedules/${encodeURIComponent(scheduleId)}/slack-usergroup`, {
         method: 'PUT',
-        body: JSON.stringify({ usergroupId, usergroupHandle }),
+        body: JSON.stringify({ usergroupId, usergroupHandle, slackInstallationId }),
       }),
 
     removeScheduleSlackUsergroup: (scheduleId: string) =>

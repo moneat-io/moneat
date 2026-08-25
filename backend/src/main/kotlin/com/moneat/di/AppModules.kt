@@ -33,6 +33,7 @@ import com.moneat.notifications.services.AlertNotificationPreferencesService
 import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.NotificationService
+import com.moneat.notifications.services.SlackInstallationService
 import com.moneat.notifications.services.SlackService
 import com.moneat.notifications.services.SlackInboundGateway
 import com.moneat.notifications.services.SlackIdentityResolver
@@ -57,7 +58,8 @@ val sharedModule = module {
     single<OrganizationRepository> { OrganizationRepositoryImpl() }
 
     single { EmailService() }
-    single { SlackService() }
+    single { SlackInstallationService() }
+    single { SlackService(installationService = get()) }
     single { SlackInboundGateway() }
     single { SlackIdentityResolver() }
     single { SlackOutboundDeliveryService() }

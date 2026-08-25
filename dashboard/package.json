@@ -121,5 +121,8 @@
     "unist-util-visit": "^5.1.0",
     "vite": "^8.0.0",
     "vitest": "^4.0.18"
+  },
+  "overrides": {
+    "@radix-ui/react-focus-scope": "1.1.9"
   }
 }

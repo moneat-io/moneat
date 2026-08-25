@@ -53,6 +53,7 @@ import com.moneat.enterprise.oncall.services.SlackUserGroupSyncService
 import com.moneat.mcp.McpToolContributor
 import com.moneat.mcp.protocol.McpToolRegistry
 import com.moneat.notifications.services.SlackService
+import com.moneat.notifications.services.SlackInstallationService
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
 import kotlinx.serialization.json.Json
@@ -79,7 +80,8 @@ class OnCallModule :
     private val onCallScheduleService = OnCallScheduleService()
     private val onCallIncidentService = OnCallIncidentService()
     private val pushNotificationService by lazy { PushNotificationService() }
-    private val slackService by lazy { SlackService() }
+    private val slackInstallationService by lazy { SlackInstallationService() }
+    private val slackService by lazy { SlackService(installationService = slackInstallationService) }
     private val redisClient by lazy { RedisClient() }
     private val escalationEngineDelegate =
         lazy {
@@ -123,6 +125,7 @@ class OnCallModule :
                 onCallScheduleService = onCallScheduleService,
                 slackService = slackService,
                 redisClient = redisClient,
+                slackInstallationService = slackInstallationService,
             )
         }
     private val slackUserGroupSyncService by slackUserGroupSyncServiceDelegate
@@ -245,8 +248,8 @@ class OnCallModule :
         organizationId: Int,
         scheduleId: Int,
     ): OnCallUserInfo? {
-        if (!onCallScheduleService.isScheduleInOrganization(scheduleId, organizationId)) return null
-        val participant = onCallScheduleService.getCurrentOnCall(scheduleId) ?: return null
+        val participant =
+            onCallScheduleService.getCurrentOnCallForOrganization(scheduleId, organizationId) ?: return null
         return OnCallUserInfo(userId = participant.userResourceId, userName = participant.userName)
     }
 

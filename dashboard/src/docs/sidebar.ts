@@ -51,7 +51,15 @@ export const docsSidebar: SidebarCategory[] = [
   {
     label: 'Configuration',
     collapsed: false,
-    items: ['integrations', 'sso-authentication', 'api-tokens'],
+    items: [
+      {
+        label: 'Integrations',
+        link: 'integrations',
+        items: ['integrations/slack'],
+      },
+      'sso-authentication',
+      'api-tokens',
+    ],
   },
   {
     label: 'Source Setup',

@@ -16,7 +16,7 @@
 
 import {createFileRoute} from '@tanstack/react-router'
 import {useQuery, useMutation, useQueryClient} from '@tanstack/react-query'
-import {api, type OnCallSchedule, type OrganizationIntegration} from '@/lib/api'
+import {api, type OnCallSchedule, type SlackInstallationSummary} from '@/lib/api'
 import {Card} from '@/components/ui/card'
 import {Button} from '@/components/ui/button'
 import {Badge, type BadgeProps} from '@/components/ui/badge'
@@ -32,8 +32,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import {useToast} from '@/hooks/useToast'
-import {Calendar, Plus, Users, Clock, Trash2, Pencil, RotateCcw, GripVertical, ChevronDown, ChevronUp, Globe, Slack} from 'lucide-react'
-import {useState} from 'react'
+import {Calendar, Plus, Users, Clock, Trash2, Pencil, RotateCcw, GripVertical, ChevronDown, ChevronUp, Globe, Loader2, AlertTriangle} from 'lucide-react'
+import {useState, type ReactNode} from 'react'
+import {SlackLogo} from '@/components/settings/BrandLogos'
 import {ScheduleEditor, type OnCallScheduleData} from '@/components/on-call/ScheduleEditor'
 import {cn} from '@/lib/utils'
 import {
@@ -89,19 +90,17 @@ function OnCallSchedules() {
     queryFn: () => api.getOrgMembers(),
   })
 
-  const {data: integrations} = useQuery({
-    queryKey: ['org-integrations'],
-    queryFn: () => api.getIntegrations(),
+  // Installation-aware Slack context. A Moneat Slack app can live in
+  // several workspaces, so on-call sync is scoped to a chosen workspace rather
+  // than one org-wide user-group list. Per-workspace user groups load lazily in
+  // ScheduleSlackSync once a workspace is selected.
+  const slackInstallationsQuery = useQuery({
+    queryKey: ['slack-installations'],
+    queryFn: () => api.getSlackInstallations(),
   })
-
-  const {data: slackUsergroups} = useQuery({
-    queryKey: ['slack-usergroups'],
-    queryFn: () => api.getSlackUsergroups(),
-    enabled: integrations?.some((i: OrganizationIntegration) => i.integrationType === 'slack' && i.enabled) ?? false,
-  })
+  const slackInstallations = slackInstallationsQuery.data ?? []
 
   const users = orgMembers?.members?.map(m => ({id: m.userId, name: m.name || m.email})) || []
-  const slackEnabled = integrations?.some((i: OrganizationIntegration) => i.integrationType === 'slack' && i.enabled) ?? false
 
   const createMutation = useMutation({
     mutationFn: (data: OnCallScheduleData) => api.createOnCallSchedule({
@@ -146,15 +145,16 @@ function OnCallSchedules() {
   })
 
   const setUsergroupMutation = useMutation({
-    mutationFn: ({scheduleId, usergroupId, usergroupHandle}: {
+    mutationFn: ({scheduleId, usergroupId, usergroupHandle, slackInstallationId}: {
       scheduleId: string
       usergroupId: string
       usergroupHandle: string
+      slackInstallationId: string
     }) =>
-      api.setScheduleSlackUsergroup(scheduleId, usergroupId, usergroupHandle),
+      api.setScheduleSlackUsergroup(scheduleId, usergroupId, usergroupHandle, slackInstallationId),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['on-call-schedules']})
-      toast({title: 'Slack User Group Set', description: 'Schedule will sync to this Slack user group.'})
+      toast({title: 'Slack user group set', description: 'Schedule will sync to this Slack user group.'})
     },
     onError: (e: Error) => toast({title: 'Error', description: e.message, variant: 'destructive'}),
   })
@@ -187,6 +187,8 @@ function OnCallSchedules() {
     }
   }
 
+  const hasSchedules = !!schedules && schedules.length > 0
+
   return (
     <div className="space-y-4">
       <PageHeader
@@ -201,15 +203,25 @@ function OnCallSchedules() {
         }
       />
 
-      {isLoading ? (
+      {isLoading && (
         <div className="flex items-center justify-center py-10">
           <div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-primary" />
         </div>
-      ) : schedules && schedules.length > 0 ? (
+      )}
+      {!isLoading && hasSchedules && (
         <div className="space-y-3">
           {schedules.map((schedule, idx) => {
             const RotIcon = rotationIcons[schedule.rotationType] || RotateCcw
             const isExpanded = expandedId === schedule.id
+            const hasSlackMapping = !!schedule.slackUsergroupId
+            // Show the Slack section when it can act: an existing mapping (even to a
+            // now-removed/disabled workspace), any connected workspace to link, or
+            // while the workspace list is still loading/errored so we surface state.
+            const showSlack =
+              hasSlackMapping ||
+              slackInstallations.length > 0 ||
+              slackInstallationsQuery.isLoading ||
+              slackInstallationsQuery.isError
             return (
               <Card key={schedule.id} className="overflow-hidden transition-colors hover:border-primary/30">
                 <div className="p-3">
@@ -247,10 +259,10 @@ function OnCallSchedules() {
                           <span className="text-xs font-medium text-success-fg">{schedule.currentOnCall.userName}</span>
                         </div>
                       )}
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(schedule)}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(schedule)} aria-label={`Edit ${schedule.name}`}>
                         <Pencil className="h-3 w-3" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(schedule.id)}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(schedule.id)} aria-label={`Delete ${schedule.name}`}>
                         <Trash2 className="h-3 w-3" />
                       </Button>
                       <Button
@@ -258,6 +270,8 @@ function OnCallSchedules() {
                         size="icon"
                         className="h-7 w-7"
                         onClick={() => setExpandedId(isExpanded ? null : schedule.id)}
+                        aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${schedule.name} details`}
+                        aria-expanded={isExpanded}
                       >
                         {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                       </Button>
@@ -346,68 +360,18 @@ function OnCallSchedules() {
                       </div>
                     )}
 
-                    {/* Slack User Group Sync */}
-                    {slackEnabled && (
-                      <div className="mt-3">
-                        <h4 className="text-xs font-medium mb-1.5 flex items-center gap-1.5">
-                          <Slack className="h-3 w-3 text-muted-foreground" />
-                          Slack User Group
-                        </h4>
-                        <div className="ml-4">
-                          {schedule.slackUsergroupId ? (
-                            <div className="flex items-center justify-between p-1.5 rounded-md bg-info-bg border border-info-border">
-                              <div className="flex items-center gap-2">
-                                <Badge variant="info" size="sm">
-                                  @{schedule.slackUsergroupHandle}
-                                </Badge>
-                                <span className="text-xs text-muted-foreground">Auto-syncing current on-call user</span>
-                              </div>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 text-xs text-destructive hover:text-destructive"
-                                onClick={() => removeUsergroupMutation.mutate(schedule.id)}
-                                disabled={removeUsergroupMutation.isPending}
-                              >
-                                Remove
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <Select
-                                onValueChange={(value) => {
-                                  const ug = slackUsergroups?.find(u => u.id === value)
-                                  if (ug) {
-                                    setUsergroupMutation.mutate({
-                                      scheduleId: schedule.id,
-                                      usergroupId: ug.id,
-                                      usergroupHandle: ug.handle
-                                    })
-                                  }
-                                }}
-                                disabled={setUsergroupMutation.isPending || !slackUsergroups || slackUsergroups.length === 0}
-                              >
-                                <SelectTrigger className="w-[260px] h-8">
-                                  <SelectValue placeholder={slackUsergroups && slackUsergroups.length === 0 ? "No user groups available" : "Select a user group"} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {slackUsergroups?.map(ug => (
-                                    <SelectItem key={ug.id} value={ug.id}>
-                                      <div className="flex flex-col">
-                                        <span className="font-medium">@{ug.handle}</span>
-                                        <span className="text-xs text-muted-foreground">{ug.name}</span>
-                                      </div>
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <span className="text-xs text-muted-foreground">
-                                Sync current on-call user to a Slack user group
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                    {/* Slack user-group sync (installation-aware) */}
+                    {showSlack && (
+                      <ScheduleSlackSync
+                        schedule={schedule}
+                        installations={slackInstallations}
+                        isLoading={slackInstallationsQuery.isLoading}
+                        isError={slackInstallationsQuery.isError}
+                        onSet={(args) => setUsergroupMutation.mutate(args)}
+                        onRemove={(id) => removeUsergroupMutation.mutate(id)}
+                        isSetting={setUsergroupMutation.isPending}
+                        isRemoving={removeUsergroupMutation.isPending}
+                      />
                     )}
                   </div>
                 )}
@@ -415,7 +379,8 @@ function OnCallSchedules() {
             )
           })}
         </div>
-      ) : (
+      )}
+      {!isLoading && !hasSchedules && (
         <EmptyState
           icon={Calendar}
           title="No on-call schedules"
@@ -459,6 +424,313 @@ function OnCallSchedules() {
           />
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+// Human-readable workspace name, falling back through team → enterprise → ids so a
+// workspace is always identifiable even before names are backfilled.
+function workspaceName(installation: SlackInstallationSummary): string {
+  return (
+    installation.teamName ??
+    installation.enterpriseName ??
+    installation.teamId ??
+    installation.enterpriseId ??
+    'Slack workspace'
+  )
+}
+
+type SlackUsergroupSetArgs = {
+  readonly scheduleId: string
+  readonly usergroupId: string
+  readonly usergroupHandle: string
+  readonly slackInstallationId: string
+}
+
+type ScheduleSlackSyncProps = {
+  readonly schedule: OnCallSchedule
+  readonly installations: readonly SlackInstallationSummary[]
+  readonly isLoading: boolean
+  readonly isError: boolean
+  readonly onSet: (args: SlackUsergroupSetArgs) => void
+  readonly onRemove: (scheduleId: string) => void
+  readonly isSetting: boolean
+  readonly isRemoving: boolean
+}
+
+// Per-schedule Slack user-group sync. Split into focused pieces — an existing
+// mapping, loading/error notices, and the two-step workspace → user-group
+// picker — so each stays simple to read.
+function ScheduleSlackSync(props: ScheduleSlackSyncProps) {
+  return (
+    <div className="mt-3">
+      <h4 className="text-xs font-medium mb-1.5 flex items-center gap-1.5">
+        <SlackLogo className="h-3 w-3 text-muted-foreground" />
+        Slack user group
+      </h4>
+      <div className="ml-4">
+        <ScheduleSlackSyncBody {...props} />
+      </div>
+    </div>
+  )
+}
+
+// Chooses the state-specific body for the Slack sync section.
+function ScheduleSlackSyncBody({
+  schedule,
+  installations,
+  isLoading,
+  isError,
+  onSet,
+  onRemove,
+  isSetting,
+  isRemoving,
+}: ScheduleSlackSyncProps) {
+  if (schedule.slackUsergroupId) {
+    return (
+      <MappedUsergroup
+        schedule={schedule}
+        installations={installations}
+        isLoading={isLoading}
+        onRemove={onRemove}
+        isRemoving={isRemoving}
+      />
+    )
+  }
+  if (isLoading) {
+    return (
+      <output className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+        Loading Slack workspaces…
+      </output>
+    )
+  }
+  if (isError) {
+    return (
+      <p className="text-xs text-warning-fg">
+        Couldn’t load Slack workspaces. Try again shortly.
+      </p>
+    )
+  }
+  const enabledInstallations = installations.filter(i => i.enabled)
+  if (enabledInstallations.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        {installations.length > 0
+          ? 'All connected Slack workspaces are disabled. Enable one in Settings to sync on-call.'
+          : 'Connect a Slack workspace in Settings to sync the on-call user to a group.'}
+      </p>
+    )
+  }
+  return (
+    <UsergroupSelector
+      schedule={schedule}
+      enabledInstallations={enabledInstallations}
+      onSet={onSet}
+      isSetting={isSetting}
+    />
+  )
+}
+
+// The label and helper copy for an existing mapping, resolved against the current
+// installation list so a mapping to a removed or paused workspace reads honestly.
+function describeMapping(
+  schedule: OnCallSchedule,
+  installations: readonly SlackInstallationSummary[],
+  isLoading: boolean
+): {label: ReactNode; helper: ReactNode} {
+  if (isLoading) {
+    return {label: <span className="text-muted-foreground">Checking workspace…</span>, helper: null}
+  }
+  const mapped = installations.find(i => i.id === schedule.slackInstallationId)
+  if (mapped?.enabled) {
+    return {
+      label: <span className="text-muted-foreground">in {workspaceName(mapped)}</span>,
+      helper: (
+        <p className="mt-1 text-xs text-muted-foreground">
+          Auto-syncing the current on-call user to this group.
+        </p>
+      ),
+    }
+  }
+  if (mapped) {
+    return {
+      label: (
+        <span className="inline-flex items-center gap-1 text-warning-fg">
+          <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+          {workspaceName(mapped)} · delivery disabled
+        </span>
+      ),
+      helper: (
+        <p className="mt-1 text-xs text-muted-foreground">
+          Enable this workspace in Settings to resume syncing.
+        </p>
+      ),
+    }
+  }
+  if (schedule.slackInstallationId) {
+    return {
+      label: (
+        <span className="inline-flex items-center gap-1 text-warning-fg">
+          <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+          Workspace no longer connected
+        </span>
+      ),
+      helper: (
+        <p className="mt-1 text-xs text-muted-foreground">
+          Reconnect the workspace in Settings, or remove this mapping.
+        </p>
+      ),
+    }
+  }
+  // Legacy mapping created before installations were tracked.
+  return {label: <span className="text-muted-foreground">Workspace not recorded</span>, helper: null}
+}
+
+// An existing schedule → user-group mapping, with a health-aware workspace label
+// and a Remove action.
+function MappedUsergroup({
+  schedule,
+  installations,
+  isLoading,
+  onRemove,
+  isRemoving,
+}: {
+  readonly schedule: OnCallSchedule
+  readonly installations: readonly SlackInstallationSummary[]
+  readonly isLoading: boolean
+  readonly onRemove: (scheduleId: string) => void
+  readonly isRemoving: boolean
+}) {
+  const {label, helper} = describeMapping(schedule, installations, isLoading)
+  return (
+    <div className="p-1.5 rounded-md bg-info-bg border border-info-border">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
+          <Badge variant="info" size="sm">@{schedule.slackUsergroupHandle}</Badge>
+          <span className="text-xs">{label}</span>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 text-xs text-destructive hover:text-destructive shrink-0"
+          onClick={() => onRemove(schedule.id)}
+          disabled={isRemoving}
+          aria-label={`Remove Slack user group from ${schedule.name}`}
+        >
+          Remove
+        </Button>
+      </div>
+      {helper}
+    </div>
+  )
+}
+
+// Placeholder for the user-group select, reflecting where the two-step selection
+// stands: no workspace yet, groups loading/failed/empty, or ready to choose.
+function usergroupPlaceholderText(
+  effectiveInstallationId: string,
+  usergroups: {readonly isLoading: boolean; readonly isError: boolean; readonly count: number}
+): string {
+  if (effectiveInstallationId === '') return 'Select a workspace first'
+  if (usergroups.isLoading) return 'Loading user groups…'
+  if (usergroups.isError) return 'Couldn’t load user groups'
+  if (usergroups.count === 0) return 'No user groups available'
+  return 'Select a user group'
+}
+
+// The workspace → user-group picker for a schedule without a mapping yet. Holds
+// the chosen-workspace state and the lazy per-workspace user-group query.
+function UsergroupSelector({
+  schedule,
+  enabledInstallations,
+  onSet,
+  isSetting,
+}: {
+  readonly schedule: OnCallSchedule
+  readonly enabledInstallations: readonly SlackInstallationSummary[]
+  readonly onSet: (args: SlackUsergroupSetArgs) => void
+  readonly isSetting: boolean
+}) {
+  // Auto-pick the only enabled workspace, but keep it a selectable value so the
+  // chosen workspace stays visible (and switchable when there are several).
+  const onlyEnabledId = enabledInstallations.length === 1 ? enabledInstallations[0].id : ''
+  const [chosenInstallationId, setChosenInstallationId] = useState('')
+  const effectiveInstallationId = chosenInstallationId || onlyEnabledId
+
+  const usergroupsQuery = useQuery({
+    queryKey: ['slack-installation-usergroups', effectiveInstallationId],
+    queryFn: () => api.getSlackInstallationUsergroups(effectiveInstallationId),
+    enabled: effectiveInstallationId !== '',
+  })
+
+  const usergroupCount = usergroupsQuery.data?.length ?? 0
+  const selectUsergroup = (value: string) => {
+    const ug = usergroupsQuery.data?.find(u => u.id === value)
+    if (ug && effectiveInstallationId !== '') {
+      onSet({
+        scheduleId: schedule.id,
+        usergroupId: ug.id,
+        usergroupHandle: ug.handle,
+        slackInstallationId: effectiveInstallationId,
+      })
+    }
+  }
+
+  const usergroupDisabled =
+    isSetting ||
+    effectiveInstallationId === '' ||
+    usergroupsQuery.isLoading ||
+    usergroupsQuery.isError ||
+    usergroupCount === 0
+
+  const helperText =
+    enabledInstallations.length > 1
+      ? 'Choose a workspace, then a user group to sync the current on-call user.'
+      : 'Sync the current on-call user to a Slack user group.'
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Select value={effectiveInstallationId} onValueChange={setChosenInstallationId}>
+          <SelectTrigger className="w-[200px] h-8" aria-label="Slack workspace">
+            <SelectValue placeholder="Select a workspace" />
+          </SelectTrigger>
+          <SelectContent>
+            {enabledInstallations.map(inst => (
+              <SelectItem key={inst.id} value={inst.id}>{workspaceName(inst)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value="" onValueChange={selectUsergroup} disabled={usergroupDisabled}>
+          <SelectTrigger className="w-[240px] h-8" aria-label="Slack user group">
+            <SelectValue
+              placeholder={usergroupPlaceholderText(effectiveInstallationId, {
+                isLoading: usergroupsQuery.isLoading,
+                isError: usergroupsQuery.isError,
+                count: usergroupCount,
+              })}
+            />
+          </SelectTrigger>
+          <SelectContent>
+            {usergroupsQuery.data?.map(ug => (
+              <SelectItem key={ug.id} value={ug.id}>
+                <div className="flex flex-col">
+                  <span className="font-medium">@{ug.handle}</span>
+                  <span className="text-xs text-muted-foreground">{ug.name}</span>
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {usergroupsQuery.isError ? (
+        <p className="text-xs text-warning-fg">Couldn’t load user groups for this workspace.</p>
+      ) : (
+        <p className="text-xs text-muted-foreground">{helperText}</p>
+      )}
     </div>
   )
 }

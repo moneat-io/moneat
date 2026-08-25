@@ -24,6 +24,7 @@ import com.moneat.org.routes.integrationRoutes
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OrganizationIntegrations
 import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.SlackInstallations
 import com.moneat.shared.models.SlackUserMappings
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
@@ -83,6 +84,7 @@ class IntegrationRoutesTest {
             Organizations,
             Memberships,
             OrganizationIntegrations,
+            SlackInstallations,
             SlackUserMappings,
             PricingTierConfigs,
             Subscriptions
@@ -248,6 +250,32 @@ class IntegrationRoutesTest {
 
             assertEquals(HttpStatusCode.Forbidden, response.status)
             assertTrue(response.bodyAsText().contains("Slack integration is not available"))
+        }
+    }
+
+    @Test
+    fun `slack oauth start requires organization admin access`() {
+        val orgId = seedOrganization("Slack Member Org")
+        val userId = seedUser("slack-member@test.com")
+        seedMembership(orgId, userId, "member")
+
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing {
+                    authenticate("auth-jwt") {
+                        route("/v1") { integrationRoutes() }
+                    }
+                }
+            }
+
+            val response = client.get("/v1/integrations/slack/oauth/start") {
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
+            }
+
+            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertTrue(response.bodyAsText().contains("Organization admin access required"))
         }
     }
 

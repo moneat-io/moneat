@@ -79,6 +79,7 @@ private fun createSlackHttpClient(): HttpClient =
 
 class SlackService(
     private val httpClient: HttpClient = createSlackHttpClient(),
+    private val installationService: SlackInstallationService = SlackInstallationService(),
 ) {
     private val logger = LoggerFactory.getLogger(SlackService::class.java)
     private val json = Json { ignoreUnknownKeys = true }
@@ -134,10 +135,25 @@ class SlackService(
         @SerialName("access_token") val accessToken: String? = null,
         @SerialName("token_type") val tokenType: String? = null,
         val scope: String? = null,
+        @SerialName("refresh_token") val refreshToken: String? = null,
+        @SerialName("expires_in") val expiresIn: Long? = null,
         @SerialName("bot_user_id") val botUserId: String? = null,
         @SerialName("app_id") val appId: String? = null,
         val team: SlackTeam? = null,
+        val enterprise: SlackTeam? = null,
+        @SerialName("authed_user") val authedUser: SlackAuthedUser? = null,
+        @SerialName("is_enterprise_install") val isEnterpriseInstall: Boolean = false,
         val error: String? = null
+    )
+
+    @Serializable
+    data class SlackAuthedUser(
+        val id: String,
+        val scope: String? = null,
+        @SerialName("access_token") val accessToken: String? = null,
+        @SerialName("token_type") val tokenType: String? = null,
+        @SerialName("refresh_token") val refreshToken: String? = null,
+        @SerialName("expires_in") val expiresIn: Long? = null,
     )
 
     @Serializable
@@ -155,6 +171,15 @@ class SlackService(
     )
 
     @Serializable
+    private data class SlackAuthTestResponse(
+        val ok: Boolean,
+        @SerialName("team_id") val teamId: String? = null,
+        @SerialName("enterprise_id") val enterpriseId: String? = null,
+        @SerialName("user_id") val userId: String? = null,
+        val error: String? = null,
+    )
+
+    @Serializable
     data class SlackConversationJoinResponse(
         val ok: Boolean,
         val error: String? = null
@@ -166,6 +191,17 @@ class SlackService(
     )
 
     private fun getSlackConfig(organizationId: Int): SlackConfig? {
+        val installationConfig = runCatching {
+            installationService.defaultDeliveryConfig(organizationId)
+        }.onFailure { error ->
+            logger.warn("Unable to read encrypted Slack installation; checking legacy configuration", error)
+        }.getOrNull()
+        if (installationConfig != null) {
+            return SlackConfig(
+                accessToken = installationConfig.accessToken,
+                channelId = installationConfig.channelId,
+            )
+        }
         return transaction {
             OrganizationIntegrations
                 .selectAll()
@@ -971,6 +1007,13 @@ class SlackService(
     suspend fun testConnection(organizationId: Int): Pair<Boolean, String> {
         val config = getSlackConfig(organizationId) ?: return false to "No Slack integration configured"
 
+        return testConnection(config.accessToken, config.channelId)
+    }
+
+    suspend fun testConnection(
+        accessToken: String,
+        channelId: String,
+    ): Pair<Boolean, String> {
         val blocks =
             listOf(
                 SlackBlock(
@@ -997,8 +1040,8 @@ class SlackService(
         return suspendRunCatching {
             val (success, error) =
                 sendMessage(
-                    accessToken = config.accessToken,
-                    channel = config.channelId,
+                    accessToken = accessToken,
+                    channel = channelId,
                     blocks = blocks,
                     fallbackText = "✅ Test Message"
                 )
@@ -1034,6 +1077,24 @@ class SlackService(
             SlackOAuthResponse(ok = false, error = e.message)
         }
     }
+
+    suspend fun probeAuthentication(accessToken: String): SlackAuthenticationProbe =
+        suspendRunCatching {
+            val response = httpClient.post("https://slack.com/api/auth.test") {
+                header("Authorization", "Bearer $accessToken")
+            }
+            val result = json.decodeFromString<SlackAuthTestResponse>(response.bodyAsText())
+            SlackAuthenticationProbe(
+                ok = result.ok,
+                teamId = result.teamId,
+                enterpriseId = result.enterpriseId,
+                botUserId = result.userId,
+                error = result.error,
+            )
+        }.getOrElse { error ->
+            logger.warn("Slack authentication health probe failed", error)
+            SlackAuthenticationProbe(ok = false, error = "transport_error")
+        }
 
     @Serializable
     data class SlackChannelsResponse(
@@ -1150,15 +1211,13 @@ class SlackService(
         priority: String
     ) {
         try {
-            // Get Slack user mapping
+            val orgId = getUserOrganizationId(userId) ?: return
             val slackUserId =
-                getSlackUserIdForUser(userId) ?: run {
+                getSlackUserIdForUser(userId, orgId) ?: run {
                     logger.debug("No Slack mapping found for user $userId")
                     return
                 }
 
-            // Get organization's bot token
-            val orgId = getUserOrganizationId(userId) ?: return
             val accessToken = getAccessToken(orgId) ?: return
 
             val actionsBlock = alertResourceId?.let { publicAlertId ->
@@ -1225,17 +1284,35 @@ class SlackService(
         }
     }
 
-    private fun getSlackUserIdForUser(userId: Int): String? =
-        transaction {
-            com.moneat.shared.models.SlackUserMappings
+    private fun getSlackUserIdForUser(
+        userId: Int,
+        organizationId: Int,
+    ): String? {
+        val defaultInstallation = installationService.defaultInstallationIdentity(organizationId) ?: return null
+        return transaction {
+            val mappings = com.moneat.shared.models.SlackUserMappings
                 .selectAll()
                 .where { com.moneat.shared.models.SlackUserMappings.userId eq userId }
-                .singleOrNull()
-                ?.get(com.moneat.shared.models.SlackUserMappings.slackUserId)
-        }
+                .toList()
+            mappings.firstOrNull {
+                it[com.moneat.shared.models.SlackUserMappings.slackInstallationId] == defaultInstallation.internalId
+            } ?: defaultInstallation.teamId?.let { teamId ->
+                mappings.firstOrNull {
+                    it[com.moneat.shared.models.SlackUserMappings.slackInstallationId] == null &&
+                        it[com.moneat.shared.models.SlackUserMappings.slackTeamId] == teamId
+                }
+            }
+        }?.get(com.moneat.shared.models.SlackUserMappings.slackUserId)
+    }
 
-    private fun getAccessToken(organizationId: Int): String? =
-        transaction {
+    private fun getAccessToken(organizationId: Int): String? {
+        val installationToken = runCatching {
+            installationService.defaultAccessToken(organizationId)
+        }.onFailure { error ->
+            logger.warn("Unable to read encrypted Slack installation; checking legacy token", error)
+        }.getOrNull()
+        if (installationToken != null) return installationToken
+        return transaction {
             OrganizationIntegrations
                 .selectAll()
                 .where {
@@ -1246,6 +1323,7 @@ class SlackService(
                 .singleOrNull()
                 ?.get(OrganizationIntegrations.access_token)
         }
+    }
 
     private fun getUserOrganizationId(userId: Int): Int? =
         transaction {

@@ -279,18 +279,6 @@ object OnCallOverrides : IntIdTable("on_call_overrides") {
     val createdAt = timestamp("created_at")
 }
 
-object OnCallScheduleUsergroups : IntIdTable("on_call_schedule_usergroups") {
-    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
-    val scheduleId =
-        integer("schedule_id")
-            .references(OnCallSchedules.id, onDelete = ReferenceOption.CASCADE)
-            .uniqueIndex()
-    val slackUsergroupId = varchar("slack_usergroup_id", 100)
-    val slackUsergroupHandle = varchar("slack_usergroup_handle", 100)
-    val createdAt = timestamp("created_at")
-    val updatedAt = timestamp("updated_at")
-}
-
 @Serializable
 data class OnCallScheduleLayer(
     val id: String,
@@ -361,6 +349,7 @@ data class OnCallSchedule(
     val currentOnCall: OnCallParticipant? = null,
     val slackUsergroupId: String? = null,
     val slackUsergroupHandle: String? = null,
+    val slackInstallationId: String?,
     val createdAt: String,
     val updatedAt: String,
 )
