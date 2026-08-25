@@ -256,9 +256,7 @@ class OnCallScheduleService {
             slackInstallationId = slackInstallationResourceId,
             createdAt = scheduleRow[OnCallSchedules.createdAt].toString(),
             updatedAt = scheduleRow[OnCallSchedules.updatedAt].toString(),
-        ).also {
-            it.organizationId = scheduleRow[OnCallSchedules.organizationId]
-        }
+        )
     }
 
     fun getOnCallAt(scheduleId: Int, at: Instant): OnCallParticipant? =
