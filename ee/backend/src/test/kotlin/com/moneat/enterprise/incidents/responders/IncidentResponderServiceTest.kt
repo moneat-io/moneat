@@ -103,6 +103,13 @@ class IncidentResponderServiceTest {
         val assignedRole = service.listAssignments(member.organizationId, incident.incidentId).single()
         assertEquals(secondUserResourceId, assignedRole.assigneeUserId)
         assertEquals(null, assignedRole.role.privateInstructions)
+        assertEquals(
+            "Keep operational details in the private responder thread.",
+            service.listAssignments(member.organizationId, incident.incidentId, secondUserId)
+                .single()
+                .role
+                .privateInstructions,
+        )
 
         commandService.execute(
             HandoverIncidentRoleCommand(

@@ -188,7 +188,11 @@ class IncidentResponderService {
                 ?: throw IncidentCommandNotFoundException("Incident role assignment not found")
         }
 
-    fun listAssignments(organizationId: Int, incidentId: Int): List<IncidentRoleAssignment> =
+    fun listAssignments(
+        organizationId: Int,
+        incidentId: Int,
+        viewerUserId: Int? = null,
+    ): List<IncidentRoleAssignment> =
         transaction {
             requireIncident(organizationId, incidentId)
             val rows =
@@ -212,7 +216,7 @@ class IncidentResponderService {
                     id = row[NativeIncidentRoleAssignments.resourceId].toString(),
                     role = roleDefinition(
                         requireRole(row[NativeIncidentRoleAssignments.roleDefinitionId]),
-                        includePrivateInstructions = false,
+                        includePrivateInstructions = viewerUserId == row[NativeIncidentRoleAssignments.assigneeUserId],
                     ),
                     assigneeUserId = checkNotNull(users[row[NativeIncidentRoleAssignments.assigneeUserId]]),
                     assignedByUserId = checkNotNull(users[row[NativeIncidentRoleAssignments.assignedBy]]),

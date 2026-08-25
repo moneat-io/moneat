@@ -204,6 +204,7 @@ export function IncidentRolesPanel({
           {roleDefinitions.map((role) => {
             const assignment = assignmentByRoleId.get(role.id)
             const assignedToSelf = assignment?.assigneeUserId === currentUserId
+            const privateInstructions = assignedToSelf ? assignment?.role.privateInstructions : undefined
             return (
               <div key={role.id} className="rounded-lg border p-3">
                 <div className="flex items-start justify-between gap-3">
@@ -230,6 +231,16 @@ export function IncidentRolesPanel({
                           </li>
                         ))}
                       </ul>
+                    )}
+                    {privateInstructions && (
+                      <div className="mt-2 rounded-md border border-accent/30 bg-accent/5 p-2">
+                        <p className="text-[11px] font-medium uppercase tracking-wider text-accent-foreground">
+                          Private role instructions
+                        </p>
+                        <p className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">
+                          {privateInstructions}
+                        </p>
+                      </div>
                     )}
                   </div>
                   <div className="flex-shrink-0 text-right">
