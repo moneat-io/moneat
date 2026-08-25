@@ -46,10 +46,12 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -320,6 +322,32 @@ class SlackService(
             return SlackOutboundSendResult.Failed("Slack message is missing a destination channel")
         }
         return sendOutboundOperation(delivery, accessToken)
+    }
+
+    suspend fun openModal(
+        organizationId: Int,
+        installationId: Int,
+        triggerId: String,
+        view: JsonObject,
+    ): Boolean {
+        val config = installationService.botConfigByInternalId(organizationId, installationId) ?: return false
+        return suspendRunCatching {
+            val response = httpClient.post("https://slack.com/api/views.open") {
+                contentType(ContentType.Application.Json)
+                header("Authorization", "Bearer ${config.accessToken}")
+                setBody(
+                    buildJsonObject {
+                        put("trigger_id", triggerId)
+                        put("view", view)
+                    }.toString(),
+                )
+            }
+            if (response.status != HttpStatusCode.OK) return@suspendRunCatching false
+            json.parseToJsonElement(response.bodyAsText()).jsonObject["ok"]?.jsonPrimitive?.booleanOrNull == true
+        }.getOrElse { error ->
+            logger.warn("Failed to open Slack modal", error)
+            false
+        }
     }
 
     private suspend fun sendOutboundOperation(
