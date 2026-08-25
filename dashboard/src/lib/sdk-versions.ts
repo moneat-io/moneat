@@ -34,6 +34,27 @@ function resolveVersion(
   return sdkVersions?.[key] ?? DEFAULT_DOC_SDK_VERSIONS[key]
 }
 
+function replaceVersionSegment(code: string, prefix: string, version: string): string {
+  let result = ''
+  let cursor = 0
+
+  while (cursor < code.length) {
+    const matchStart = code.indexOf(prefix, cursor)
+    if (matchStart < 0) break
+
+    const versionStart = matchStart + prefix.length
+    const versionEnd = code.indexOf('"', versionStart)
+    if (versionEnd <= versionStart) {
+      return result + code.slice(cursor)
+    }
+
+    result += code.slice(cursor, versionStart) + version
+    cursor = versionEnd
+  }
+
+  return result + code.slice(cursor)
+}
+
 export function applySdkVersionsToSnippet(code: string, sdkVersions?: SdkVersionMap): string {
   let next = code
 
@@ -56,7 +77,7 @@ export function applySdkVersionsToSnippet(code: string, sdkVersions?: SdkVersion
   next = next.replace(/sentry_flutter:\s*\^[0-9A-Za-z.+-]+/g, `sentry_flutter: ^${sentryFlutterVersion}`)
 
   const sentryElixirVersion = resolveVersion('hex:sentry', sdkVersions)
-  next = next.replace(/\{:sentry,\s*"~>\s*[^"]+"\s*\}/g, `{:sentry, "~> ${sentryElixirVersion}"}`)
+  next = replaceVersionSegment(next, '{:sentry, "~> ', sentryElixirVersion)
 
   const otelSdkLogsVersion = resolveVersion('io.opentelemetry:opentelemetry-sdk-logs', sdkVersions)
   next = next.replace(

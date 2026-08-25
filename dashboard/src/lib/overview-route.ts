@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import {trimTrailingCharacter} from './string-utils'
+
 export const APP_OVERVIEW_VIEW = 'overview'
 export const APP_OVERVIEW_HREF = '/?view=overview'
 
@@ -40,7 +42,7 @@ export function isAppOverviewSearch(search: unknown): boolean {
 
 function normalizeRoutePath(pathname: string): string {
   if (!pathname || pathname === '/') return '/'
-  return pathname.replace(/\/+$/, '') || '/'
+  return trimTrailingCharacter(pathname, '/') || '/'
 }
 
 export function isPublicLandingRoute(pathname: string, search: unknown): boolean {

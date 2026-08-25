@@ -19,8 +19,29 @@ import {Check, Copy} from 'lucide-react'
 import {Prism as SyntaxHighlighter} from 'react-syntax-highlighter'
 import {oneDark, oneLight} from 'react-syntax-highlighter/dist/esm/styles/prism'
 
+function isDigits(value: string): boolean {
+  if (!value) return false
+  for (const character of value) {
+    if (character < '0' || character > '9') return false
+  }
+  return true
+}
+
+function isJavaStacktrace(stacktrace: string): boolean {
+  const firstLine = stacktrace.split('\n', 1)[0]?.trimStart() ?? ''
+  if (!firstLine.startsWith('at ')) return false
+
+  const openParen = firstLine.indexOf('(')
+  const closeParen = firstLine.lastIndexOf(')')
+  if (openParen <= 3 || closeParen <= openParen + 1) return false
+
+  const location = firstLine.slice(openParen + 1, closeParen)
+  const lineSeparator = location.lastIndexOf(':')
+  return lineSeparator > 0 && isDigits(location.slice(lineSeparator + 1))
+}
+
 function detectLanguage(stacktrace: string): string {
-  if (/^\s+at\s+.+\(.+:\d+\)/.test(stacktrace) || /\tat\s/.test(stacktrace)) return 'javastacktrace'
+  if (isJavaStacktrace(stacktrace) || stacktrace.includes('\tat ')) return 'javastacktrace'
   if (/File ".+", line \d+/.test(stacktrace)) return 'python'
   return 'log'
 }

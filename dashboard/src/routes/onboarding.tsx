@@ -35,6 +35,7 @@ import {
   storeTelemetrySourceIdsForService,
 } from '@/lib/telemetry-sources'
 import {APP_OVERVIEW_SEARCH} from '@/lib/overview-route'
+import {trimLeadingCharacter, trimTrailingCharacter} from '@/lib/string-utils'
 
 export const Route = createFileRoute('/onboarding')({
   component: OnboardingPage,
@@ -62,11 +63,10 @@ const REFERRAL_SOURCES = [
 
 // Generate slug from organization name
 function generateSlug(name: string): string {
-  return name
+  const slug = name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .substring(0, 100)
+  return trimTrailingCharacter(trimLeadingCharacter(slug, '-'), '-').substring(0, 100)
 }
 
 type OnboardingStep = 'org' | 'service'
@@ -145,9 +145,8 @@ function OnboardingPage() {
     const sanitized = value
       .toLowerCase()
       .replace(/[^a-z0-9-]/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .substring(0, 100)
-    updateSlug(sanitized, true)
+    const trimmed = trimTrailingCharacter(trimLeadingCharacter(sanitized, '-'), '-')
+    updateSlug(trimmed.substring(0, 100), true)
   }
 
   const copySlug = () => {

@@ -27,6 +27,7 @@ import {Toaster} from '../components/ui/toaster'
 import {api} from '../lib/api'
 import {isDemo} from '../lib/demo'
 import {APP_OVERVIEW_SEARCH, isPublicLandingRoute} from '../lib/overview-route'
+import {trimTrailingCharacter} from '../lib/string-utils'
 import {DemoBanner} from '../components/demo/DemoBanner'
 import {AiFloatingPanel} from '../components/AiFloatingPanel'
 import {AiSplitPanel} from '../components/AiSplitPanel'
@@ -151,7 +152,7 @@ const AUTH_OPTIONAL_ROUTE_EXCLUSIONS: ReadonlySet<string> = new Set([
 
 function normalizePath(pathname: string): string {
   if (!pathname || pathname === '/') return '/'
-  return pathname.replace(/\/+$/, '')
+  return trimTrailingCharacter(pathname, '/')
 }
 
 function isRouteBranch(pathname: string, routeRoot: string): boolean {

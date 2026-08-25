@@ -1,5 +1,6 @@
 import {datadogRum} from '@datadog/browser-rum'
 import {datadogLogs} from '@datadog/browser-logs'
+import {trimLeadingCharacter, trimTrailingCharacter} from './string-utils'
 
 export interface DatadogInitOptions {
   applicationId?: string
@@ -13,11 +14,11 @@ export interface DatadogInitOptions {
 
 export function resolveProxyUrl(proxyUrl?: string, backendUrl?: string): string {
   const base = proxyUrl || (backendUrl || 'https://api.moneat.io')
-  return base.replace(/\/+$/, '') + '/dd'
+  return trimTrailingCharacter(base, '/') + '/dd'
 }
 
 function joinUrl(base: string, path: string): string {
-  return base.replace(/\/+$/, '') + '/' + path.replace(/^\/+/, '')
+  return trimTrailingCharacter(base, '/') + '/' + trimLeadingCharacter(path, '/')
 }
 
 function isConfigured(value: string | undefined): value is string {
