@@ -127,7 +127,9 @@ class IncidentSlackChannelService(
         if (state == IncidentSlackChannelState.ACTIVE.wire ||
             (state == IncidentSlackChannelState.PROVISIONING.wire &&
                 row[NativeIncidentSlackChannels.deliveryResourceId] != null)
-        ) return
+        ) {
+            return
+        }
         val request = SlackOutboundEnqueueRequest(
             organizationId = event.organizationId,
             teamId = teamId,
