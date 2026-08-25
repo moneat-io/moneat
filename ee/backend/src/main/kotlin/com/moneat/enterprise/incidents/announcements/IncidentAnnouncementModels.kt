@@ -23,6 +23,37 @@ data class IncidentAnnouncementRuleConditions(
     val teams: Set<String> = emptySet(),
     val fields: Map<String, Set<String>> = emptyMap(),
     val visibilities: Set<String> = emptySet(),
+    /** Optional incident actions rendered on matching overview cards. */
+    val quickActions: List<IncidentAnnouncementQuickAction> = emptyList(),
+    /** Optional links rendered alongside the canonical incident homepage. */
+    val links: List<IncidentAnnouncementLink> = emptyList(),
+    /** Controls which response-work nudges are included in card updates. */
+    val nudges: IncidentAnnouncementNudgePolicy = IncidentAnnouncementNudgePolicy(),
+)
+
+@Serializable
+data class IncidentAnnouncementQuickAction(
+    val label: String,
+    val actionId: String,
+    val value: String? = null,
+)
+
+@Serializable
+data class IncidentAnnouncementLink(
+    val label: String,
+    val url: String,
+)
+
+@Serializable
+data class IncidentAnnouncementNudgePolicy(
+    val enabled: Boolean = true,
+    val missingLead: Boolean = true,
+    val missingSummary: Boolean = true,
+    val missingUpdate: Boolean = true,
+    val missingStatusPage: Boolean = true,
+    val missingTriageDecision: Boolean = true,
+    val missingEscalation: Boolean = true,
+    val missingClosure: Boolean = true,
 )
 
 data class IncidentAnnouncementContext(

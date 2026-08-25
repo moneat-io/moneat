@@ -116,6 +116,45 @@ class IncidentAnnouncementServiceTest {
         assertEquals(false, conditions.matches(matching.copy(severity = "SEV-3")))
     }
 
+    @Test
+    fun `announcement card includes configured actions links and response nudges`() = runBlocking {
+        val requests = mutableListOf<SlackOutboundEnqueueRequest>()
+        val service = IncidentAnnouncementService(
+            enqueue = { request -> requests += request; Uuid.random().toString() },
+        )
+        service.createRule(
+            organizationId = member.organizationId,
+            actorUserId = member.userId,
+            request = CreateIncidentAnnouncementRule(
+                name = "Incident response overview",
+                teamId = "T-announcements",
+                channelId = "C-announcements",
+                enabled = true,
+                announceTriage = false,
+                allowPrivate = false,
+                allowTest = false,
+                conditions = IncidentAnnouncementRuleConditions(
+                    quickActions = listOf(
+                        IncidentAnnouncementQuickAction(
+                            label = "Add update",
+                            actionId = "incident_update",
+                        ),
+                    ),
+                    links = listOf(IncidentAnnouncementLink("Runbook", "https://runbooks.example.test/incident")),
+                ),
+            ),
+        )
+
+        service.consume(event("INCIDENT_DECLARE", 1, NativeIncidentStatus.ACTIVE.wire), "overview-card")
+
+        val payload = requests.single().payload
+        assertTrue(payload.contains("Add update"))
+        assertTrue(payload.contains("Runbook"))
+        assertTrue(payload.contains("Response nudges"))
+        assertTrue(payload.contains("Assign an incident lead"))
+        assertTrue(payload.contains("Activate the response escalation"))
+    }
+
     private fun seedIncident(status: String): Uuid = transaction {
         val resourceId = Uuid.random()
         OnCallIncidents.insert {

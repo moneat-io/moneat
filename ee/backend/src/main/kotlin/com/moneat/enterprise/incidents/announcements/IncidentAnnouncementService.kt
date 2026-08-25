@@ -5,6 +5,9 @@
 package com.moneat.enterprise.incidents.announcements
 
 import com.moneat.enterprise.incidents.events.NativeIncidentDomainEvent
+import com.moneat.enterprise.incidents.models.NativeIncidentRoleAssignments
+import com.moneat.enterprise.incidents.models.NativeIncidentRoleDefinitions
+import com.moneat.enterprise.incidents.response.NativeIncidentResponseActivations
 import com.moneat.enterprise.incidents.models.NativeIncidentStatus
 import com.moneat.enterprise.oncall.models.OnCallIncidents
 import com.moneat.config.EnvConfig
@@ -12,6 +15,7 @@ import com.moneat.notifications.services.SlackOutboundDeliveryService
 import com.moneat.notifications.services.SlackOutboundEnqueueRequest
 import com.moneat.shared.models.OrganizationIntegrations
 import com.moneat.shared.models.SlackOutboundOperation
+import com.moneat.shared.models.Users
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -23,7 +27,9 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.isNotNull
+import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -62,6 +68,7 @@ class IncidentAnnouncementService(
         require(request.channelId.isNullOrBlank() || !request.teamId.isNullOrBlank()) {
             "A Slack team is required when a channel is specified"
         }
+        validatePresentation(request.conditions)
         val version = NativeIncidentAnnouncementRules
             .selectAll()
             .where { NativeIncidentAnnouncementRules.organizationId eq organizationId }
@@ -140,7 +147,7 @@ class IncidentAnnouncementService(
                 outboundDeliveryService.find(id)?.providerMessageTs
             }
         val isUpdate = previousTs != null
-        val cardPayload = cardPayload(snapshot, destination.channelId, previousTs)
+        val cardPayload = cardPayload(snapshot, destination, previousTs)
         val idempotencyKey =
             "incident:${snapshot.resourceId}:announcement:${destination.ruleKey}:${destination.teamId}" +
                 ":${destination.channelId}:card"
@@ -274,6 +281,29 @@ class IncidentAnnouncementService(
                 (OnCallIncidents.id eq event.incidentId)
         }.singleOrNull()?.let { row ->
             val fields = row[OnCallIncidents.declarationSnapshot].mapValues { (_, value) -> value.asText() }
+            val roleAssignments = NativeIncidentRoleAssignments.selectAll().where {
+                (NativeIncidentRoleAssignments.organizationId eq event.organizationId) and
+                    (NativeIncidentRoleAssignments.incidentId eq event.incidentId) and
+                    NativeIncidentRoleAssignments.endedAt.isNull()
+            }
+            val roleIds = roleAssignments.map { it[NativeIncidentRoleAssignments.roleDefinitionId] }.toSet()
+            val userIds = roleAssignments.map { it[NativeIncidentRoleAssignments.assigneeUserId] }.toSet()
+            val roleNames: Map<Int, String> = NativeIncidentRoleDefinitions.selectAll().where {
+                NativeIncidentRoleDefinitions.id inList roleIds
+            }.associate { it[NativeIncidentRoleDefinitions.id].value to it[NativeIncidentRoleDefinitions.name] }
+            val userNames: Map<Int, String> = Users.selectAll().where { Users.id inList userIds }
+                .associate { it[Users.id] to (it[Users.name] ?: "Responder") }
+            val roles = roleAssignments.map { assignment ->
+                val roleId: Int = assignment[NativeIncidentRoleAssignments.roleDefinitionId]
+                val userId: Int = assignment[NativeIncidentRoleAssignments.assigneeUserId]
+                val role = roleNames[roleId] ?: "Responder"
+                val user = userNames[userId] ?: "Responder"
+                "$role: $user"
+            }
+            val activation = NativeIncidentResponseActivations.selectAll().where {
+                (NativeIncidentResponseActivations.organizationId eq event.organizationId) and
+                    (NativeIncidentResponseActivations.incidentId eq event.incidentId)
+            }.maxByOrNull { it[NativeIncidentResponseActivations.createdAt] }
             IncidentSnapshot(
                 resourceId = row[OnCallIncidents.resourceId].toString(),
                 title = row[OnCallIncidents.title],
@@ -285,6 +315,12 @@ class IncidentAnnouncementService(
                 visibility = row[OnCallIncidents.visibility],
                 reporter = row[OnCallIncidents.declaredBy].toString(),
                 fields = fields,
+                roles = roles,
+                escalation = activation?.let {
+                    "${it[NativeIncidentResponseActivations.acknowledgedCount]}/" +
+                        "${it[NativeIncidentResponseActivations.desiredCount]} acknowledged · " +
+                        it[NativeIncidentResponseActivations.status]
+                },
             )
         }
     }
@@ -340,10 +376,14 @@ class IncidentAnnouncementService(
         return true
     }
 
-    private fun cardPayload(snapshot: IncidentSnapshot, channelId: String, messageTs: String?): String =
+    private fun cardPayload(
+        snapshot: IncidentSnapshot,
+        destination: AnnouncementDestination,
+        messageTs: String?,
+    ): String =
         json.encodeToString(
             buildJsonObject {
-                put("channel", channelId)
+                put("channel", destination.channelId)
                 messageTs?.let { put("ts", it) }
                 put("text", "Incident: ${snapshot.title}")
                 put("blocks", buildJsonArray {
@@ -362,7 +402,9 @@ class IncidentAnnouncementService(
                             add(field("Severity", snapshot.severity ?: "Unclassified"))
                             add(field("Type", snapshot.incidentType ?: "Unclassified"))
                             add(field("Reporter", snapshot.reporter))
-                            add(field("Channel", channelId))
+                            add(field("Channel", destination.channelId))
+                            add(field("Escalation", snapshot.escalation ?: "Not activated"))
+                            add(field("Roles", snapshot.roles.ifEmpty { listOf("Unassigned") }.joinToString("; ")))
                             snapshot.fields.entries.take(MAX_CUSTOM_FIELDS).forEach { (key, value) ->
                                 add(field(key.replace('_', ' ').replaceFirstChar(Char::uppercase), value))
                             }
@@ -377,6 +419,7 @@ class IncidentAnnouncementService(
                             })
                         })
                     }
+                    nudgeBlock(snapshot, destination.conditions.nudges)?.let(::add)
                     add(buildJsonObject {
                         put("type", "context")
                         put("elements", buildJsonArray {
@@ -384,6 +427,24 @@ class IncidentAnnouncementService(
                                 put("type", "mrkdwn")
                                 put("text", "<${homepage(snapshot.resourceId)}|Open incident homepage>")
                             })
+                            destination.conditions.links.take(MAX_LINKS).forEach { link ->
+                                add(buildJsonObject {
+                                    put("type", "mrkdwn")
+                                    put("text", "<${link.url}|${link.label.take(MAX_LINK_LABEL_LENGTH)}>")
+                                })
+                            }
+                            snapshot.fields["call_url"]?.let { url ->
+                                add(buildJsonObject {
+                                    put("type", "mrkdwn")
+                                    put("text", "<$url|Join incident call>")
+                                })
+                            }
+                            snapshot.fields["status_page_url"]?.let { url ->
+                                add(buildJsonObject {
+                                    put("type", "mrkdwn")
+                                    put("text", "<$url|View status page>")
+                                })
+                            }
                         })
                     })
                     add(buildJsonObject {
@@ -392,6 +453,15 @@ class IncidentAnnouncementService(
                             add(action("Accept", "incident_accept:${snapshot.resourceId}"))
                             add(action("Merge", "incident_merge:${snapshot.resourceId}"))
                             add(action("Decline", "incident_decline:${snapshot.resourceId}"))
+                            destination.conditions.quickActions.take(MAX_QUICK_ACTIONS).forEach { configured ->
+                                add(
+                                    action(
+                                        configured.label,
+                                        configured.actionId,
+                                        configured.value ?: snapshot.resourceId,
+                                    ),
+                                )
+                            }
                         })
                     })
                 })
@@ -403,11 +473,52 @@ class IncidentAnnouncementService(
         put("text", "*$label:*\n${value.take(MAX_FIELD_LENGTH)}")
     }
 
-    private fun action(label: String, actionId: String): JsonObject = buildJsonObject {
+    private fun action(
+        label: String,
+        actionId: String,
+        value: String = actionId.substringAfter(':'),
+    ): JsonObject = buildJsonObject {
         put("type", "button")
         put("text", buildJsonObject { put("type", "plain_text"); put("text", label) })
         put("action_id", actionId)
-        put("value", actionId.substringAfter(':'))
+        put("value", value)
+    }
+
+    private fun nudgeBlock(
+        snapshot: IncidentSnapshot,
+        policy: IncidentAnnouncementNudgePolicy,
+    ): JsonObject? {
+        if (!policy.enabled || snapshot.status in TERMINAL_STATUSES) return null
+        val nudges = nudgeMessages(snapshot, policy)
+        if (nudges.isEmpty()) return null
+        return buildJsonObject {
+            put("type", "section")
+            put("text", buildJsonObject {
+                put("type", "mrkdwn")
+                put("text", "*Response nudges*\n" + nudges.take(MAX_NUDGES).joinToString("\n") { "• $it" })
+            })
+        }
+    }
+
+    private fun nudgeMessages(
+        snapshot: IncidentSnapshot,
+        policy: IncidentAnnouncementNudgePolicy,
+    ): List<String> = buildList {
+        if (policy.missingLead && snapshot.roles.none { it.startsWith("Incident Commander:") }) {
+            add("Assign an incident lead")
+        }
+        if (policy.missingSummary && snapshot.summary.isNullOrBlank()) add("Add an incident summary")
+        if (policy.missingUpdate && snapshot.fields["next_update_at"].isNullOrBlank()) {
+            add("Set the next update time")
+        }
+        if (policy.missingStatusPage && snapshot.fields["status_page_url"].isNullOrBlank()) {
+            add("Publish a status page update")
+        }
+        if (policy.missingTriageDecision && snapshot.status == NativeIncidentStatus.TRIAGE.wire) {
+            add("Make the triage decision")
+        }
+        if (policy.missingEscalation && snapshot.escalation == null) add("Activate the response escalation")
+        if (policy.missingClosure) add("Keep the closure checklist current")
     }
 
     private fun JsonElement.asText(): String = (this as? JsonPrimitive)?.contentOrNull.orEmpty()
@@ -437,6 +548,8 @@ class IncidentAnnouncementService(
         val visibility: String,
         val reporter: String,
         val fields: Map<String, String>,
+        val roles: List<String>,
+        val escalation: String?,
     ) {
         val context: IncidentAnnouncementContext
             get() = IncidentAnnouncementContext(
@@ -469,6 +582,31 @@ class IncidentAnnouncementService(
     private fun enqueue(request: SlackOutboundEnqueueRequest): String =
         enqueue?.invoke(request) ?: outboundDeliveryService.enqueueAndWake(request)
 
+    private fun validatePresentation(conditions: IncidentAnnouncementRuleConditions) {
+        require(conditions.quickActions.size <= MAX_QUICK_ACTIONS) {
+            "At most $MAX_QUICK_ACTIONS incident quick actions may be configured"
+        }
+        require(conditions.links.size <= MAX_LINKS) {
+            "At most $MAX_LINKS incident links may be configured"
+        }
+        conditions.quickActions.forEach { action ->
+            require(action.label.isNotBlank() && action.label.length <= MAX_LINK_LABEL_LENGTH) {
+                "Incident quick action labels must be non-empty and at most $MAX_LINK_LABEL_LENGTH characters"
+            }
+            require(action.actionId.matches(ACTION_ID_PATTERN)) {
+                "Incident quick action IDs must use lowercase letters, numbers, underscores, colons, or hyphens"
+            }
+        }
+        conditions.links.forEach { link ->
+            require(link.label.isNotBlank() && link.label.length <= MAX_LINK_LABEL_LENGTH) {
+                "Incident link labels must be non-empty and at most $MAX_LINK_LABEL_LENGTH characters"
+            }
+            require(link.url.startsWith("https://") || link.url.startsWith("http://")) {
+                "Incident links must use http or https URLs"
+            }
+        }
+    }
+
     companion object {
         private const val MAX_RULE_NAME_LENGTH = 160
         private const val MAX_ERROR_LENGTH = 1_000
@@ -476,6 +614,12 @@ class IncidentAnnouncementService(
         private const val MAX_SUMMARY_LENGTH = 1_500
         private const val MAX_FIELD_LENGTH = 200
         private const val MAX_CUSTOM_FIELDS = 6
+        private const val MAX_QUICK_ACTIONS = 5
+        private const val MAX_LINKS = 5
+        private const val MAX_LINK_LABEL_LENGTH = 80
+        private const val MAX_NUDGES = 7
+        private val ACTION_ID_PATTERN = Regex("^[a-z][a-z0-9_:-]{1,63}$")
+        private val TERMINAL_STATUSES = setOf("RESOLVED", "CLOSED", "CANCELLED", "DECLINED", "MERGED")
         private val TERMINAL_EVENT_TYPES =
             setOf("INCIDENT_RESOLVE", "INCIDENT_CLOSE", "INCIDENT_CANCEL", "INCIDENT_DECLINE", "INCIDENT_MERGE")
     }
