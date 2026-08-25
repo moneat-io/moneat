@@ -491,6 +491,8 @@ class ReleaseService {
         }
 
         // Verify checksum
+        // Sentry-compatible artifact bundles require SHA-1 as a protocol checksum;
+        // this value is used for integrity matching, not authentication.
         val digest = MessageDigest.getInstance("SHA-1")
         storage.openInputStream(storageKey)?.use { input ->
             val buffer = ByteArray(IO_BUFFER_SIZE)
