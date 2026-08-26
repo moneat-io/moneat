@@ -25,6 +25,9 @@ import com.moneat.enterprise.incidents.models.NativeIncidentSourceLinks
 import com.moneat.enterprise.incidents.models.NativeIncidentStatus
 import com.moneat.enterprise.incidents.models.IncidentUpdateRequestStatus
 import com.moneat.enterprise.incidents.models.NativeIncidentUpdateRequests
+import com.moneat.enterprise.incidents.models.IncidentActionState
+import com.moneat.enterprise.incidents.models.NativeIncidentActions
+import com.moneat.enterprise.incidents.models.NativeIncidentActionEvents
 import com.moneat.enterprise.incidents.timeline.IncidentTimelineWriter
 import com.moneat.enterprise.incidents.timeline.PendingIncidentTimelineEvent
 import com.moneat.enterprise.incidents.timeline.toIncidentTimelineProvenance
@@ -123,7 +126,13 @@ class IncidentCommandService(
             is SetIncidentParticipationCommand,
             is LeaveIncidentCommand,
             -> applyResponderCommand(command)
-            is AddIncidentActionCommand -> addAction(command)
+            is AddIncidentActionCommand,
+            is ClaimIncidentActionCommand,
+            is ReassignIncidentActionCommand,
+            is CompleteIncidentActionCommand,
+            is CancelIncidentActionCommand,
+            is ConvertIncidentActionToFollowUpCommand,
+            -> applyActionCommand(command)
             is AddIncidentTimelineEventCommand -> addTimelineEvent(command)
             is LinkOnCallAlertCommand -> linkAlert(command)
             is LinkIncidentSourceCommand -> linkSource(command)
@@ -143,6 +152,17 @@ class IncidentCommandService(
             is SetIncidentParticipationCommand -> setParticipation(command)
             is LeaveIncidentCommand -> leaveIncident(command)
             else -> error("Unsupported incident responder command: ${command.type.wire}")
+        }
+
+    private fun applyActionCommand(command: IncidentCommand): IncidentMutation =
+        when (command) {
+            is AddIncidentActionCommand -> addAction(command)
+            is ClaimIncidentActionCommand -> claimAction(command)
+            is ReassignIncidentActionCommand -> reassignAction(command)
+            is CompleteIncidentActionCommand -> completeAction(command)
+            is CancelIncidentActionCommand -> cancelAction(command)
+            is ConvertIncidentActionToFollowUpCommand -> convertAction(command)
+            else -> error("Unsupported incident action command: ${command.type.wire}")
         }
 
     private fun replayResult(command: IncidentCommand): IncidentCommandResult? {
@@ -926,9 +946,220 @@ class IncidentCommandService(
     private fun addAction(command: AddIncidentActionCommand): IncidentMutation {
         require(command.title.isNotBlank()) { "Incident action title is required" }
         command.assigneeUserId?.let { requireUserMembership(command.actor.organizationId, it) }
-        val details = mutableMapOf<String, JsonElement>("title" to JsonPrimitive(command.title.trim()))
+        val description = (command.description ?: command.title).trim()
+        require(description.isNotEmpty()) { "Incident action description is required" }
+        require(description.length <= MAX_ACTION_DESCRIPTION_LENGTH) { "Incident action description is too long" }
+        require(command.slackChannelId == null || command.slackChannelId.length <= MAX_SLACK_CHANNEL_ID_LENGTH) {
+            "Slack channel ID is too long"
+        }
+        require(command.slackMessageTs == null || command.slackMessageTs.length <= MAX_SLACK_MESSAGE_TS_LENGTH) {
+            "Slack message reference is too long"
+        }
+        val now = Clock.System.now()
+        val actionId = NativeIncidentActions.insertAndGetId {
+            it[resourceId] = Uuid.random()
+            it[organizationId] = command.actor.organizationId
+            it[incidentId] = command.incidentId
+            it[NativeIncidentActions.description] = description
+            it[assigneeUserId] = command.assigneeUserId
+            it[state] = if (command.assigneeUserId == null) {
+                IncidentActionState.OPEN.wire
+            } else {
+                IncidentActionState.CLAIMED.wire
+            }
+            it[actionSource] = command.source.wire
+            it[slackChannelId] = command.slackChannelId
+            it[slackMessageTs] = command.slackMessageTs
+            it[createdBy] = command.actor.userId
+            it[claimedAt] = now.takeIf { command.assigneeUserId != null }
+            it[completedAt] = null
+            it[cancelledAt] = null
+            it[convertedToFollowUpAt] = null
+            it[createdAt] = now
+            it[updatedAt] = now
+        }
+        recordActionEvent(
+            ActionEventRecord(
+                organizationId = command.actor.organizationId,
+                incidentId = command.incidentId,
+                actionId = actionId.value,
+                actorUserId = command.actor.userId,
+                eventType = "ACTION_CREATED",
+                fromState = null,
+                toState = if (command.assigneeUserId == null) IncidentActionState.OPEN else IncidentActionState.CLAIMED,
+                details = mapOf(
+                    "description" to JsonPrimitive(description),
+                    "source" to JsonPrimitive(command.source.wire),
+                    "origin" to JsonPrimitive(command.actor.origin),
+                ),
+                now = now,
+            ),
+        )
+        val details = mutableMapOf<String, JsonElement>(
+            "actionId" to JsonPrimitive(actionResourceId(command.actor.organizationId, actionId.value)),
+            "description" to JsonPrimitive(description),
+            "source" to JsonPrimitive(command.source.wire),
+        )
         command.assigneeUserId?.let { details["assigneeUserId"] = JsonPrimitive(userResourceId(it)) }
-        return appendVersionedEvent(command, "ACTION_ADDED", details)
+        command.slackChannelId?.let { details["slackChannelId"] = JsonPrimitive(it) }
+        command.slackMessageTs?.let { details["slackMessageTs"] = JsonPrimitive(it) }
+        return appendVersionedEvent(command, "ACTION_ADDED", details).copy(
+            actionResourceId = actionResourceId(
+                command.actor.organizationId,
+                actionId.value,
+            ),
+        )
+    }
+
+    private fun claimAction(command: ClaimIncidentActionCommand): IncidentMutation =
+        transitionAction(command, IncidentActionState.CLAIMED, command.actor.userId, "ACTION_CLAIMED")
+
+    private fun reassignAction(command: ReassignIncidentActionCommand): IncidentMutation {
+        requireUserMembership(command.actor.organizationId, command.assigneeUserId)
+        return transitionAction(command, IncidentActionState.CLAIMED, command.assigneeUserId, "ACTION_REASSIGNED")
+    }
+
+    private fun completeAction(command: CompleteIncidentActionCommand): IncidentMutation =
+        transitionAction(command, IncidentActionState.COMPLETED, null, "ACTION_COMPLETED", command.note)
+
+    private fun cancelAction(command: CancelIncidentActionCommand): IncidentMutation =
+        transitionAction(command, IncidentActionState.CANCELLED, null, "ACTION_CANCELLED", command.reason)
+
+    private fun convertAction(command: ConvertIncidentActionToFollowUpCommand): IncidentMutation =
+        transitionAction(
+            command,
+            IncidentActionState.FOLLOW_UP,
+            null,
+            "ACTION_CONVERTED_TO_FOLLOW_UP",
+            command.followUpDescription,
+        )
+
+    private fun transitionAction(
+        command: ExistingIncidentCommand,
+        target: IncidentActionState,
+        assigneeUserId: Int?,
+        eventType: String,
+        note: String? = null,
+    ): IncidentMutation {
+        val action = requireAction(command.actor.organizationId, command.incidentId, actionResourceId(command))
+        val currentState = action[NativeIncidentActions.state].toActionState()
+        if (currentState == target &&
+            (target != IncidentActionState.CLAIMED || action[NativeIncidentActions.assigneeUserId] == assigneeUserId)
+        ) {
+            return loadMutation(command.incidentId, changed = false)
+        }
+        requireActionTransitionAllowed(currentState, target)
+        val now = Clock.System.now()
+        NativeIncidentActions.update({ NativeIncidentActions.id eq action[NativeIncidentActions.id] }) {
+            it[state] = target.wire
+            if (target == IncidentActionState.CLAIMED) it[NativeIncidentActions.assigneeUserId] = assigneeUserId
+            if (target == IncidentActionState.COMPLETED) it[completedAt] = now
+            if (target == IncidentActionState.CANCELLED) it[cancelledAt] = now
+            if (target == IncidentActionState.FOLLOW_UP) it[convertedToFollowUpAt] = now
+            if (target == IncidentActionState.CLAIMED) it[claimedAt] = action[NativeIncidentActions.claimedAt] ?: now
+            it[updatedAt] = now
+        }
+        recordActionEvent(
+            ActionEventRecord(
+                organizationId = command.actor.organizationId,
+                incidentId = command.incidentId,
+                actionId = action[NativeIncidentActions.id].value,
+                actorUserId = command.actor.userId,
+                eventType = eventType,
+                fromState = currentState,
+                toState = target,
+                details = buildMap {
+                    note?.trim()?.takeIf(String::isNotEmpty)?.let { put("note", JsonPrimitive(it)) }
+                    assigneeUserId?.let { put("assigneeUserId", JsonPrimitive(userResourceId(it))) }
+                    put("origin", JsonPrimitive(command.actor.origin))
+                },
+                now = now,
+            ),
+        )
+        val details = buildMap<String, JsonElement> {
+            put("actionId", JsonPrimitive(action[NativeIncidentActions.resourceId].toString()))
+            put("previousState", JsonPrimitive(currentState.wire))
+            put("state", JsonPrimitive(target.wire))
+            note?.trim()?.takeIf(String::isNotEmpty)?.let { put("note", JsonPrimitive(it)) }
+            assigneeUserId?.let { put("assigneeUserId", JsonPrimitive(userResourceId(it))) }
+        }
+        return appendVersionedEvent(command, eventType, details)
+    }
+
+    private fun actionResourceId(organizationId: Int, actionId: Int): String =
+        NativeIncidentActions
+            .selectAll()
+            .where {
+                (NativeIncidentActions.organizationId eq organizationId) and
+                    (NativeIncidentActions.id eq actionId)
+            }
+            .single()[NativeIncidentActions.resourceId]
+            .toString()
+
+    private fun actionResourceId(command: ExistingIncidentCommand): Uuid {
+        val value = when (command) {
+            is ClaimIncidentActionCommand -> command.actionResourceId
+            is ReassignIncidentActionCommand -> command.actionResourceId
+            is CompleteIncidentActionCommand -> command.actionResourceId
+            is CancelIncidentActionCommand -> command.actionResourceId
+            is ConvertIncidentActionToFollowUpCommand -> command.actionResourceId
+            else -> throw IncidentCommandNotFoundException("Incident action not found")
+        }
+        return runCatching { Uuid.parse(value) }
+            .getOrElse { throw IncidentCommandNotFoundException("Incident action not found") }
+    }
+
+    private fun requireAction(organizationId: Int, incidentId: Int, resourceId: Uuid): ResultRow =
+        NativeIncidentActions
+            .selectAll()
+            .where {
+                (NativeIncidentActions.organizationId eq organizationId) and
+                    (NativeIncidentActions.incidentId eq incidentId) and
+                    (NativeIncidentActions.resourceId eq resourceId)
+            }.singleOrNull() ?: throw IncidentCommandNotFoundException("Incident action not found")
+
+    private fun requireActionTransitionAllowed(from: IncidentActionState, to: IncidentActionState) {
+        val allowed = when (from) {
+            IncidentActionState.OPEN -> setOf(
+                IncidentActionState.CLAIMED,
+                IncidentActionState.COMPLETED,
+                IncidentActionState.CANCELLED,
+                IncidentActionState.FOLLOW_UP,
+            )
+            IncidentActionState.CLAIMED -> setOf(
+                IncidentActionState.COMPLETED,
+                IncidentActionState.CANCELLED,
+                IncidentActionState.FOLLOW_UP,
+            )
+            IncidentActionState.COMPLETED,
+            IncidentActionState.CANCELLED,
+            IncidentActionState.FOLLOW_UP,
+            -> emptySet()
+        }
+        if (to !in allowed) {
+            throw IncidentCommandConflictException(
+                "Cannot transition action from ${from.wire} to ${to.wire}",
+            )
+        }
+    }
+
+    private fun String.toActionState(): IncidentActionState =
+        IncidentActionState.entries.firstOrNull { it.wire == this }
+            ?: throw IncidentCommandConflictException("Unknown incident action state: $this")
+
+    private fun recordActionEvent(record: ActionEventRecord) {
+        NativeIncidentActionEvents.insert {
+            it[resourceId] = Uuid.random()
+            it[NativeIncidentActionEvents.organizationId] = record.organizationId
+            it[NativeIncidentActionEvents.actionId] = record.actionId
+            it[NativeIncidentActionEvents.incidentId] = record.incidentId
+            it[NativeIncidentActionEvents.actorUserId] = record.actorUserId
+            it[NativeIncidentActionEvents.eventType] = record.eventType
+            it[NativeIncidentActionEvents.fromState] = record.fromState?.wire
+            it[NativeIncidentActionEvents.toState] = record.toState?.wire
+            it[NativeIncidentActionEvents.details] = record.details
+            it[createdAt] = record.now
+        }
     }
 
     private fun addTimelineEvent(command: AddIncidentTimelineEventCommand): IncidentMutation {
@@ -1564,6 +1795,7 @@ class IncidentCommandService(
             status = status,
             version = version,
             replayed = replayed,
+            actionResourceId = actionResourceId,
         )
 
     private data class IncidentMutation(
@@ -1574,6 +1806,7 @@ class IncidentCommandService(
         val status: NativeIncidentStatus,
         val version: Int,
         val changed: Boolean,
+        val actionResourceId: String? = null,
     )
 
     private data class PreparedIncidentUpdate(
@@ -1601,6 +1834,18 @@ class IncidentCommandService(
         val at: kotlin.time.Instant,
     )
 
+    private data class ActionEventRecord(
+        val organizationId: Int,
+        val incidentId: Int,
+        val actionId: Int,
+        val actorUserId: Int,
+        val eventType: String,
+        val fromState: IncidentActionState?,
+        val toState: IncidentActionState?,
+        val details: Map<String, JsonElement>,
+        val now: kotlin.time.Instant,
+    )
+
     companion object {
         private const val UNIQUE_VIOLATION_SQL_STATE = "23505"
         private const val COMMAND_KEY_CONSTRAINT = "uq_native_incident_commands_org_command_key"
@@ -1609,6 +1854,9 @@ class IncidentCommandService(
         private const val MAX_UPDATE_MESSAGE_LENGTH = 2_000
         private const val MAX_CUSTOMER_IMPACT_LENGTH = 64
         private const val MAX_TIMELINE_EVENT_TYPE_LENGTH = 80
+        private const val MAX_ACTION_DESCRIPTION_LENGTH = 2_000
+        private const val MAX_SLACK_CHANNEL_ID_LENGTH = 128
+        private const val MAX_SLACK_MESSAGE_TS_LENGTH = 64
         private const val MAX_SOURCE_KEY_LENGTH = 500
         private const val SEVERITY_REQUIRED_MESSAGE =
             "Incident severity is required before an incident is accepted"

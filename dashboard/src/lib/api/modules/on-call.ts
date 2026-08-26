@@ -70,6 +70,12 @@ import type {
   IncidentUpdateInput,
   IncidentUpdateRequestInput,
   IncidentUpdateReminderInput,
+  OnCallIncidentAction,
+  IncidentActionEvent,
+  IncidentActionMetrics,
+  CreateIncidentActionInput,
+  IncidentActionMutationInput,
+  ReassignIncidentActionInput,
 } from '../types'
 
 /** Normalize the entitlement and quota payload into a strict, fail-closed shape. */
@@ -430,6 +436,78 @@ export function onCallMethods(core: ApiClientCore) {
           method: 'POST',
           body: JSON.stringify(input),
         }
+      ),
+
+    getIncidentActions: (id: string) =>
+      core.request<OnCallIncidentAction[]>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/actions`
+      ),
+
+    getIncidentAction: (id: string, actionId: string) =>
+      core.request<OnCallIncidentAction>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/actions/${encodeURIComponent(actionId)}`
+      ),
+
+    getIncidentActionEvents: (id: string, actionId: string) =>
+      core.request<IncidentActionEvent[]>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/actions/${encodeURIComponent(actionId)}/events`
+      ),
+
+    getIncidentActionMetrics: (id: string) =>
+      core.request<IncidentActionMetrics>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/actions/metrics`
+      ),
+
+    createIncidentAction: (id: string, input: CreateIncidentActionInput) =>
+      core.request<OnCallIncidentAction>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/actions`,
+        {method: 'POST', body: JSON.stringify(input)}
+      ),
+
+    claimIncidentAction: (id: string, actionId: string, expectedVersion?: number) =>
+      core.request<OnCallIncidentAction>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/actions/${encodeURIComponent(actionId)}/claim`,
+        {method: 'POST', body: JSON.stringify({expectedVersion})}
+      ),
+
+    reassignIncidentAction: (
+      id: string,
+      actionId: string,
+      input: ReassignIncidentActionInput
+    ) =>
+      core.request<OnCallIncidentAction>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/actions/${encodeURIComponent(actionId)}/reassign`,
+        {method: 'POST', body: JSON.stringify(input)}
+      ),
+
+    completeIncidentAction: (
+      id: string,
+      actionId: string,
+      input: IncidentActionMutationInput = {}
+    ) =>
+      core.request<OnCallIncidentAction>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/actions/${encodeURIComponent(actionId)}/complete`,
+        {method: 'POST', body: JSON.stringify(input)}
+      ),
+
+    cancelIncidentAction: (
+      id: string,
+      actionId: string,
+      input: IncidentActionMutationInput = {}
+    ) =>
+      core.request<OnCallIncidentAction>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/actions/${encodeURIComponent(actionId)}/cancel`,
+        {method: 'POST', body: JSON.stringify(input)}
+      ),
+
+    convertIncidentActionToFollowUp: (
+      id: string,
+      actionId: string,
+      input: IncidentActionMutationInput = {}
+    ) =>
+      core.request<OnCallIncidentAction>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/actions/${encodeURIComponent(actionId)}/convert-to-follow-up`,
+        {method: 'POST', body: JSON.stringify(input)}
       ),
 
     // Canonical, evidence-preserving incident timeline. Supersedes the legacy

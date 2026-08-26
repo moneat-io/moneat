@@ -125,8 +125,13 @@ internal object IncidentCommandFingerprint {
 
     private fun supportingParts(command: IncidentCommand): List<String?> =
         when (command) {
-            is AddIncidentActionCommand ->
-                listOf(command.incidentId.toString(), command.title, command.assigneeUserId?.toString())
+            is AddIncidentActionCommand,
+            is ClaimIncidentActionCommand,
+            is ReassignIncidentActionCommand,
+            is CompleteIncidentActionCommand,
+            is CancelIncidentActionCommand,
+            is ConvertIncidentActionToFollowUpCommand,
+            -> actionParts(command)
             is AddIncidentTimelineEventCommand ->
                 listOf(command.incidentId.toString(), command.eventType, canonicalDetails(command.details))
             is LinkOnCallAlertCommand -> listOf(command.incidentId.toString(), command.alertId.toString())
@@ -147,6 +152,34 @@ internal object IncidentCommandFingerprint {
             is CancelIncidentCommand -> listOf(command.incidentId.toString(), command.reason)
             is ReopenIncidentCommand -> listOf(command.incidentId.toString(), command.reason)
             else -> error("Unsupported supporting incident command")
+        }
+
+    private fun actionParts(command: IncidentCommand): List<String?> =
+        when (command) {
+            is AddIncidentActionCommand ->
+                listOf(
+                    command.incidentId.toString(),
+                    command.title,
+                    command.assigneeUserId?.toString(),
+                    command.description,
+                    command.source.wire,
+                    command.slackChannelId,
+                    command.slackMessageTs,
+                )
+            is ClaimIncidentActionCommand -> listOf(command.incidentId.toString(), command.actionResourceId)
+            is ReassignIncidentActionCommand ->
+                listOf(
+                    command.incidentId.toString(),
+                    command.actionResourceId,
+                    command.assigneeUserId.toString(),
+                )
+            is CompleteIncidentActionCommand ->
+                listOf(command.incidentId.toString(), command.actionResourceId, command.note)
+            is CancelIncidentActionCommand ->
+                listOf(command.incidentId.toString(), command.actionResourceId, command.reason)
+            is ConvertIncidentActionToFollowUpCommand ->
+                listOf(command.incidentId.toString(), command.actionResourceId, command.followUpDescription)
+            else -> error("Unsupported incident action command")
         }
 
     private fun commonParts(command: IncidentCommand): List<String?> =

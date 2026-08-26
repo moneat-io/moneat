@@ -271,6 +271,76 @@ export interface IncidentUpdateReminderInput {
   expectedVersion?: number
 }
 
+export type IncidentActionState = 'OPEN' | 'CLAIMED' | 'COMPLETED' | 'CANCELLED' | 'FOLLOW_UP'
+export type IncidentActionSource =
+  | 'COMMAND'
+  | 'MODAL'
+  | 'REACTION'
+  | 'MESSAGE_SHORTCUT'
+  | 'DASHBOARD'
+  | 'API'
+  | 'WORKFLOW'
+  | 'AI_PROPOSAL'
+  | 'SLACK'
+
+export interface OnCallIncidentAction {
+  id: string
+  incidentId: string
+  description: string
+  assigneeUserId?: string | null
+  assigneeName?: string | null
+  state: IncidentActionState
+  source: IncidentActionSource
+  slackChannelId?: string | null
+  slackMessageTs?: string | null
+  createdBy?: string | null
+  claimedAt?: string | null
+  completedAt?: string | null
+  cancelledAt?: string | null
+  convertedToFollowUpAt?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface IncidentActionEvent {
+  id: string
+  eventType: string
+  fromState?: IncidentActionState | null
+  toState?: IncidentActionState | null
+  actorUserId?: string | null
+  actorName?: string | null
+  details?: Record<string, unknown>
+  createdAt: string
+}
+
+export interface IncidentActionMetrics {
+  total: number
+  open: number
+  claimed: number
+  completed: number
+  cancelled: number
+  followUp: number
+}
+
+export interface CreateIncidentActionInput {
+  description: string
+  assigneeUserId?: string
+  source?: IncidentActionSource
+  slackChannelId?: string
+  slackMessageTs?: string
+  expectedVersion?: number
+}
+
+export interface IncidentActionMutationInput {
+  note?: string
+  expectedVersion?: number
+}
+
+export interface ReassignIncidentActionInput {
+  assigneeUserId: string
+  expectedVersion?: number
+}
+
 export interface OnCallIncidentDetail extends OnCallIncident {
   timeline?: OnCallTimelineEvent[]
 }

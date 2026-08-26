@@ -15,6 +15,11 @@ import com.moneat.enterprise.incidents.models.NativeIncidentVisibility
 import com.moneat.enterprise.incidents.models.IncidentSourceType
 import com.moneat.enterprise.incidents.models.IncidentUpdateRequestStatus
 import com.moneat.enterprise.incidents.models.NativeIncidentUpdateRequests
+import com.moneat.enterprise.incidents.models.IncidentActionSource
+import com.moneat.enterprise.incidents.models.IncidentActionState
+import com.moneat.enterprise.incidents.models.NativeIncidentActions
+import com.moneat.enterprise.incidents.models.NativeIncidentActionEvents
+import com.moneat.enterprise.incidents.actions.IncidentActionService
 import com.moneat.enterprise.incidents.updates.IncidentUpdateReminderService
 import com.moneat.enterprise.oncall.models.OnCallAlerts
 import com.moneat.enterprise.oncall.models.OnCallIncidentAlerts
@@ -519,6 +524,67 @@ class IncidentCommandServiceTest {
             assertTrue("ACTION_ADDED" in eventTypes)
             assertTrue("CUSTOM_NOTE" in eventTypes)
             assertTrue("UPDATED" in eventTypes)
+        }
+    }
+
+    @Test
+    fun `persists action lifecycle and audit history`() {
+        val incident = service.execute(declareCommand("action-lifecycle", actor()))
+        val created = service.execute(
+            AddIncidentActionCommand(
+                commandKey = "action-created",
+                actor = actor(),
+                incidentId = incident.incidentId,
+                title = "Drain unhealthy node",
+                description = "Drain the unhealthy node and verify capacity",
+                source = IncidentActionSource.SLACK,
+                slackChannelId = "C123",
+                slackMessageTs = "1712345678.000100",
+                expectedVersion = 1,
+            ),
+        )
+        val actionResourceId = checkNotNull(created.actionResourceId)
+        assertEquals(IncidentActionState.OPEN.wire, IncidentActionService().get(
+            member.organizationId,
+            incident.incidentId,
+            actionResourceId,
+        )?.state)
+
+        val claimed = service.execute(
+            ClaimIncidentActionCommand(
+                commandKey = "action-claimed",
+                actor = actor(),
+                incidentId = incident.incidentId,
+                actionResourceId = actionResourceId,
+                expectedVersion = 2,
+            ),
+        )
+        val completed = service.execute(
+            CompleteIncidentActionCommand(
+                commandKey = "action-completed",
+                actor = actor(),
+                incidentId = incident.incidentId,
+                actionResourceId = actionResourceId,
+                note = "Capacity is healthy",
+                expectedVersion = 3,
+            ),
+        )
+        assertEquals(3, claimed.version)
+        assertEquals(4, completed.version)
+        val action = checkNotNull(
+            IncidentActionService().get(member.organizationId, incident.incidentId, actionResourceId),
+        )
+        assertEquals(incident.incidentResourceId, action.incidentId)
+        assertEquals(IncidentActionState.COMPLETED.wire, action.state)
+        assertEquals("C123", action.slackChannelId)
+        assertEquals("1712345678.000100", action.slackMessageTs)
+        assertEquals(
+            3,
+            IncidentActionService().events(member.organizationId, incident.incidentId, actionResourceId).size,
+        )
+        transaction {
+            assertEquals(3, NativeIncidentActionEvents.selectAll().count())
+            assertEquals(1, NativeIncidentActions.selectAll().count())
         }
     }
 

@@ -129,6 +129,71 @@ object NativeIncidentUpdateRequests : IntIdTable("native_incident_update_request
     }
 }
 
+enum class IncidentActionState(val wire: String) {
+    OPEN("OPEN"),
+    CLAIMED("CLAIMED"),
+    COMPLETED("COMPLETED"),
+    CANCELLED("CANCELLED"),
+    FOLLOW_UP("FOLLOW_UP"),
+}
+
+enum class IncidentActionSource(val wire: String) {
+    COMMAND("COMMAND"),
+    MODAL("MODAL"),
+    REACTION("REACTION"),
+    MESSAGE_SHORTCUT("MESSAGE_SHORTCUT"),
+    DASHBOARD("DASHBOARD"),
+    API("API"),
+    WORKFLOW("WORKFLOW"),
+    AI_PROPOSAL("AI_PROPOSAL"),
+    SLACK("SLACK"),
+}
+
+object NativeIncidentActions : IntIdTable("native_incident_actions") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
+    val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
+    val incidentId = integer("incident_id").references(OnCallIncidents.id, onDelete = ReferenceOption.CASCADE)
+    val description = text("description")
+    val assigneeUserId = integer("assignee_user_id")
+        .references(Users.id, onDelete = ReferenceOption.SET_NULL)
+        .nullable()
+    val state = varchar("state", 24)
+    val actionSource = varchar("source", 32)
+    val slackChannelId = varchar("slack_channel_id", 128).nullable()
+    val slackMessageTs = varchar("slack_message_ts", 64).nullable()
+    val createdBy = integer("created_by").references(Users.id, onDelete = ReferenceOption.SET_NULL).nullable()
+    val claimedAt = timestamp("claimed_at").nullable()
+    val completedAt = timestamp("completed_at").nullable()
+    val cancelledAt = timestamp("cancelled_at").nullable()
+    val convertedToFollowUpAt = timestamp("converted_to_follow_up_at").nullable()
+    val createdAt = timestamp("created_at")
+    val updatedAt = timestamp("updated_at")
+
+    init {
+        uniqueIndex(organizationId, resourceId)
+        index(false, incidentId, state)
+    }
+}
+
+object NativeIncidentActionEvents : IntIdTable("native_incident_action_events") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
+    val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
+    val actionId = integer("action_id").references(NativeIncidentActions.id, onDelete = ReferenceOption.CASCADE)
+    val incidentId = integer("incident_id").references(OnCallIncidents.id, onDelete = ReferenceOption.CASCADE)
+    val actorUserId = integer("actor_user_id").references(Users.id, onDelete = ReferenceOption.SET_NULL).nullable()
+    val eventType = varchar("event_type", 48)
+    val fromState = varchar("from_state", 24).nullable()
+    val toState = varchar("to_state", 24).nullable()
+    val details = requiredJsonb("details").clientDefault { emptyMap() }
+    val createdAt = timestamp("created_at")
+
+    init {
+        uniqueIndex(organizationId, resourceId)
+        index(false, actionId, createdAt)
+        index(false, incidentId, createdAt)
+    }
+}
+
 enum class IncidentOutboxStatus(val wire: String) {
     PENDING("PENDING"),
     PROCESSING("PROCESSING"),
