@@ -29,6 +29,7 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -227,6 +228,60 @@ class IncidentCommandServiceTest {
                 NativeIncidentUpdateRequests.selectAll().single()[NativeIncidentUpdateRequests.status],
             )
             assertTrue(OnCallIncidents.selectAll().single()[OnCallIncidents.updateReminderPaused])
+        }
+    }
+
+    @Test
+    fun `reminder processing pauses and cancels overdue requests from incident state`() {
+        val now = Clock.System.now()
+        val pausedIncident = service.execute(declareCommand("paused-reminder", actor()))
+        service.execute(
+            RequestIncidentUpdateCommand(
+                commandKey = "request-paused-reminder",
+                actor = actor(),
+                incidentId = pausedIncident.incidentId,
+                dueAt = now.minus(1.minutes),
+                expectedVersion = 1,
+            ),
+        )
+        transaction {
+            OnCallIncidents.update({ OnCallIncidents.id eq pausedIncident.incidentId }) {
+                it[OnCallIncidents.updateReminderPaused] = true
+            }
+        }
+
+        val reminderService = IncidentUpdateReminderService()
+        assertEquals(0, reminderService.processDue(now))
+        transaction {
+            assertEquals(
+                IncidentUpdateRequestStatus.PAUSED.wire,
+                NativeIncidentUpdateRequests.selectAll().single()[NativeIncidentUpdateRequests.status],
+            )
+        }
+
+        val terminalIncident = service.execute(declareCommand("terminal-reminder", actor()))
+        service.execute(
+            RequestIncidentUpdateCommand(
+                commandKey = "request-terminal-reminder",
+                actor = actor(),
+                incidentId = terminalIncident.incidentId,
+                dueAt = now.minus(1.minutes),
+                expectedVersion = 1,
+            ),
+        )
+        transaction {
+            OnCallIncidents.update({ OnCallIncidents.id eq terminalIncident.incidentId }) {
+                it[OnCallIncidents.status] = NativeIncidentStatus.RESOLVED.wire
+            }
+        }
+
+        assertEquals(0, reminderService.processDue(now))
+        transaction {
+            val requests = NativeIncidentUpdateRequests.selectAll().toList()
+            assertEquals(
+                IncidentUpdateRequestStatus.CANCELLED.wire,
+                requests.last()[NativeIncidentUpdateRequests.status],
+            )
         }
     }
 
