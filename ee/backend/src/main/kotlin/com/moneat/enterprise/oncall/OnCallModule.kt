@@ -476,6 +476,7 @@ class OnCallModule :
         val channelId = value("channel_id")
             ?: root?.get("channel")?.jsonObject?.get("id")?.jsonPrimitive?.contentOrNull
             ?: event?.get("channel")?.jsonPrimitive?.contentOrNull
+            ?: event?.get("item")?.jsonObject?.get("channel")?.jsonPrimitive?.contentOrNull
         if (channelId.isNullOrBlank()) return null
         val messageTs = event?.get("item")?.jsonObject?.get("ts")?.jsonPrimitive?.contentOrNull
         val submitter = resolveSlackSubmitter(root, value, slackInstallationService) ?: return null
@@ -493,33 +494,13 @@ class OnCallModule :
                         (NativeIncidentSlackChannels.state eq IncidentSlackChannelState.ACTIVE.wire)
                 }
                 .firstOrNull()
-            val announcement = if (channel == null && !messageTs.isNullOrBlank()) {
-                val deliveryResourceId = SlackOutboundDeliveries
-                    .selectAll()
-                    .where {
-                        (SlackOutboundDeliveries.organizationId eq submitter.organizationId) and
-                            (SlackOutboundDeliveries.teamId eq teamId) and
-                            (SlackOutboundDeliveries.channelId eq channelId) and
-                            (SlackOutboundDeliveries.providerMessageTs eq messageTs)
-                    }
-                    .firstOrNull()
-                    ?.get(SlackOutboundDeliveries.resourceId)
-                NativeIncidentAnnouncements
-                    .selectAll()
-                    .where {
-                        (NativeIncidentAnnouncements.organizationId eq submitter.organizationId) and
-                            (NativeIncidentAnnouncements.teamId eq teamId) and
-                            (NativeIncidentAnnouncements.channelId eq channelId)
-                    }
-                    .firstOrNull { row ->
-                        row[NativeIncidentAnnouncements.providerMessageTs] == messageTs ||
-                            row[NativeIncidentAnnouncements.deliveryResourceId] == deliveryResourceId
-                    }
+            val announcementIncidentId = if (channel == null) {
+                findAnnouncementIncidentId(submitter.organizationId, teamId, channelId, messageTs)
             } else {
                 null
             }
             val incidentId = channel?.get(NativeIncidentSlackChannels.incidentId)
-                ?: announcement?.get(NativeIncidentAnnouncements.incidentId)
+                ?: announcementIncidentId
                 ?: return@transaction null
             OnCallIncidents
                 .selectAll()
@@ -531,6 +512,38 @@ class OnCallModule :
                 ?.get(OnCallIncidents.resourceId)
                 ?.toString()
         }
+    }
+
+    private fun findAnnouncementIncidentId(
+        organizationId: Int,
+        teamId: String,
+        channelId: String,
+        messageTs: String?,
+    ): Int? {
+        if (messageTs.isNullOrBlank()) return null
+        val deliveryResourceId = SlackOutboundDeliveries
+            .selectAll()
+            .where {
+                (SlackOutboundDeliveries.organizationId eq organizationId) and
+                    (SlackOutboundDeliveries.teamId eq teamId) and
+                    (SlackOutboundDeliveries.channelId eq channelId) and
+                    (SlackOutboundDeliveries.providerMessageTs eq messageTs)
+            }
+            .firstOrNull()
+            ?.get(SlackOutboundDeliveries.resourceId)
+        return NativeIncidentAnnouncements
+            .selectAll()
+            .where {
+                (NativeIncidentAnnouncements.organizationId eq organizationId) and
+                    (NativeIncidentAnnouncements.teamId eq teamId) and
+                    (NativeIncidentAnnouncements.channelId eq channelId)
+            }
+            .firstOrNull { row ->
+                row[NativeIncidentAnnouncements.providerMessageTs] == messageTs ||
+                    (deliveryResourceId != null &&
+                        row[NativeIncidentAnnouncements.deliveryResourceId] == deliveryResourceId)
+            }
+            ?.get(NativeIncidentAnnouncements.incidentId)
     }
 
     private suspend fun openSlackIncident(
