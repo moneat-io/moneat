@@ -70,6 +70,7 @@ import com.moneat.mcp.McpToolContributor
 import com.moneat.mcp.protocol.McpToolRegistry
 import com.moneat.notifications.services.SlackService
 import com.moneat.notifications.services.SlackInstallationService
+import com.moneat.shared.models.SlackOutboundDeliveries
 import com.moneat.shared.models.SlackUserMappings
 import io.ktor.server.application.Application
 import io.ktor.http.parseQueryString
@@ -493,15 +494,27 @@ class OnCallModule :
                 }
                 .firstOrNull()
             val announcement = if (channel == null && !messageTs.isNullOrBlank()) {
+                val deliveryResourceId = SlackOutboundDeliveries
+                    .selectAll()
+                    .where {
+                        (SlackOutboundDeliveries.organizationId eq submitter.organizationId) and
+                            (SlackOutboundDeliveries.teamId eq teamId) and
+                            (SlackOutboundDeliveries.channelId eq channelId) and
+                            (SlackOutboundDeliveries.providerMessageTs eq messageTs)
+                    }
+                    .firstOrNull()
+                    ?.get(SlackOutboundDeliveries.resourceId)
                 NativeIncidentAnnouncements
                     .selectAll()
                     .where {
                         (NativeIncidentAnnouncements.organizationId eq submitter.organizationId) and
                             (NativeIncidentAnnouncements.teamId eq teamId) and
-                            (NativeIncidentAnnouncements.channelId eq channelId) and
-                            (NativeIncidentAnnouncements.providerMessageTs eq messageTs)
+                            (NativeIncidentAnnouncements.channelId eq channelId)
                     }
-                    .firstOrNull()
+                    .firstOrNull { row ->
+                        row[NativeIncidentAnnouncements.providerMessageTs] == messageTs ||
+                            row[NativeIncidentAnnouncements.deliveryResourceId] == deliveryResourceId
+                    }
             } else {
                 null
             }
