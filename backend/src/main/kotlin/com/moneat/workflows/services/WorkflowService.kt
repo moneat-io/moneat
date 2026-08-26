@@ -58,6 +58,10 @@ import com.moneat.workflows.models.ALERT_LAST_SEEN_AT_REFERENCE
 import com.moneat.workflows.models.ALERT_NOTIFICATION_KIND_REFERENCE
 import com.moneat.workflows.models.ALERT_NOTIFICATION_SEQUENCE_REFERENCE
 import com.moneat.workflows.models.ALERT_OPENED_AT_REFERENCE
+import com.moneat.workflows.models.INCIDENT_ASSIGNEE_REFERENCE
+import com.moneat.workflows.models.INCIDENT_ROLE_ACTION_REFERENCE
+import com.moneat.workflows.models.INCIDENT_ROLE_EVENT_ID_REFERENCE
+import com.moneat.workflows.models.INCIDENT_ROLE_REFERENCE
 import com.moneat.workflows.models.CreateWorkflowRequest
 import com.moneat.workflows.models.ManualWorkflowRunRequest
 import com.moneat.workflows.models.UpdateWorkflowRequest
@@ -155,6 +159,17 @@ data class AlertResolvedWorkflowEvent(
     val moneatUrl: String = "",
     val priority: AlertPriority? = null,
     val severity: AlertPriority? = null,
+)
+
+data class DeclaredIncidentRoleChange(
+    val organizationId: Int,
+    val incidentId: Int,
+    val title: String,
+    val severity: IncidentSeverity?,
+    val role: String,
+    val assignee: String?,
+    val action: String,
+    val eventResourceId: String,
 )
 
 class WorkflowService(
@@ -1049,6 +1064,18 @@ class WorkflowService(
         )
     }
 
+    suspend fun publishDeclaredIncidentRoleChanged(change: DeclaredIncidentRoleChange) {
+        publishTrigger(
+            WorkflowTriggerEvent(
+                triggerName = INCIDENT_ROLE_CHANGED_TRIGGER,
+                organizationId = change.organizationId,
+                scope = declaredIncidentRoleScope(
+                    change = change,
+                ),
+            ),
+        )
+    }
+
     /**
      * Fires the `security.signal` workflow trigger once per **newly created or escalated** signal,
      * not once per raw agent event — eliminating the previous per-event fan-out. Repeats that merely
@@ -1617,6 +1644,22 @@ class WorkflowService(
         ).typedWorkflowScope()
     }
 
+    private fun declaredIncidentRoleScope(change: DeclaredIncidentRoleChange): Map<String, JsonElement> {
+        val incidentResourceId = declaredIncidentResourceId(change.organizationId, change.incidentId)
+        return mapOf(
+            INCIDENT_ID_REFERENCE to incidentResourceId,
+            INCIDENT_KIND_REFERENCE to "native_incident",
+            INCIDENT_TITLE_REFERENCE to change.title,
+            INCIDENT_STATUS_REFERENCE to "role_changed",
+            INCIDENT_SEVERITY_REFERENCE to change.severity?.wire.orEmpty(),
+            INCIDENT_ROLE_REFERENCE to change.role,
+            INCIDENT_ASSIGNEE_REFERENCE to change.assignee.orEmpty(),
+            INCIDENT_ROLE_ACTION_REFERENCE to change.action,
+            INCIDENT_ROLE_EVENT_ID_REFERENCE to change.eventResourceId,
+            ORGANIZATION_ID_REFERENCE to organizationResourceId(change.organizationId),
+        ).typedWorkflowScope()
+    }
+
     private fun securitySignalScope(
         organizationId: Int,
         signal: SignalOutcome
@@ -1678,6 +1721,7 @@ class WorkflowService(
         private const val SYNTHETIC_PASSED_TRIGGER = "synthetic.passed"
         private const val INCIDENT_CREATED_TRIGGER = "incident.created"
         private const val INCIDENT_RESOLVED_TRIGGER = "incident.resolved"
+        private const val INCIDENT_ROLE_CHANGED_TRIGGER = "incident.role_changed"
         private const val SECURITY_SIGNAL_TRIGGER = "security.signal"
         private const val API_TRIGGER = "api"
         private const val WEBHOOK_TRIGGER = "webhook"

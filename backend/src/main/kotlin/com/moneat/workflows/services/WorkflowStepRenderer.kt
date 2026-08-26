@@ -58,6 +58,7 @@ internal const val API_TRIGGER = "api"
 internal const val WEBHOOK_TRIGGER = "webhook"
 internal const val INCIDENT_CREATED_TRIGGER = "incident.created"
 internal const val INCIDENT_RESOLVED_TRIGGER = "incident.resolved"
+internal const val INCIDENT_ROLE_CHANGED_TRIGGER = "incident.role_changed"
 internal const val SECURITY_SIGNAL_TRIGGER = "security.signal"
 internal const val ALERT_DESCRIPTION_TEMPLATE_BLOCK = "{{alert.description}}\n\n"
 internal const val ALERT_PRIORITY_TEMPLATE_LINE = "Priority: {{alert.priority}}\n"
@@ -108,7 +109,8 @@ class WorkflowStepRenderer {
             API_TRIGGER -> apiSampleScope()
             WEBHOOK_TRIGGER -> webhookSampleScope()
             INCIDENT_CREATED_TRIGGER,
-            INCIDENT_RESOLVED_TRIGGER -> incidentSampleScope(triggerName)
+            INCIDENT_RESOLVED_TRIGGER,
+            INCIDENT_ROLE_CHANGED_TRIGGER -> incidentSampleScope(triggerName)
             SECURITY_SIGNAL_TRIGGER -> securitySampleScope()
             else -> alertSampleScope(triggerName)
         }
@@ -180,9 +182,10 @@ class WorkflowStepRenderer {
     private fun incidentSampleScope(triggerName: String): Map<String, String> {
         val status = when (triggerName) {
             INCIDENT_RESOLVED_TRIGGER -> "resolved"
+            INCIDENT_ROLE_CHANGED_TRIGGER -> "role_changed"
             else -> "created"
         }
-        return mapOf(
+        val baseScope = mapOf(
             "incident.id" to SAMPLE_INCIDENT_ID,
             "incident.kind" to "native_incident",
             "incident.title" to "Checkout latency incident",
@@ -190,6 +193,16 @@ class WorkflowStepRenderer {
             "incident.severity" to IncidentSeverity.SEV1.wire,
             ORGANIZATION_ID_REFERENCE to SAMPLE_ORGANIZATION_ID
         )
+        return if (triggerName == INCIDENT_ROLE_CHANGED_TRIGGER) {
+            baseScope + mapOf(
+                "incident.role" to "Incident Commander",
+                "incident.assignee" to SAMPLE_USER_ID,
+                "incident.role_action" to "assign_role",
+                "incident.role_event_id" to "123e4567-e89b-12d3-a456-426614170006",
+            )
+        } else {
+            baseScope
+        }
     }
 
     private fun securitySampleScope(): Map<String, String> =
