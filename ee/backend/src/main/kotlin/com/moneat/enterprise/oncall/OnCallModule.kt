@@ -702,7 +702,7 @@ internal fun slackMessageContextText(
     value: (String) -> String?,
 ): String? = sequenceOf(
     value("text"),
-    root?.get("message")?.jsonObject?.get("text")?.jsonPrimitive?.contentOrNull,
+    (root?.get("message") as? JsonObject)?.get("text")?.jsonPrimitive?.contentOrNull,
 ).mapNotNull { it?.trim()?.takeIf(String::isNotEmpty) }
     .firstOrNull()
 
