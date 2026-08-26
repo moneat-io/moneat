@@ -5,6 +5,7 @@
 package com.moneat.enterprise.incidents.events
 
 import com.moneat.alerts.models.IncidentSeverity
+import com.moneat.workflows.services.DeclaredIncidentRoleChange
 import com.moneat.workflows.services.WorkflowService
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -43,13 +44,15 @@ class WorkflowIncidentEventConsumer(
 
     private suspend fun NativeIncidentDomainEvent.publishRoleChangedWorkflow() {
         workflowService.publishDeclaredIncidentRoleChanged(
-            organizationId = organizationId,
-            incidentId = incidentId,
-            title = title(),
-            severity = severityOrNull(),
-            role = payload["role"]?.jsonPrimitive?.contentOrNull ?: "Incident role",
-            assignee = payload["assigneeUserId"]?.jsonPrimitive?.contentOrNull,
-            action = eventType.removePrefix("INCIDENT_").lowercase(),
+            DeclaredIncidentRoleChange(
+                organizationId = organizationId,
+                incidentId = incidentId,
+                title = title(),
+                severity = severityOrNull(),
+                role = payload["role"]?.jsonPrimitive?.contentOrNull ?: "Incident role",
+                assignee = payload["assigneeUserId"]?.jsonPrimitive?.contentOrNull,
+                action = eventType.removePrefix("INCIDENT_").lowercase(),
+            ),
         )
     }
 

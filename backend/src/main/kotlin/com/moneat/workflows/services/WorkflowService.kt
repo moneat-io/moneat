@@ -160,6 +160,16 @@ data class AlertResolvedWorkflowEvent(
     val severity: AlertPriority? = null,
 )
 
+data class DeclaredIncidentRoleChange(
+    val organizationId: Int,
+    val incidentId: Int,
+    val title: String,
+    val severity: IncidentSeverity?,
+    val role: String,
+    val assignee: String?,
+    val action: String,
+)
+
 class WorkflowService(
     private val emailService: EmailService = EmailService(),
     private val slackService: SlackService = SlackService(),
@@ -1052,28 +1062,13 @@ class WorkflowService(
         )
     }
 
-    suspend fun publishDeclaredIncidentRoleChanged(
-        organizationId: Int,
-        incidentId: Int,
-        title: String,
-        severity: IncidentSeverity?,
-        role: String,
-        assignee: String?,
-        action: String,
-    ) {
+    suspend fun publishDeclaredIncidentRoleChanged(change: DeclaredIncidentRoleChange) {
         publishTrigger(
             WorkflowTriggerEvent(
                 triggerName = INCIDENT_ROLE_CHANGED_TRIGGER,
-                organizationId = organizationId,
+                organizationId = change.organizationId,
                 scope = declaredIncidentRoleScope(
-                    organizationId = organizationId,
-                    incidentId = incidentId,
-                    status = "role_changed",
-                    title = title,
-                    severity = severity?.wire.orEmpty(),
-                    role = role,
-                    assignee = assignee.orEmpty(),
-                    action = action,
+                    change = change,
                 ),
             ),
         )
@@ -1647,27 +1642,18 @@ class WorkflowService(
         ).typedWorkflowScope()
     }
 
-    private fun declaredIncidentRoleScope(
-        organizationId: Int,
-        incidentId: Int,
-        status: String,
-        title: String,
-        severity: String,
-        role: String,
-        assignee: String,
-        action: String,
-    ): Map<String, JsonElement> {
-        val incidentResourceId = declaredIncidentResourceId(organizationId, incidentId)
+    private fun declaredIncidentRoleScope(change: DeclaredIncidentRoleChange): Map<String, JsonElement> {
+        val incidentResourceId = declaredIncidentResourceId(change.organizationId, change.incidentId)
         return mapOf(
             INCIDENT_ID_REFERENCE to incidentResourceId,
             INCIDENT_KIND_REFERENCE to "native_incident",
-            INCIDENT_TITLE_REFERENCE to title,
-            INCIDENT_STATUS_REFERENCE to status,
-            INCIDENT_SEVERITY_REFERENCE to severity,
-            INCIDENT_ROLE_REFERENCE to role,
-            INCIDENT_ASSIGNEE_REFERENCE to assignee,
-            INCIDENT_ROLE_ACTION_REFERENCE to action,
-            ORGANIZATION_ID_REFERENCE to organizationResourceId(organizationId),
+            INCIDENT_TITLE_REFERENCE to change.title,
+            INCIDENT_STATUS_REFERENCE to "role_changed",
+            INCIDENT_SEVERITY_REFERENCE to change.severity?.wire.orEmpty(),
+            INCIDENT_ROLE_REFERENCE to change.role,
+            INCIDENT_ASSIGNEE_REFERENCE to change.assignee.orEmpty(),
+            INCIDENT_ROLE_ACTION_REFERENCE to change.action,
+            ORGANIZATION_ID_REFERENCE to organizationResourceId(change.organizationId),
         ).typedWorkflowScope()
     }
 
