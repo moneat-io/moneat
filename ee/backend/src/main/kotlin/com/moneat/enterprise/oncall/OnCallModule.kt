@@ -23,7 +23,6 @@ import com.moneat.enterprise.incidents.commands.DeclareIncidentCommand
 import com.moneat.enterprise.incidents.commands.AddIncidentActionCommand
 import com.moneat.enterprise.incidents.commands.IncidentCommandActor
 import com.moneat.enterprise.incidents.commands.IncidentCommandException
-import com.moneat.enterprise.incidents.commands.IncidentCommandService
 import com.moneat.enterprise.incidents.events.IncidentOutboxService
 import com.moneat.enterprise.incidents.events.IncidentOutboxWorker
 import com.moneat.enterprise.incidents.updates.IncidentUpdateReminderWorker
@@ -99,7 +98,6 @@ import kotlinx.serialization.json.addJsonObject
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.module.Module
@@ -393,13 +391,13 @@ class OnCallModule :
         val assigneeUserId = request.assigneeUserResourceId?.let { resourceId ->
             val parsed = resourceId.toUuidOrNull() ?: return null
             transaction {
-                val memberUserIds = Memberships
-                    .selectAll()
-                    .where { Memberships.organization_id eq request.organizationId }
-                    .map { it[Memberships.user_id] }
                 Users
+                    .innerJoin(Memberships)
                     .selectAll()
-                    .where { (Users.resource_id eq parsed) and (Users.id inList memberUserIds) }
+                    .where {
+                        (Users.resource_id eq parsed) and
+                            (Memberships.organization_id eq request.organizationId)
+                    }
                     .singleOrNull()
                     ?.get(Users.id)
             } ?: return null
@@ -407,10 +405,10 @@ class OnCallModule :
         val source = IncidentActionSource.entries
             .firstOrNull { it.wire == request.source }
             ?: return null
-        return IncidentCommandService().execute(
+        return onCallIncidentService.executeIncidentCommand(
             AddIncidentActionCommand(
                 commandKey = request.commandKey,
-                actor = IncidentCommandActor(request.organizationId, request.userId, "WORKFLOW"),
+                actor = IncidentCommandActor(request.organizationId, request.userId, source.wire),
                 incidentId = incidentId,
                 title = request.description,
                 description = request.description,
@@ -537,14 +535,10 @@ class OnCallModule :
             ?: value("channel_id")
         val incidentResourceId = requestedIncidentResourceId
             ?: channelId?.let { incidentResourceIdForSlackChannel(submitter.organizationId, it) }
-        if (incidentResourceId.isNullOrBlank() ||
-            onCallIncidentService.getIncidentIdByResourceId(submitter.organizationId, incidentResourceId) == null
-        ) {
-            return slackEphemeral("Open this shortcut from an incident channel or provide an incident reference.")
-        }
-        val incidentId = checkNotNull(
-            onCallIncidentService.getIncidentIdByResourceId(submitter.organizationId, incidentResourceId),
-        )
+        val incidentId = incidentResourceId
+            ?.takeIf(String::isNotBlank)
+            ?.let { onCallIncidentService.getIncidentIdByResourceId(submitter.organizationId, it) }
+            ?: return slackEphemeral("Open this shortcut from an incident channel or provide an incident reference.")
         authorizeSlackIncidentAction(root, value, submitter.organizationId, incidentId)?.let { message ->
             return slackEphemeral(message)
         }

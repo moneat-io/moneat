@@ -632,6 +632,42 @@ class IncidentCommandServiceTest {
     }
 
     @Test
+    fun `no-op action mutations still validate the incident version`() {
+        val incident = service.execute(declareCommand("action-noop-version", actor()))
+        val created = service.execute(
+            AddIncidentActionCommand(
+                commandKey = "action-noop-created",
+                actor = actor(),
+                incidentId = incident.incidentId,
+                title = "Check queue depth",
+                expectedVersion = 1,
+            ),
+        )
+        val actionResourceId = checkNotNull(created.actionResourceId)
+        service.execute(
+            ClaimIncidentActionCommand(
+                commandKey = "action-noop-claimed",
+                actor = actor(),
+                incidentId = incident.incidentId,
+                actionResourceId = actionResourceId,
+                expectedVersion = 2,
+            ),
+        )
+
+        assertFailsWith<IncidentCommandConflictException> {
+            service.execute(
+                ClaimIncidentActionCommand(
+                    commandKey = "action-noop-stale",
+                    actor = actor(),
+                    incidentId = incident.incidentId,
+                    actionResourceId = actionResourceId,
+                    expectedVersion = 2,
+                ),
+            )
+        }
+    }
+
+    @Test
     fun `enforces entitlement membership and organization scope before mutation`() {
         val deniedService =
             IncidentCommandService(

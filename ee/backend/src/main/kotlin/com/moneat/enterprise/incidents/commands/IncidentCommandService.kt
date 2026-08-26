@@ -1052,6 +1052,7 @@ class IncidentCommandService(
                 assigneeUserId,
             )
         ) {
+            requireIncident(command)
             return loadMutation(command.incidentId, changed = false)
         }
         val isReassignment = command is ReassignIncidentActionCommand
