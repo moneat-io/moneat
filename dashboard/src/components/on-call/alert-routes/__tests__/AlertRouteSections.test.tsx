@@ -131,6 +131,7 @@ describe('alert route editor sections', () => {
         onRecoveryChange={onRecoveryChange}
       />
     )
+    expect(screen.getByRole('status')).toHaveTextContent('will not create incidents while this option is off')
     fireEvent.click(screen.getByLabelText('Create an incident for matched alerts'))
     fireEvent.click(screen.getByLabelText('Cancel active escalations when the group recovers'))
     fireEvent.click(screen.getByLabelText('Decline triage incidents that were never accepted'))
@@ -153,6 +154,7 @@ describe('alert route editor sections', () => {
         onRecoveryChange={onRecoveryChange}
       />
     )
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Title template (optional)'), {target: {value: 'New title'}})
     fireEvent.change(screen.getByLabelText('Summary template (optional)'), {target: {value: 'New summary'}})
     expect(screen.getByText('Active incidents require a severity.')).toBeInTheDocument()
