@@ -97,8 +97,9 @@ class WorkflowTrustedActionExecutor(
         params: Map<String, String>,
         actorUserId: Int?,
         idempotencyKey: String?,
-    ): Map<String, JsonElement> =
-        when (stepName) {
+    ): Map<String, JsonElement> {
+        executeOnCallBuiltInOrNull(organizationId, stepName, params, actorUserId, idempotencyKey)?.let { return it }
+        return when (stepName) {
             LOGS_SEARCH_STEP -> executeLogSearch(organizationId, params)
             LOGS_AGGREGATE_STEP -> executeLogAggregate(organizationId, params)
             METRICS_QUERY_STEP -> executeMetricsQuery(organizationId, params)
@@ -109,13 +110,24 @@ class WorkflowTrustedActionExecutor(
             STATUS_PAGE_UPDATE_STEP -> executeStatusPageUpdate(organizationId, params)
             STATUS_PAGE_INCIDENT_CREATE_STEP -> executeStatusPageIncidentCreate(organizationId, params)
             ALERT_SILENCE_STEP -> executeAlertSilence(organizationId, params, actorUserId)
-            ON_CALL_PAGE_STEP -> executeOnCallPage(organizationId, params)
-            ON_CALL_DECLARE_INCIDENT_STEP ->
-                executeOnCallDeclareIncident(organizationId, params, actorUserId, idempotencyKey)
-            ON_CALL_CREATE_INCIDENT_ACTION_STEP ->
-                executeOnCallCreateIncidentAction(organizationId, params, actorUserId, idempotencyKey)
             else -> throw IllegalArgumentException("Unknown workflow step $stepName")
         }
+    }
+
+    private suspend fun executeOnCallBuiltInOrNull(
+        organizationId: Int,
+        stepName: String,
+        params: Map<String, String>,
+        actorUserId: Int?,
+        idempotencyKey: String?,
+    ): Map<String, JsonElement>? = when (stepName) {
+        ON_CALL_PAGE_STEP -> executeOnCallPage(organizationId, params)
+        ON_CALL_DECLARE_INCIDENT_STEP ->
+            executeOnCallDeclareIncident(organizationId, params, actorUserId, idempotencyKey)
+        ON_CALL_CREATE_INCIDENT_ACTION_STEP ->
+            executeOnCallCreateIncidentAction(organizationId, params, actorUserId, idempotencyKey)
+        else -> null
+    }
 
     fun supports(stepName: String): Boolean =
         stepName in SUPPORTED_ACTIONS
