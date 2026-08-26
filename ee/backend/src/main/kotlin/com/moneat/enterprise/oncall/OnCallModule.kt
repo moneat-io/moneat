@@ -107,6 +107,9 @@ private const val SLACK_FORM_OPTION_MAX_CHARS = 75
 private const val SLACK_INCIDENT_MENU_CALLBACK_ID = "moneat_incident_menu"
 private const val SLACK_INCIDENT_ACTION_CALLBACK_ID = "moneat_incident_action"
 private const val SLACK_INCIDENT_ACTION_BUTTON_ID = "incident_action_add"
+private const val SLACK_ACTION_METADATA_PARTS = 4
+private const val SLACK_ACTION_METADATA_CHANNEL_INDEX = 2
+private const val SLACK_ACTION_METADATA_MESSAGE_INDEX = 3
 private val SLACK_INCIDENT_HELP_COMMANDS = setOf("help", "menu", "commands", "incident help", "incident menu")
 
 private data class SlackIncidentSubmitter(
@@ -420,37 +423,52 @@ class OnCallModule :
         val value: (String) -> String? = { key ->
             root?.get(key)?.jsonPrimitive?.contentOrNull ?: form[key]
         }
-        val type = root?.get("type")?.jsonPrimitive?.contentOrNull
-        if (requestType == "interactions" && type == "block_actions") {
-            val actionId = root["actions"]?.jsonArray?.firstOrNull()
-                ?.jsonObject?.get("action_id")?.jsonPrimitive?.contentOrNull
-            val actionValue = root["actions"]?.jsonArray?.firstOrNull()
-                ?.jsonObject?.get("value")?.jsonPrimitive?.contentOrNull
-            if (actionId == "incident_menu_declare") return openSlackIncident(root, value)
-            if (actionId == SLACK_INCIDENT_ACTION_BUTTON_ID) {
-                return openSlackIncidentAction(root, value, actionValue, IncidentActionSource.MODAL)
-            }
-            return alertRouteSlackActionService.handle(payload, deliveryId)
-        }
-        if (requestType == "interactions" && type == "view_submission") {
-            val callbackId = root["view"]?.jsonObject?.get("callback_id")?.jsonPrimitive?.contentOrNull
-            if (callbackId == SLACK_INCIDENT_ACTION_CALLBACK_ID) {
-                return submitSlackIncidentAction(root, value, deliveryId)
-            }
-            return submitSlackIncident(root, value, deliveryId)
-        }
+        if (requestType == "interactions") return handleSlackInteraction(root, value, payload, deliveryId)
         if (requestType == "events" || requestType == "mentions") return null
         if (requestType == "commands" && value("text")?.trim()?.lowercase() in SLACK_INCIDENT_HELP_COMMANDS) {
             return slackIncidentCommandMenu()
         }
-        if (requestType == "shortcuts" && value("callback_id") == SLACK_INCIDENT_MENU_CALLBACK_ID) {
-            return slackIncidentCommandMenu()
-        }
-        if (requestType == "shortcuts" && value("callback_id") == SLACK_INCIDENT_ACTION_CALLBACK_ID) {
-            return openSlackIncidentAction(root, value, null, IncidentActionSource.MESSAGE_SHORTCUT)
-        }
+        if (requestType == "shortcuts") return handleSlackShortcut(root, value)
 
         return openSlackIncident(root, value)
+    }
+
+    private suspend fun handleSlackInteraction(
+        root: JsonObject?,
+        value: (String) -> String?,
+        payload: String,
+        deliveryId: String?,
+    ): String? = when (root?.get("type")?.jsonPrimitive?.contentOrNull) {
+        "block_actions" -> {
+            val action = root["actions"]?.jsonArray?.firstOrNull()?.jsonObject
+            val actionId = action?.get("action_id")?.jsonPrimitive?.contentOrNull
+            val actionValue = action?.get("value")?.jsonPrimitive?.contentOrNull
+            when (actionId) {
+                "incident_menu_declare" -> openSlackIncident(root, value)
+                SLACK_INCIDENT_ACTION_BUTTON_ID ->
+                    openSlackIncidentAction(root, value, actionValue, IncidentActionSource.MODAL)
+                else -> alertRouteSlackActionService.handle(payload, deliveryId)
+            }
+        }
+        "view_submission" -> {
+            val callbackId = root["view"]?.jsonObject?.get("callback_id")?.jsonPrimitive?.contentOrNull
+            if (callbackId == SLACK_INCIDENT_ACTION_CALLBACK_ID) {
+                submitSlackIncidentAction(root, value, deliveryId)
+            } else {
+                submitSlackIncident(root, value, deliveryId)
+            }
+        }
+        else -> openSlackIncident(root, value)
+    }
+
+    private suspend fun handleSlackShortcut(
+        root: JsonObject?,
+        value: (String) -> String?,
+    ): String? = when (value("callback_id")) {
+        SLACK_INCIDENT_MENU_CALLBACK_ID -> slackIncidentCommandMenu()
+        SLACK_INCIDENT_ACTION_CALLBACK_ID ->
+            openSlackIncidentAction(root, value, null, IncidentActionSource.MESSAGE_SHORTCUT)
+        else -> openSlackIncident(root, value)
     }
 
     private suspend fun openSlackIncident(
@@ -516,7 +534,8 @@ class OnCallModule :
             return slackEphemeral("Open this shortcut from an incident channel or provide an incident reference.")
         }
         val messageTs = root?.get("message")?.jsonObject?.get("ts")?.jsonPrimitive?.contentOrNull
-        val metadata = listOf(source.wire, incidentResourceId, channelId.orEmpty(), messageTs.orEmpty()).joinToString("|")
+        val metadata = listOf(source.wire, incidentResourceId, channelId.orEmpty(), messageTs.orEmpty())
+            .joinToString("|")
         val installationId = slackInstallationService.internalInstallationIdForTeam(
             submitter.organizationId,
             requireNotNull(
@@ -544,7 +563,7 @@ class OnCallModule :
         if (description.isBlank()) return slackViewErrors(mapOf("description" to "Action description is required."))
         val metadata = root?.get("view")?.jsonObject?.get("private_metadata")?.jsonPrimitive?.contentOrNull
             ?: return slackEphemeral("The incident action context has expired.")
-        val metadataParts = metadata.split("|", limit = 4)
+        val metadataParts = metadata.split("|", limit = SLACK_ACTION_METADATA_PARTS)
         val source = IncidentActionSource.entries.firstOrNull { it.wire == metadataParts.firstOrNull() }
             ?: return slackEphemeral("The incident action context is invalid.")
         val incidentResourceId = metadataParts.getOrNull(1)
@@ -560,14 +579,19 @@ class OnCallModule :
                     title = description,
                     description = description,
                     source = source,
-                    slackChannelId = metadataParts.getOrNull(2)?.takeIf(String::isNotBlank),
-                    slackMessageTs = metadataParts.getOrNull(3)?.takeIf(String::isNotBlank),
+                    slackChannelId = metadataParts.getOrNull(SLACK_ACTION_METADATA_CHANNEL_INDEX)
+                        ?.takeIf(String::isNotBlank),
+                    slackMessageTs = metadataParts.getOrNull(SLACK_ACTION_METADATA_MESSAGE_INDEX)
+                        ?.takeIf(String::isNotBlank),
                 ),
             )
         } catch (error: IllegalArgumentException) {
             return slackViewErrors(mapOf("description" to (error.message ?: "Check this action.")))
         }
-        logger.info { "Added incident action ${result.actionResourceId} from Slack for organization ${submitter.organizationId}" }
+        logger.info {
+            "Added incident action ${result.actionResourceId} from Slack for " +
+                "organization ${submitter.organizationId}"
+        }
         return buildJsonObject { put("response_action", "clear") }.toString()
     }
 
