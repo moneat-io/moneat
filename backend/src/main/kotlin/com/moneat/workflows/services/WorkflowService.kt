@@ -58,6 +58,9 @@ import com.moneat.workflows.models.ALERT_LAST_SEEN_AT_REFERENCE
 import com.moneat.workflows.models.ALERT_NOTIFICATION_KIND_REFERENCE
 import com.moneat.workflows.models.ALERT_NOTIFICATION_SEQUENCE_REFERENCE
 import com.moneat.workflows.models.ALERT_OPENED_AT_REFERENCE
+import com.moneat.workflows.models.INCIDENT_ASSIGNEE_REFERENCE
+import com.moneat.workflows.models.INCIDENT_ROLE_ACTION_REFERENCE
+import com.moneat.workflows.models.INCIDENT_ROLE_REFERENCE
 import com.moneat.workflows.models.CreateWorkflowRequest
 import com.moneat.workflows.models.ManualWorkflowRunRequest
 import com.moneat.workflows.models.UpdateWorkflowRequest
@@ -128,9 +131,6 @@ private const val INCIDENT_KIND_REFERENCE = "incident.kind"
 private const val INCIDENT_TITLE_REFERENCE = "incident.title"
 private const val INCIDENT_STATUS_REFERENCE = "incident.status"
 private const val INCIDENT_SEVERITY_REFERENCE = "incident.severity"
-private const val INCIDENT_ROLE_REFERENCE = "incident.role"
-private const val INCIDENT_ASSIGNEE_REFERENCE = "incident.assignee"
-private const val INCIDENT_ROLE_ACTION_REFERENCE = "incident.role_action"
 private const val SECURITY_RULE_ID_REFERENCE = "security.rule_id"
 private const val SECURITY_RULE_NAME_REFERENCE = "security.rule_name"
 private const val SECURITY_SEVERITY_REFERENCE = "security.severity"
