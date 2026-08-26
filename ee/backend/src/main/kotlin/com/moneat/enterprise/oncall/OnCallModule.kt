@@ -535,10 +535,13 @@ class OnCallModule :
             ?: value("channel_id")
         val incidentResourceId = requestedIncidentResourceId
             ?: channelId?.let { incidentResourceIdForSlackChannel(submitter.organizationId, it) }
-        val incidentId = incidentResourceId
-            ?.takeIf(String::isNotBlank)
-            ?.let { onCallIncidentService.getIncidentIdByResourceId(submitter.organizationId, it) }
-            ?: return slackEphemeral("Open this shortcut from an incident channel or provide an incident reference.")
+        if (incidentResourceId.isNullOrBlank()) {
+            return slackEphemeral("Open this shortcut from an incident channel or provide an incident reference.")
+        }
+        val incidentId = onCallIncidentService.getIncidentIdByResourceId(
+            submitter.organizationId,
+            incidentResourceId,
+        ) ?: return slackEphemeral("Open this shortcut from an incident channel or provide an incident reference.")
         authorizeSlackIncidentAction(root, value, submitter.organizationId, incidentId)?.let { message ->
             return slackEphemeral(message)
         }
