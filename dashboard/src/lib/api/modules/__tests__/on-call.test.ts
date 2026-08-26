@@ -706,6 +706,68 @@ describe('onCallMethods', () => {
     })
   })
 
+  describe('incident actions', () => {
+    it('reads and mutates incident actions through the shared API surface', async () => {
+      const actionId = 'a1111111-1111-4111-8111-111111111111'
+      const action = {id: actionId, incidentId: ON_CALL_INCIDENT_ID_PRIMARY, description: 'Verify fallback', state: 'OPEN'}
+      const event = {id: 'b1111111-1111-4111-8111-111111111111', eventType: 'CREATED'}
+      const metrics = {total: 1, open: 1, claimed: 0, completed: 0, cancelled: 0, followUp: 0}
+      const paths = {
+        list: `${API_BASE}/on-call/incidents/${ON_CALL_INCIDENT_ID_PRIMARY}/actions`,
+        get: `${API_BASE}/on-call/incidents/${ON_CALL_INCIDENT_ID_PRIMARY}/actions/${actionId}`,
+        events: `${API_BASE}/on-call/incidents/${ON_CALL_INCIDENT_ID_PRIMARY}/actions/${actionId}/events`,
+        metrics: `${API_BASE}/on-call/incidents/${ON_CALL_INCIDENT_ID_PRIMARY}/actions/metrics`,
+        create: `${API_BASE}/on-call/incidents/${ON_CALL_INCIDENT_ID_PRIMARY}/actions`,
+        claim: `${API_BASE}/on-call/incidents/${ON_CALL_INCIDENT_ID_PRIMARY}/actions/${actionId}/claim`,
+        reassign: `${API_BASE}/on-call/incidents/${ON_CALL_INCIDENT_ID_PRIMARY}/actions/${actionId}/reassign`,
+        complete: `${API_BASE}/on-call/incidents/${ON_CALL_INCIDENT_ID_PRIMARY}/actions/${actionId}/complete`,
+        cancel: `${API_BASE}/on-call/incidents/${ON_CALL_INCIDENT_ID_PRIMARY}/actions/${actionId}/cancel`,
+        followUp: `${API_BASE}/on-call/incidents/${ON_CALL_INCIDENT_ID_PRIMARY}/actions/${actionId}/convert-to-follow-up`,
+      }
+      server.use(
+        http.get(paths.list, () => HttpResponse.json([action])),
+        http.get(paths.get, () => HttpResponse.json(action)),
+        http.get(paths.events, () => HttpResponse.json([event])),
+        http.get(paths.metrics, () => HttpResponse.json(metrics)),
+        http.post(paths.create, async ({request}) => {
+          expect(await request.json()).toEqual({description: 'Verify fallback', source: 'DASHBOARD'})
+          return HttpResponse.json(action, {status: 201})
+        }),
+        http.post(paths.claim, async ({request}) => {
+          expect(await request.json()).toEqual({expectedVersion: 3})
+          return HttpResponse.json(action)
+        }),
+        http.post(paths.reassign, async ({request}) => {
+          expect(await request.json()).toEqual({assigneeUserId: USER_ID_REASSIGN, expectedVersion: 4})
+          return HttpResponse.json(action)
+        }),
+        http.post(paths.complete, async ({request}) => {
+          expect(await request.json()).toEqual({note: 'Done', expectedVersion: 5})
+          return HttpResponse.json(action)
+        }),
+        http.post(paths.cancel, async ({request}) => {
+          expect(await request.json()).toEqual({expectedVersion: 6})
+          return HttpResponse.json(action)
+        }),
+        http.post(paths.followUp, async ({request}) => {
+          expect(await request.json()).toEqual({note: 'Track in follow-up', expectedVersion: 7})
+          return HttpResponse.json(action)
+        })
+      )
+
+      expect(await api.getIncidentActions(ON_CALL_INCIDENT_ID_PRIMARY)).toEqual([action])
+      expect(await api.getIncidentAction(ON_CALL_INCIDENT_ID_PRIMARY, actionId)).toEqual(action)
+      expect(await api.getIncidentActionEvents(ON_CALL_INCIDENT_ID_PRIMARY, actionId)).toEqual([event])
+      expect(await api.getIncidentActionMetrics(ON_CALL_INCIDENT_ID_PRIMARY)).toEqual(metrics)
+      expect(await api.createIncidentAction(ON_CALL_INCIDENT_ID_PRIMARY, {description: 'Verify fallback', source: 'DASHBOARD'})).toEqual(action)
+      expect(await api.claimIncidentAction(ON_CALL_INCIDENT_ID_PRIMARY, actionId, 3)).toEqual(action)
+      expect(await api.reassignIncidentAction(ON_CALL_INCIDENT_ID_PRIMARY, actionId, {assigneeUserId: USER_ID_REASSIGN, expectedVersion: 4})).toEqual(action)
+      expect(await api.completeIncidentAction(ON_CALL_INCIDENT_ID_PRIMARY, actionId, {note: 'Done', expectedVersion: 5})).toEqual(action)
+      expect(await api.cancelIncidentAction(ON_CALL_INCIDENT_ID_PRIMARY, actionId, {expectedVersion: 6})).toEqual(action)
+      expect(await api.convertIncidentActionToFollowUp(ON_CALL_INCIDENT_ID_PRIMARY, actionId, {note: 'Track in follow-up', expectedVersion: 7})).toEqual(action)
+    })
+  })
+
   describe('getOnCallIncidentTimeline', () => {
     it('fetches on-call incident timeline', async () => {
       const mock = [{ type: 'ESCALATED', timestamp: '2025-06-01T12:00:00Z' }]
