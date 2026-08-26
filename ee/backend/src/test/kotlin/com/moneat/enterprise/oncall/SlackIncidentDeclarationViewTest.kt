@@ -25,13 +25,13 @@ class SlackIncidentDeclarationViewTest {
     @Test
     fun `declaration modal preserves context and offers supported severities`() {
         val view = slackIncidentDeclarationView("Checkout API is timing out")
-        val blocks = view["blocks"]?.jsonArray
+        val blocks = requireNotNull(view["blocks"]?.jsonArray)
 
         assertEquals("moneat_incident_declaration", view["callback_id"]?.toString()?.trim('"'))
-        assertEquals("Checkout API is timing out", blocks?.first()?.jsonObject?.get("element")
+        assertEquals("Checkout API is timing out", blocks.first().jsonObject["element"]
             ?.jsonObject?.get("initial_value")?.toString()?.trim('"'))
-        assertEquals(5, blocks?.size)
-        assertNotNull(blocks?.get(2)?.jsonObject?.get("element")?.jsonObject?.get("options"))
+        assertEquals(5, blocks.size)
+        assertNotNull(blocks.get(2).jsonObject["element"]?.jsonObject?.get("options"))
         assertEquals("mode", blocks.get(3).jsonObject["block_id"]?.toString()?.trim('"'))
         assertEquals("visibility", blocks.get(4).jsonObject["block_id"]?.toString()?.trim('"'))
         assertEquals(
