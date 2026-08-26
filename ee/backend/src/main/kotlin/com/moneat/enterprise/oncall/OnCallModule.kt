@@ -41,11 +41,14 @@ import com.moneat.enterprise.incidents.config.ResolvedIncidentForm
 import com.moneat.enterprise.incidents.models.IncidentCustomFieldValueType
 import com.moneat.enterprise.incidents.models.IncidentFormStage
 import com.moneat.enterprise.incidents.models.IncidentActionSource
+import com.moneat.enterprise.incidents.models.NativeIncidentMode
 import com.moneat.enterprise.incidents.models.NativeIncidentVisibility
 import com.moneat.enterprise.incidents.authorization.SlackIncidentAccessRequest
 import com.moneat.enterprise.incidents.authorization.SlackIncidentAction
 import com.moneat.enterprise.incidents.authorization.SlackIncidentAuthorizationService
+import com.moneat.enterprise.incidents.slack.IncidentSlackChannelState
 import com.moneat.enterprise.incidents.slack.NativeIncidentSlackChannels
+import com.moneat.enterprise.oncall.models.OnCallIncidents
 import com.moneat.enterprise.oncall.routes.deviceRoutes
 import com.moneat.enterprise.oncall.routes.escalationRoutes
 import com.moneat.enterprise.oncall.routes.incidentRoutes
@@ -376,6 +379,8 @@ class OnCallModule :
                     title = declaration.title,
                     description = declaration.description,
                     severity = declaration.severity,
+                    mode = parseIncidentMode(declaration.mode),
+                    visibility = parseIncidentVisibility(declaration.visibility),
                     formDefinitionId = declaration.formDefinitionId,
                     formDefinitionSnapshot = declaration.formDefinitionSnapshot,
                     formValues = declaration.formValues,
@@ -432,12 +437,58 @@ class OnCallModule :
         }
         if (requestType == "interactions") return handleSlackInteraction(root, value, payload, deliveryId)
         if (requestType == "events" || requestType == "mentions") return null
+        slackCommandResponse(requestType, root, value)?.let { return it }
+
+        return openSlackIncident(root, value)
+    }
+
+    private fun slackCommandResponse(
+        requestType: String,
+        root: JsonObject?,
+        value: (String) -> String?,
+    ): String? {
+        if (requestType != "commands" && requestType != "shortcuts") return null
+        incidentResourceIdForSlackChannel(root, value)?.let { return slackIncidentCommandMenu(it) }
         if (requestType == "commands" && value("text")?.trim()?.lowercase() in SLACK_INCIDENT_HELP_COMMANDS) {
             return slackIncidentCommandMenu()
         }
         if (requestType == "shortcuts") return handleSlackShortcut(root, value)
+        return null
+    }
 
-        return openSlackIncident(root, value)
+    private fun incidentResourceIdForSlackChannel(
+        root: JsonObject?,
+        value: (String) -> String?,
+    ): String? {
+        val channelId = value("channel_id")
+            ?: root?.get("channel")?.jsonObject?.get("id")?.jsonPrimitive?.contentOrNull
+        if (channelId.isNullOrBlank()) return null
+        val submitter = resolveSlackSubmitter(root, value, slackInstallationService) ?: return null
+        val teamId = root?.get("team")?.jsonObject?.get("id")?.jsonPrimitive?.contentOrNull
+            ?: value("team_id")
+            ?: return null
+        return transaction {
+            val channel = NativeIncidentSlackChannels
+                .selectAll()
+                .where {
+                    (NativeIncidentSlackChannels.organizationId eq submitter.organizationId) and
+                        (NativeIncidentSlackChannels.teamId eq teamId) and
+                        (NativeIncidentSlackChannels.channelId eq channelId) and
+                        (NativeIncidentSlackChannels.state eq IncidentSlackChannelState.ACTIVE.wire)
+                }
+                .firstOrNull()
+                ?: return@transaction null
+            val incidentId = channel[NativeIncidentSlackChannels.incidentId]
+            OnCallIncidents
+                .selectAll()
+                .where {
+                    (OnCallIncidents.id eq incidentId) and
+                        (OnCallIncidents.organizationId eq submitter.organizationId)
+                }
+                .firstOrNull()
+                ?.get(OnCallIncidents.resourceId)
+                ?.toString()
+        }
     }
 
     private suspend fun handleSlackInteraction(
@@ -647,6 +698,10 @@ class OnCallModule :
         val description = slackViewValue(state, "description")?.trim()?.takeIf(String::isNotEmpty)
         val severity = slackViewValue(state, "severity")?.trim()?.takeIf(String::isNotEmpty) ?: "SEV-3"
         if (title.isBlank()) return slackViewErrors(mapOf("title" to "Incident title is required."))
+        val mode = parseSlackIncidentMode(slackViewValue(state, "mode"))
+            ?: return slackViewErrors(mapOf("mode" to "Choose a supported incident mode."))
+        val visibility = parseSlackIncidentVisibility(slackViewValue(state, "visibility"))
+            ?: return slackViewErrors(mapOf("visibility" to "Choose a supported incident visibility."))
         val resolvedForm = try {
             resolveSlackDeclarationForm(organizationId, state, incidentConfigurationService)
         } catch (error: IllegalArgumentException) {
@@ -661,6 +716,8 @@ class OnCallModule :
                 title = title,
                 description = description,
                 severity = severity,
+                mode = mode.wire,
+                visibility = visibility.wire,
                 commandKey = "slack:${deliveryId ?: Uuid.random()}",
                 origin = "SLACK",
                 formDefinitionId = resolvedForm?.formDefinitionId,
@@ -756,10 +813,10 @@ private fun slackEphemeral(message: String): String =
         put("text", message)
     }.toString()
 
-internal fun slackIncidentCommandMenu(): String =
+internal fun slackIncidentCommandMenu(incidentResourceId: String? = null): String =
     buildJsonObject {
         put("response_type", "ephemeral")
-        put("text", "Incident response commands")
+        put("text", if (incidentResourceId == null) "Incident response commands" else "Incident menu")
         putJsonArray("blocks") {
             addJsonObject {
                 put("type", "header")
@@ -772,10 +829,18 @@ internal fun slackIncidentCommandMenu(): String =
                 put("type", "section")
                 put(
                     "text",
-                    "*Available actions*\n" +
-                        "Overview · update · status · severity · summary · rename · roles · fields\n" +
-                        "Actions · follow-ups · timeline · decision · handover · call · status page\n" +
-                        "Escalation · resolve · cancel · reopen · workflow",
+                    if (incidentResourceId == null) {
+                        "*Available actions*\n" +
+                            "Overview · update · status · severity · summary · rename · roles · fields\n" +
+                            "Actions · follow-ups · timeline · decision · handover · call · status page\n" +
+                            "Escalation · resolve · cancel · reopen · workflow"
+                    } else {
+                        "*Incident menu*\n" +
+                            "Incident `$incidentResourceId`\n" +
+                            "Overview · update · status · severity · summary · rename · roles · fields\n" +
+                            "Actions · follow-ups · timeline · decision · handover · call · status page\n" +
+                            "Escalation · resolve · cancel · reopen · workflow"
+                    },
                 )
             }
             addJsonObject {
@@ -809,6 +874,28 @@ internal fun slackViewValue(values: JsonObject?, blockId: String): String? {
     return action["value"]?.jsonPrimitive?.contentOrNull
         ?: action["selected_option"]?.jsonObject?.get("value")?.jsonPrimitive?.contentOrNull
 }
+
+private fun parseIncidentMode(value: String): NativeIncidentMode =
+    NativeIncidentMode.entries.firstOrNull { it.wire.equals(value.trim(), ignoreCase = true) }
+        ?: throw IllegalArgumentException("Unsupported incident mode")
+
+private fun parseIncidentVisibility(value: String): NativeIncidentVisibility =
+    NativeIncidentVisibility.entries.firstOrNull { it.wire.equals(value.trim(), ignoreCase = true) }
+        ?: throw IllegalArgumentException("Unsupported incident visibility")
+
+private fun parseSlackIncidentMode(value: String?): NativeIncidentMode? =
+    if (value.isNullOrBlank()) {
+        NativeIncidentMode.LIVE
+    } else {
+        NativeIncidentMode.entries.firstOrNull { it.wire.equals(value.trim(), ignoreCase = true) }
+    }
+
+private fun parseSlackIncidentVisibility(value: String?): NativeIncidentVisibility? =
+    if (value.isNullOrBlank()) {
+        NativeIncidentVisibility.ORGANIZATION
+    } else {
+        NativeIncidentVisibility.entries.firstOrNull { it.wire.equals(value.trim(), ignoreCase = true) }
+    }
 
 private fun resolveSlackSubmitter(
     root: JsonObject?,
@@ -906,6 +993,82 @@ internal fun slackIncidentDeclarationView(
                                     put("text", severity)
                                 }
                                 put("value", severity)
+                            }
+                        }
+                    }
+                }
+            }
+            addJsonObject {
+                put("type", "input")
+                put("block_id", "mode")
+                putJsonObject("label") {
+                    put("type", "plain_text")
+                    put("text", "Incident mode")
+                }
+                putJsonObject("hint") {
+                    put("type", "plain_text")
+                    put(
+                        "text",
+                        "Live incidents can page responders. Test and retrospective incidents stay channelless " +
+                            "unless your response policy enables those actions.",
+                    )
+                }
+                putJsonObject("element") {
+                    put("type", "static_select")
+                    put("action_id", "value")
+                    putJsonObject("initial_option") {
+                        putJsonObject("text") {
+                            put("type", "plain_text")
+                            put("text", "Live")
+                        }
+                        put("value", NativeIncidentMode.LIVE.wire)
+                    }
+                    putJsonArray("options") {
+                        listOf(
+                            NativeIncidentMode.LIVE to "Live",
+                            NativeIncidentMode.RETROSPECTIVE to "Retrospective",
+                            NativeIncidentMode.TEST to "Test",
+                        ).forEach { (mode, label) ->
+                            addJsonObject {
+                                putJsonObject("text") {
+                                    put("type", "plain_text")
+                                    put("text", label)
+                                }
+                                put("value", mode.wire)
+                            }
+                        }
+                    }
+                }
+            }
+            addJsonObject {
+                put("type", "input")
+                put("block_id", "visibility")
+                putJsonObject("label") {
+                    put("type", "plain_text")
+                    put("text", "Visibility")
+                }
+                putJsonObject("element") {
+                    put("type", "static_select")
+                    put("action_id", "value")
+                    putJsonObject("initial_option") {
+                        putJsonObject("text") {
+                            put("type", "plain_text")
+                            put("text", "Organization")
+                        }
+                        put("value", NativeIncidentVisibility.ORGANIZATION.wire)
+                    }
+                    putJsonArray("options") {
+                        listOf(
+                            NativeIncidentVisibility.ORGANIZATION to "Organization",
+                            NativeIncidentVisibility.PRIVATE to "Private",
+                            NativeIncidentVisibility.PUBLIC to "Public",
+                        ).forEach { (visibility, label) ->
+                            addJsonObject {
+                                putJsonObject("text") {
+                                    put("type", "plain_text")
+                                    put("text", label)
+                                }
+                                put("value", visibility.wire)
                             }
                         }
                     }
