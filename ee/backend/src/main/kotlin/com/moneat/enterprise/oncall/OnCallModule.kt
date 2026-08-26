@@ -22,6 +22,7 @@ import com.moneat.enterprise.alertroutes.services.AlertRouteSlackActionService
 import com.moneat.enterprise.incidents.commands.DeclareIncidentCommand
 import com.moneat.enterprise.incidents.commands.AddIncidentActionCommand
 import com.moneat.enterprise.incidents.commands.IncidentCommandActor
+import com.moneat.enterprise.incidents.commands.IncidentCommandException
 import com.moneat.enterprise.incidents.commands.IncidentCommandService
 import com.moneat.enterprise.incidents.events.IncidentOutboxService
 import com.moneat.enterprise.incidents.events.IncidentOutboxWorker
@@ -41,6 +42,10 @@ import com.moneat.enterprise.incidents.config.ResolvedIncidentForm
 import com.moneat.enterprise.incidents.models.IncidentCustomFieldValueType
 import com.moneat.enterprise.incidents.models.IncidentFormStage
 import com.moneat.enterprise.incidents.models.IncidentActionSource
+import com.moneat.enterprise.incidents.models.NativeIncidentVisibility
+import com.moneat.enterprise.incidents.authorization.SlackIncidentAccessRequest
+import com.moneat.enterprise.incidents.authorization.SlackIncidentAction
+import com.moneat.enterprise.incidents.authorization.SlackIncidentAuthorizationService
 import com.moneat.enterprise.incidents.slack.NativeIncidentSlackChannels
 import com.moneat.enterprise.oncall.routes.deviceRoutes
 import com.moneat.enterprise.oncall.routes.escalationRoutes
@@ -69,6 +74,8 @@ import com.moneat.mcp.McpToolContributor
 import com.moneat.mcp.protocol.McpToolRegistry
 import com.moneat.notifications.services.SlackService
 import com.moneat.notifications.services.SlackInstallationService
+import com.moneat.notifications.services.SlackIdentityRequest
+import com.moneat.notifications.services.SlackIdentityResolver
 import com.moneat.shared.models.SlackUserMappings
 import com.moneat.shared.models.Users
 import com.moneat.shared.models.Memberships
@@ -133,6 +140,8 @@ class OnCallModule :
     private val onCallScheduleService = OnCallScheduleService()
     private val onCallIncidentService = OnCallIncidentService()
     private val incidentConfigurationService by lazy { IncidentConfigurationService() }
+    private val slackIdentityResolver = SlackIdentityResolver()
+    private val slackIncidentAuthorization = SlackIncidentAuthorizationService()
     private val pushNotificationService by lazy { PushNotificationService() }
     private val slackInstallationService by lazy { SlackInstallationService() }
     private val slackService by lazy { SlackService(installationService = slackInstallationService) }
@@ -533,6 +542,12 @@ class OnCallModule :
         ) {
             return slackEphemeral("Open this shortcut from an incident channel or provide an incident reference.")
         }
+        val incidentId = checkNotNull(
+            onCallIncidentService.getIncidentIdByResourceId(submitter.organizationId, incidentResourceId),
+        )
+        authorizeSlackIncidentAction(root, value, submitter.organizationId, incidentId)?.let { message ->
+            return slackEphemeral(message)
+        }
         val messageTs = root?.get("message")?.jsonObject?.get("ts")?.jsonPrimitive?.contentOrNull
         val metadata = listOf(source.wire, incidentResourceId, channelId.orEmpty(), messageTs.orEmpty())
             .joinToString("|")
@@ -570,6 +585,9 @@ class OnCallModule :
             ?: return slackEphemeral("The incident action context is invalid.")
         val incidentId = onCallIncidentService.getIncidentIdByResourceId(submitter.organizationId, incidentResourceId)
             ?: return slackEphemeral("This incident is no longer available.")
+        authorizeSlackIncidentAction(root, value, submitter.organizationId, incidentId)?.let { message ->
+            return slackEphemeral(message)
+        }
         val result = try {
             onCallIncidentService.executeIncidentCommand(
                 AddIncidentActionCommand(
@@ -585,6 +603,8 @@ class OnCallModule :
                         ?.takeIf(String::isNotBlank),
                 ),
             )
+        } catch (error: IncidentCommandException) {
+            return slackViewErrors(mapOf("description" to (error.message ?: "This action is not allowed.")))
         } catch (error: IllegalArgumentException) {
             return slackViewErrors(mapOf("description" to (error.message ?: "Check this action.")))
         }
@@ -681,6 +701,37 @@ class OnCallModule :
                 acknowledged
             }
         }
+    }
+
+    private fun authorizeSlackIncidentAction(
+        root: JsonObject?,
+        value: (String) -> String?,
+        organizationId: Int,
+        incidentId: Int,
+    ): String? {
+        val incident = onCallIncidentService.getIncident(incidentId)
+            ?: return "This incident is no longer available."
+        val visibility = NativeIncidentVisibility.entries.firstOrNull { it.wire == incident.visibility }
+            ?: return "This incident has an invalid visibility."
+        val identity = slackIdentityResolver.resolve(
+            SlackIdentityRequest(
+                teamId = root?.get("team")?.jsonObject?.get("id")?.jsonPrimitive?.contentOrNull
+                    ?: value("team_id"),
+                userId = root?.get("user")?.jsonObject?.get("id")?.jsonPrimitive?.contentOrNull
+                    ?: value("user_id"),
+                organizationId = organizationId,
+            ),
+        )
+        val decision = slackIncidentAuthorization.authorize(
+            SlackIncidentAccessRequest(
+                identity = identity,
+                organizationId = organizationId,
+                incidentId = incidentId,
+                visibility = visibility,
+                action = SlackIncidentAction.RESPOND,
+            ),
+        )
+        return decision.message.takeUnless { decision.allowed }
     }
 
     override fun getAlert(
