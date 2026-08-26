@@ -41,6 +41,7 @@ import com.moneat.enterprise.incidents.models.NativeIncidentSourceLinks
 import com.moneat.enterprise.incidents.models.NativeIncidentTimelineRevisions
 import com.moneat.enterprise.incidents.models.NativeIncidentTypes
 import com.moneat.enterprise.oncall.models.OnCallAlerts
+import com.moneat.enterprise.oncall.models.OnCallAlertTimeline
 import com.moneat.enterprise.oncall.models.OnCallIncidentAlerts
 import com.moneat.enterprise.oncall.models.OnCallIncidentTimeline
 import com.moneat.enterprise.oncall.models.OnCallIncidents
@@ -87,6 +88,7 @@ object IncidentTestDatabase {
             NativeIncidentFormFields,
             OnCallIncidents,
             OnCallAlerts,
+            OnCallAlertTimeline,
             OnCallIncidentAlerts,
             OnCallIncidentTimeline,
             NativeIncidentTimelineRevisions,

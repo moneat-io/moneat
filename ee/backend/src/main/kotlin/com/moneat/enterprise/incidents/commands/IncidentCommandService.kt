@@ -26,6 +26,7 @@ import com.moneat.enterprise.incidents.models.NativeIncidentStatus
 import com.moneat.enterprise.incidents.models.IncidentUpdateRequestStatus
 import com.moneat.enterprise.incidents.models.NativeIncidentUpdateRequests
 import com.moneat.enterprise.incidents.timeline.IncidentTimelineWriter
+import com.moneat.enterprise.incidents.timeline.IncidentAlertTimelineBridge
 import com.moneat.enterprise.incidents.timeline.PendingIncidentTimelineEvent
 import com.moneat.enterprise.incidents.timeline.toIncidentTimelineProvenance
 import com.moneat.enterprise.oncall.models.OnCallAlerts
@@ -59,6 +60,7 @@ class IncidentCommandService(
     private val policy: IncidentCommandPolicy = IncidentCommandPolicy(),
     private val outboxWriter: IncidentOutboxWriter = IncidentOutboxWriter(),
     private val timelineWriter: IncidentTimelineWriter = IncidentTimelineWriter(),
+    private val incidentAlertTimelineBridge: IncidentAlertTimelineBridge = IncidentAlertTimelineBridge(),
     private val configurationService: IncidentConfigurationService = IncidentConfigurationService(),
 ) {
     fun execute(command: IncidentCommand): IncidentCommandResult {
@@ -978,9 +980,11 @@ class IncidentCommandService(
             if (existing[OnCallIncidentAlerts.incidentId] != command.incidentId) {
                 throw IncidentCommandConflictException("On-call alert is already linked to another native incident")
             }
+            incidentAlertTimelineBridge.backfill(command.incidentId, command.alertId)
             return loadMutation(command.incidentId, changed = false)
         }
         linkAlertRecord(command.incidentId, command.alertId)
+        incidentAlertTimelineBridge.backfill(command.incidentId, command.alertId)
         val now = Clock.System.now()
         val nextVersion = current[OnCallIncidents.version] + 1
         val updated =
