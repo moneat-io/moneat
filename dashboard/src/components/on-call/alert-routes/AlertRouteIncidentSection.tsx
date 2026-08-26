@@ -71,7 +71,7 @@ export function AlertRouteIncidentSection({
         <span className="min-w-0">
           <span className="block text-sm font-medium">Create an incident for matched alerts</span>
           <span className="mt-0.5 block text-xs text-muted-foreground">
-            When off, matched alerts still page and group but no incident is opened.
+            Enable this on an enabled, matching route to open incidents automatically.
           </span>
         </span>
         <Switch
@@ -80,6 +80,15 @@ export function AlertRouteIncidentSection({
           aria-label="Create an incident for matched alerts"
         />
       </label>
+
+      {!incident.create && (
+        <output
+          className="rounded-md border border-warning-border bg-warning-bg px-3 py-2 text-xs text-warning-fg"
+        >
+          This route will not create incidents while this option is off. Matching alerts may still
+          be grouped or paged.
+        </output>
+      )}
 
       {incident.create && (
         <div className="space-y-4 border-l-2 border-muted pl-4">
