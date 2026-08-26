@@ -989,11 +989,14 @@ class IncidentCommandService(
                 eventType = "ACTION_CREATED",
                 fromState = null,
                 toState = if (command.assigneeUserId == null) IncidentActionState.OPEN else IncidentActionState.CLAIMED,
-                details = mapOf(
-                    "description" to JsonPrimitive(description),
-                    "source" to JsonPrimitive(command.source.wire),
-                    "origin" to JsonPrimitive(command.actor.origin),
-                ),
+                details = buildMap {
+                    put("description", JsonPrimitive(description))
+                    put("source", JsonPrimitive(command.source.wire))
+                    put("origin", JsonPrimitive(command.actor.origin))
+                    command.assigneeUserId?.let {
+                        put("assigneeUserId", JsonPrimitive(userResourceId(it)))
+                    }
+                },
                 now = now,
             ),
         )
@@ -1043,7 +1046,12 @@ class IncidentCommandService(
         eventType: String,
         note: String? = null,
     ): IncidentMutation {
-        val action = requireAction(command.actor.organizationId, command.incidentId, actionResourceId(command))
+        val action = requireAction(
+            command.actor.organizationId,
+            command.incidentId,
+            actionResourceId(command),
+            lockForUpdate = true,
+        )
         val currentState = action[NativeIncidentActions.state].toActionState()
         if (actionTransitionIsNoop(
                 currentState,
@@ -1058,7 +1066,7 @@ class IncidentCommandService(
         val isReassignment = command is ReassignIncidentActionCommand
         requireActionTransitionAllowed(currentState, target, allowReassignment = isReassignment)
         val now = Clock.System.now()
-        NativeIncidentActions.update({ NativeIncidentActions.id eq action[NativeIncidentActions.id] }) {
+        val updated = NativeIncidentActions.update({ NativeIncidentActions.id eq action[NativeIncidentActions.id] }) {
             it[state] = target.wire
             if (target == IncidentActionState.CLAIMED) it[NativeIncidentActions.assigneeUserId] = assigneeUserId
             if (target == IncidentActionState.COMPLETED) it[completedAt] = now
@@ -1066,6 +1074,9 @@ class IncidentCommandService(
             if (target == IncidentActionState.FOLLOW_UP) it[convertedToFollowUpAt] = now
             if (target == IncidentActionState.CLAIMED) it[claimedAt] = action[NativeIncidentActions.claimedAt] ?: now
             it[updatedAt] = now
+        }
+        if (updated != 1) {
+            throw IncidentCommandConflictException("Concurrent incident action update detected")
         }
         recordActionEvent(
             ActionEventRecord(
@@ -1117,14 +1128,22 @@ class IncidentCommandService(
             .getOrElse { throw IncidentCommandNotFoundException(INCIDENT_ACTION_NOT_FOUND_MESSAGE) }
     }
 
-    private fun requireAction(organizationId: Int, incidentId: Int, resourceId: Uuid): ResultRow =
-        NativeIncidentActions
+    private fun requireAction(
+        organizationId: Int,
+        incidentId: Int,
+        resourceId: Uuid,
+        lockForUpdate: Boolean = false,
+    ): ResultRow {
+        val query = NativeIncidentActions
             .selectAll()
             .where {
                 (NativeIncidentActions.organizationId eq organizationId) and
                     (NativeIncidentActions.incidentId eq incidentId) and
                     (NativeIncidentActions.resourceId eq resourceId)
-            }.singleOrNull() ?: throw IncidentCommandNotFoundException(INCIDENT_ACTION_NOT_FOUND_MESSAGE)
+            }
+        if (lockForUpdate) query.forUpdate()
+        return query.singleOrNull() ?: throw IncidentCommandNotFoundException(INCIDENT_ACTION_NOT_FOUND_MESSAGE)
+    }
 
     private fun actionTransitionIsNoop(
         currentState: IncidentActionState,

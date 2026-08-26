@@ -29,6 +29,7 @@ import com.moneat.enterprise.oncall.services.OnCallIncidentService
 import com.moneat.enterprise.incidents.responders.CreateIncidentRole
 import com.moneat.enterprise.incidents.responders.IncidentResponderService
 import com.moneat.shared.models.Users
+import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
@@ -46,6 +47,8 @@ import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.uuid.Uuid
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
 
 class IncidentCommandServiceTest {
     private lateinit var member: SeededMember
@@ -616,6 +619,32 @@ class IncidentCommandServiceTest {
     }
 
     @Test
+    fun `action creation audit captures the initial assignee`() {
+        val incident = service.execute(declareCommand("action-assignee-audit", actor()))
+        service.execute(
+            AddIncidentActionCommand(
+                commandKey = "action-assignee-created",
+                actor = actor(),
+                incidentId = incident.incidentId,
+                title = "Verify failover",
+                assigneeUserId = member.userId,
+                expectedVersion = 1,
+            ),
+        )
+
+        val assigneeResourceId = transaction {
+            Users.selectAll().where { Users.id eq member.userId }.single()[Users.resource_id].toString()
+        }
+        transaction {
+            val event = NativeIncidentActionEvents.selectAll().single()
+            assertEquals(
+                assigneeResourceId,
+                event[NativeIncidentActionEvents.details]["assigneeUserId"]?.jsonPrimitive?.content,
+            )
+        }
+    }
+
+    @Test
     fun `action command replay retains resource id`() {
         val incident = service.execute(declareCommand("action-replay", actor()))
         val command = AddIncidentActionCommand(
@@ -664,6 +693,70 @@ class IncidentCommandServiceTest {
                     expectedVersion = 2,
                 ),
             )
+        }
+    }
+
+    @Test
+    fun `concurrent action claims serialize against the locked action row`() {
+        val incident = service.execute(declareCommand("action-concurrent-claim", actor()))
+        val created = service.execute(
+            AddIncidentActionCommand(
+                commandKey = "action-concurrent-created",
+                actor = actor(),
+                incidentId = incident.incidentId,
+                title = "Check queue depth",
+                expectedVersion = 1,
+            ),
+        )
+        val actionResourceId = checkNotNull(created.actionResourceId)
+        val secondUserId = IncidentTestDatabase.seedUserInOrganization(member.organizationId, "action-concurrent-other")
+        val executor = Executors.newFixedThreadPool(2)
+        try {
+            val results = executor.invokeAll(
+                listOf(
+                    Callable {
+                        runCatching {
+                            service.execute(
+                                ClaimIncidentActionCommand(
+                                    commandKey = "action-concurrent-claim-first",
+                                    actor = actor(),
+                                    incidentId = incident.incidentId,
+                                    actionResourceId = actionResourceId,
+                                ),
+                            )
+                        }
+                    },
+                    Callable {
+                        runCatching {
+                            service.execute(
+                                ClaimIncidentActionCommand(
+                                    commandKey = "action-concurrent-claim-second",
+                                    actor = IncidentCommandActor(
+                                        member.organizationId,
+                                        secondUserId,
+                                        "REST",
+                                    ),
+                                    incidentId = incident.incidentId,
+                                    actionResourceId = actionResourceId,
+                                ),
+                            )
+                        }
+                    },
+                ),
+            ).map { it.get() }
+
+            assertEquals(1, results.count { it.isSuccess })
+            assertEquals(1, results.count { it.exceptionOrNull() is IncidentCommandConflictException })
+            transaction {
+                val action = NativeIncidentActions.selectAll().single()
+                assertEquals(IncidentActionState.CLAIMED.wire, action[NativeIncidentActions.state])
+                val claimEvents = NativeIncidentActionEvents.selectAll()
+                    .where { NativeIncidentActionEvents.eventType eq "ACTION_CLAIMED" }
+                assertEquals(1, claimEvents.count())
+                assertEquals(IncidentActionState.OPEN.wire, claimEvents.single()[NativeIncidentActionEvents.fromState])
+            }
+        } finally {
+            executor.shutdownNow()
         }
     }
 
