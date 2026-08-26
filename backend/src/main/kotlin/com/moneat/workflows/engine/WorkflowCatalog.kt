@@ -60,6 +60,9 @@ private const val INCIDENT_KIND_REFERENCE = "incident.kind"
 private const val INCIDENT_TITLE_REFERENCE = "incident.title"
 private const val INCIDENT_STATUS_REFERENCE = "incident.status"
 private const val INCIDENT_SEVERITY_REFERENCE = "incident.severity"
+private const val INCIDENT_ROLE_REFERENCE = "incident.role"
+private const val INCIDENT_ASSIGNEE_REFERENCE = "incident.assignee"
+private const val INCIDENT_ROLE_ACTION_REFERENCE = "incident.role_action"
 private const val SECURITY_RULE_ID_REFERENCE = "security.rule_id"
 private const val SECURITY_RULE_NAME_REFERENCE = "security.rule_name"
 private const val SECURITY_SEVERITY_REFERENCE = "security.severity"
@@ -303,6 +306,9 @@ object WorkflowCatalog {
         WorkflowScopeReferenceDefinition(INCIDENT_TITLE_REFERENCE, "Incident title", "String"),
         WorkflowScopeReferenceDefinition(INCIDENT_STATUS_REFERENCE, "Incident status", "IncidentStatus"),
         WorkflowScopeReferenceDefinition(INCIDENT_SEVERITY_REFERENCE, INCIDENT_SEVERITY_LABEL, "IncidentSeverity"),
+        WorkflowScopeReferenceDefinition(INCIDENT_ROLE_REFERENCE, "Incident role", "String"),
+        WorkflowScopeReferenceDefinition(INCIDENT_ASSIGNEE_REFERENCE, "Role assignee", "String"),
+        WorkflowScopeReferenceDefinition(INCIDENT_ROLE_ACTION_REFERENCE, "Role action", "String"),
         WorkflowScopeReferenceDefinition(ALERT_DEDUPLICATION_KEY_REFERENCE, DEDUPLICATION_KEY_LABEL, "String"),
         WorkflowScopeReferenceDefinition(ALERT_EPISODE_ID_REFERENCE, "Episode ID", "String"),
         WorkflowScopeReferenceDefinition(ALERT_EPISODE_KEY_REFERENCE, "Episode key", "String"),
@@ -392,6 +398,13 @@ object WorkflowCatalog {
             description = "Runs when incident routing resolves a response event.",
             scope = incidentScope,
             defaultOnceForTemplate = listOf(INCIDENT_ID_REFERENCE, INCIDENT_STATUS_REFERENCE)
+        ),
+        WorkflowTriggerDefinition(
+            name = "incident.role_changed",
+            label = "When an incident role changes",
+            description = "Runs when an incident role is assigned, claimed, handed over, or unassigned.",
+            scope = incidentScope,
+            defaultOnceForTemplate = listOf(INCIDENT_ID_REFERENCE, INCIDENT_ROLE_ACTION_REFERENCE)
         ),
         WorkflowTriggerDefinition(
             name = "security.signal",

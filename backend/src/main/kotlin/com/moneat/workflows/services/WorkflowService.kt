@@ -128,6 +128,9 @@ private const val INCIDENT_KIND_REFERENCE = "incident.kind"
 private const val INCIDENT_TITLE_REFERENCE = "incident.title"
 private const val INCIDENT_STATUS_REFERENCE = "incident.status"
 private const val INCIDENT_SEVERITY_REFERENCE = "incident.severity"
+private const val INCIDENT_ROLE_REFERENCE = "incident.role"
+private const val INCIDENT_ASSIGNEE_REFERENCE = "incident.assignee"
+private const val INCIDENT_ROLE_ACTION_REFERENCE = "incident.role_action"
 private const val SECURITY_RULE_ID_REFERENCE = "security.rule_id"
 private const val SECURITY_RULE_NAME_REFERENCE = "security.rule_name"
 private const val SECURITY_SEVERITY_REFERENCE = "security.severity"
@@ -1049,6 +1052,33 @@ class WorkflowService(
         )
     }
 
+    suspend fun publishDeclaredIncidentRoleChanged(
+        organizationId: Int,
+        incidentId: Int,
+        title: String,
+        severity: IncidentSeverity?,
+        role: String,
+        assignee: String?,
+        action: String,
+    ) {
+        publishTrigger(
+            WorkflowTriggerEvent(
+                triggerName = INCIDENT_ROLE_CHANGED_TRIGGER,
+                organizationId = organizationId,
+                scope = declaredIncidentRoleScope(
+                    organizationId = organizationId,
+                    incidentId = incidentId,
+                    status = "role_changed",
+                    title = title,
+                    severity = severity?.wire.orEmpty(),
+                    role = role,
+                    assignee = assignee.orEmpty(),
+                    action = action,
+                ),
+            ),
+        )
+    }
+
     /**
      * Fires the `security.signal` workflow trigger once per **newly created or escalated** signal,
      * not once per raw agent event — eliminating the previous per-event fan-out. Repeats that merely
@@ -1617,6 +1647,30 @@ class WorkflowService(
         ).typedWorkflowScope()
     }
 
+    private fun declaredIncidentRoleScope(
+        organizationId: Int,
+        incidentId: Int,
+        status: String,
+        title: String,
+        severity: String,
+        role: String,
+        assignee: String,
+        action: String,
+    ): Map<String, JsonElement> {
+        val incidentResourceId = declaredIncidentResourceId(organizationId, incidentId)
+        return mapOf(
+            INCIDENT_ID_REFERENCE to incidentResourceId,
+            INCIDENT_KIND_REFERENCE to "native_incident",
+            INCIDENT_TITLE_REFERENCE to title,
+            INCIDENT_STATUS_REFERENCE to status,
+            INCIDENT_SEVERITY_REFERENCE to severity,
+            INCIDENT_ROLE_REFERENCE to role,
+            INCIDENT_ASSIGNEE_REFERENCE to assignee,
+            INCIDENT_ROLE_ACTION_REFERENCE to action,
+            ORGANIZATION_ID_REFERENCE to organizationResourceId(organizationId),
+        ).typedWorkflowScope()
+    }
+
     private fun securitySignalScope(
         organizationId: Int,
         signal: SignalOutcome
@@ -1678,6 +1732,7 @@ class WorkflowService(
         private const val SYNTHETIC_PASSED_TRIGGER = "synthetic.passed"
         private const val INCIDENT_CREATED_TRIGGER = "incident.created"
         private const val INCIDENT_RESOLVED_TRIGGER = "incident.resolved"
+        private const val INCIDENT_ROLE_CHANGED_TRIGGER = "incident.role_changed"
         private const val SECURITY_SIGNAL_TRIGGER = "security.signal"
         private const val API_TRIGGER = "api"
         private const val WEBHOOK_TRIGGER = "webhook"

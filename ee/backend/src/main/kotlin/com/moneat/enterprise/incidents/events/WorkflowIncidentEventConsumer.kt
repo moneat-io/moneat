@@ -20,6 +20,7 @@ class WorkflowIncidentEventConsumer(
         when (event.eventType) {
             "INCIDENT_DECLARE" -> if (event.status() == ACCEPTED_STATUS) event.publishCreatedWorkflow()
             "INCIDENT_ACCEPT" -> event.publishCreatedWorkflow()
+            in ROLE_CHANGE_EVENTS -> event.publishRoleChangedWorkflow()
             "INCIDENT_RESOLVE" ->
                 workflowService.publishDeclaredIncidentResolved(
                     organizationId = event.organizationId,
@@ -40,6 +41,18 @@ class WorkflowIncidentEventConsumer(
         )
     }
 
+    private suspend fun NativeIncidentDomainEvent.publishRoleChangedWorkflow() {
+        workflowService.publishDeclaredIncidentRoleChanged(
+            organizationId = organizationId,
+            incidentId = incidentId,
+            title = title(),
+            severity = severityOrNull(),
+            role = payload["role"]?.jsonPrimitive?.contentOrNull ?: "Incident role",
+            assignee = payload["assigneeUserId"]?.jsonPrimitive?.contentOrNull,
+            action = eventType.removePrefix("INCIDENT_").lowercase(),
+        )
+    }
+
     private fun NativeIncidentDomainEvent.title(): String = payload.getValue("title").jsonPrimitive.content
 
     private fun NativeIncidentDomainEvent.severity(): IncidentSeverity {
@@ -48,10 +61,21 @@ class WorkflowIncidentEventConsumer(
         return requireNotNull(IncidentSeverity.fromString(raw)) { "Incident event has invalid severity" }
     }
 
+    private fun NativeIncidentDomainEvent.severityOrNull(): IncidentSeverity? {
+        val raw = (payload["severity"] as? JsonPrimitive)?.contentOrNull ?: return null
+        return IncidentSeverity.fromString(raw)
+    }
+
     private fun NativeIncidentDomainEvent.status(): String? =
         (payload["status"] as? JsonPrimitive)?.contentOrNull
 
     private companion object {
         private const val ACCEPTED_STATUS = "ACTIVE"
+        private val ROLE_CHANGE_EVENTS = setOf(
+            "INCIDENT_ASSIGN_ROLE",
+            "INCIDENT_CLAIM_ROLE",
+            "INCIDENT_UNASSIGN_ROLE",
+            "INCIDENT_HANDOVER_ROLE",
+        )
     }
 }

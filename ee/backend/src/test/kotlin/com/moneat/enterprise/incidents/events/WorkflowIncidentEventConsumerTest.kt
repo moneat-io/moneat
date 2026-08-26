@@ -70,6 +70,34 @@ class WorkflowIncidentEventConsumerTest {
         }
     }
 
+    @Test
+    fun `role changes publish the role workflow with incident context`() = runBlocking {
+        coEvery {
+            workflowService.publishDeclaredIncidentRoleChanged(any(), any(), any(), any(), any(), any(), any())
+        } returns Unit
+
+        consumer.consume(
+            event(
+                eventType = "INCIDENT_ASSIGN_ROLE",
+                status = "ACTIVE",
+                severity = "SEV-1",
+            ),
+            deliveryKey = "workflows:role-assignment",
+        )
+
+        coVerify(exactly = 1) {
+            workflowService.publishDeclaredIncidentRoleChanged(
+                7,
+                42,
+                "Checkout unavailable",
+                IncidentSeverity.SEV1,
+                "Incident role",
+                null,
+                "assign_role",
+            )
+        }
+    }
+
     private fun event(
         eventType: String,
         status: String,

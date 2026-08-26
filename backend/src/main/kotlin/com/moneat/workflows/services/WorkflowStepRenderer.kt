@@ -58,6 +58,7 @@ internal const val API_TRIGGER = "api"
 internal const val WEBHOOK_TRIGGER = "webhook"
 internal const val INCIDENT_CREATED_TRIGGER = "incident.created"
 internal const val INCIDENT_RESOLVED_TRIGGER = "incident.resolved"
+internal const val INCIDENT_ROLE_CHANGED_TRIGGER = "incident.role_changed"
 internal const val SECURITY_SIGNAL_TRIGGER = "security.signal"
 internal const val ALERT_DESCRIPTION_TEMPLATE_BLOCK = "{{alert.description}}\n\n"
 internal const val ALERT_PRIORITY_TEMPLATE_LINE = "Priority: {{alert.priority}}\n"
@@ -108,7 +109,8 @@ class WorkflowStepRenderer {
             API_TRIGGER -> apiSampleScope()
             WEBHOOK_TRIGGER -> webhookSampleScope()
             INCIDENT_CREATED_TRIGGER,
-            INCIDENT_RESOLVED_TRIGGER -> incidentSampleScope(triggerName)
+            INCIDENT_RESOLVED_TRIGGER,
+            INCIDENT_ROLE_CHANGED_TRIGGER -> incidentSampleScope(triggerName)
             SECURITY_SIGNAL_TRIGGER -> securitySampleScope()
             else -> alertSampleScope(triggerName)
         }
@@ -188,6 +190,9 @@ class WorkflowStepRenderer {
             "incident.title" to "Checkout latency incident",
             "incident.status" to status,
             "incident.severity" to IncidentSeverity.SEV1.wire,
+            "incident.role" to "Incident Commander",
+            "incident.assignee" to SAMPLE_USER_ID,
+            "incident.role_action" to if (triggerName == INCIDENT_ROLE_CHANGED_TRIGGER) "assigned" else "",
             ORGANIZATION_ID_REFERENCE to SAMPLE_ORGANIZATION_ID
         )
     }
