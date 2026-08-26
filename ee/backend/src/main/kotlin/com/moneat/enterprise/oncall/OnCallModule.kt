@@ -945,6 +945,31 @@ internal fun slackIncidentCommandMenu(incidentResourceId: String? = null): Strin
                     }
                 }
             }
+            incidentResourceId?.let { resourceId ->
+                listOf(
+                    listOf("Overview" to "overview", "Update" to "update", "Actions" to "action"),
+                    listOf("Timeline" to "timeline", "Join" to "join", "Observe" to "observe", "Leave" to "leave"),
+                    listOf("Accept" to "accept", "Decline" to "decline", "Resolve" to "resolve", "Cancel" to "cancel"),
+                    listOf("Reopen" to "reopen", "Refresh" to "refresh"),
+                ).forEach { group ->
+                    addJsonObject {
+                        put("type", "actions")
+                        putJsonArray("elements") {
+                            group.forEach { (label, action) ->
+                                addJsonObject {
+                                    put("type", "button")
+                                    put("action_id", "incident_$action:$resourceId")
+                                    put("value", resourceId)
+                                    putJsonObject("text") {
+                                        put("type", "plain_text")
+                                        put("text", label)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }.toString()
 
