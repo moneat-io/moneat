@@ -181,7 +181,9 @@ class IncidentCommandService(
         }
         val incidentId = existing[NativeIncidentCommands.incidentId]
             ?: throw IncidentCommandConflictException("Incident command completed without an incident result")
-        return loadMutation(incidentId, changed = false).toResult(replayed = true)
+        return loadMutation(incidentId, changed = false).copy(
+            actionResourceId = existing[NativeIncidentCommands.actionResourceId]?.toString(),
+        ).toResult(replayed = true)
     }
 
     private fun requireActorMembership(actor: IncidentCommandActor) {
@@ -1043,12 +1045,17 @@ class IncidentCommandService(
     ): IncidentMutation {
         val action = requireAction(command.actor.organizationId, command.incidentId, actionResourceId(command))
         val currentState = action[NativeIncidentActions.state].toActionState()
-        if (currentState == target &&
-            (target != IncidentActionState.CLAIMED || action[NativeIncidentActions.assigneeUserId] == assigneeUserId)
+        if (actionTransitionIsNoop(
+                currentState,
+                target,
+                action[NativeIncidentActions.assigneeUserId],
+                assigneeUserId,
+            )
         ) {
             return loadMutation(command.incidentId, changed = false)
         }
-        requireActionTransitionAllowed(currentState, target)
+        val isReassignment = command is ReassignIncidentActionCommand
+        requireActionTransitionAllowed(currentState, target, allowReassignment = isReassignment)
         val now = Clock.System.now()
         NativeIncidentActions.update({ NativeIncidentActions.id eq action[NativeIncidentActions.id] }) {
             it[state] = target.wire
@@ -1118,7 +1125,23 @@ class IncidentCommandService(
                     (NativeIncidentActions.resourceId eq resourceId)
             }.singleOrNull() ?: throw IncidentCommandNotFoundException("Incident action not found")
 
-    private fun requireActionTransitionAllowed(from: IncidentActionState, to: IncidentActionState) {
+    private fun actionTransitionIsNoop(
+        currentState: IncidentActionState,
+        target: IncidentActionState,
+        currentAssigneeUserId: Int?,
+        targetAssigneeUserId: Int?,
+    ): Boolean = when {
+        currentState != target -> false
+        target != IncidentActionState.CLAIMED -> true
+        else -> currentAssigneeUserId == targetAssigneeUserId
+    }
+
+    private fun requireActionTransitionAllowed(
+        from: IncidentActionState,
+        to: IncidentActionState,
+        allowReassignment: Boolean = false,
+    ) {
+        if (allowReassignment && from == IncidentActionState.CLAIMED && to == IncidentActionState.CLAIMED) return
         val allowed = when (from) {
             IncidentActionState.OPEN -> setOf(
                 IncidentActionState.CLAIMED,
@@ -1712,6 +1735,7 @@ class IncidentCommandService(
             it[requestFingerprint] = IncidentCommandFingerprint.of(command)
             it[expectedVersion] = command.expectedVersion
             it[resultVersion] = mutation.version
+            it[actionResourceId] = mutation.actionResourceId?.let(Uuid::parse)
             it[createdAt] = Clock.System.now()
         }
     }

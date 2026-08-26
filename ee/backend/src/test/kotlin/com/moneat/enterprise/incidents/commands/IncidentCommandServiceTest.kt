@@ -530,20 +530,23 @@ class IncidentCommandServiceTest {
     @Test
     fun `persists action lifecycle and audit history`() {
         val incident = service.execute(declareCommand("action-lifecycle", actor()))
-        val created = service.execute(
-            AddIncidentActionCommand(
-                commandKey = "action-created",
-                actor = actor(),
-                incidentId = incident.incidentId,
-                title = "Drain unhealthy node",
-                description = "Drain the unhealthy node and verify capacity",
-                source = IncidentActionSource.SLACK,
-                slackChannelId = "C123",
-                slackMessageTs = "1712345678.000100",
-                expectedVersion = 1,
-            ),
+        val addCommand = AddIncidentActionCommand(
+            commandKey = "action-created",
+            actor = actor(),
+            incidentId = incident.incidentId,
+            title = "Drain unhealthy node",
+            description = "Drain the unhealthy node and verify capacity",
+            source = IncidentActionSource.SLACK,
+            slackChannelId = "C123",
+            slackMessageTs = "1712345678.000100",
+            expectedVersion = 1,
         )
+        val created = service.execute(addCommand)
+        val replay = service.execute(addCommand)
+        assertTrue(replay.replayed)
+        assertEquals(created.actionResourceId, replay.actionResourceId)
         val actionResourceId = checkNotNull(created.actionResourceId)
+
         assertEquals(IncidentActionState.OPEN.wire, IncidentActionService().get(
             member.organizationId,
             incident.incidentId,
@@ -559,6 +562,17 @@ class IncidentCommandServiceTest {
                 expectedVersion = 2,
             ),
         )
+        val reassignedUserId = IncidentTestDatabase.seedUserInOrganization(member.organizationId, "action-assignee")
+        val reassigned = service.execute(
+            ReassignIncidentActionCommand(
+                commandKey = "action-reassigned",
+                actor = actor(),
+                incidentId = incident.incidentId,
+                actionResourceId = actionResourceId,
+                assigneeUserId = reassignedUserId,
+                expectedVersion = 3,
+            ),
+        )
         val completed = service.execute(
             CompleteIncidentActionCommand(
                 commandKey = "action-completed",
@@ -566,11 +580,12 @@ class IncidentCommandServiceTest {
                 incidentId = incident.incidentId,
                 actionResourceId = actionResourceId,
                 note = "Capacity is healthy",
-                expectedVersion = 3,
+                expectedVersion = 4,
             ),
         )
         assertEquals(3, claimed.version)
-        assertEquals(4, completed.version)
+        assertEquals(4, reassigned.version)
+        assertEquals(5, completed.version)
         val action = checkNotNull(
             IncidentActionService().get(member.organizationId, incident.incidentId, actionResourceId),
         )
@@ -579,13 +594,29 @@ class IncidentCommandServiceTest {
         assertEquals("C123", action.slackChannelId)
         assertEquals("1712345678.000100", action.slackMessageTs)
         assertEquals(
-            3,
+            4,
             IncidentActionService().events(member.organizationId, incident.incidentId, actionResourceId).size,
         )
         transaction {
-            assertEquals(3, NativeIncidentActionEvents.selectAll().count())
+            assertEquals(4, NativeIncidentActionEvents.selectAll().count())
             assertEquals(1, NativeIncidentActions.selectAll().count())
         }
+    }
+
+    @Test
+    fun `action command replay retains resource id`() {
+        val incident = service.execute(declareCommand("action-replay", actor()))
+        val command = AddIncidentActionCommand(
+            commandKey = "action-replay-command",
+            actor = actor(),
+            incidentId = incident.incidentId,
+            title = "Check queue depth",
+            expectedVersion = 1,
+        )
+        val created = service.execute(command)
+        val replay = service.execute(command)
+        assertTrue(replay.replayed)
+        assertEquals(created.actionResourceId, replay.actionResourceId)
     }
 
     @Test

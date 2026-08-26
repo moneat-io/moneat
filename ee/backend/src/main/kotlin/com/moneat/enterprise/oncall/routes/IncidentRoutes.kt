@@ -267,6 +267,11 @@ data class IncidentActionNoteRequest(
 )
 
 @Serializable
+data class IncidentActionVersionRequest(
+    val expectedVersion: Int? = null,
+)
+
+@Serializable
 data class ReassignIncidentActionRequest(
     val assigneeUserId: String,
     val expectedVersion: Int? = null,
@@ -1238,23 +1243,26 @@ private fun Route.registerIncidentActionRoutes(
     actionService: IncidentActionService,
 ) {
     route("/{id}/actions") {
-        registerIncidentActionReadRoutes(actionService)
+        registerIncidentActionReadRoutes(onCallIncidentService, actionService)
         registerIncidentActionCreateRoute(onCallIncidentService, actionService)
         registerIncidentActionMutationRoutes(onCallIncidentService, actionService)
     }
 }
 
-private fun Route.registerIncidentActionReadRoutes(actionService: IncidentActionService) {
+private fun Route.registerIncidentActionReadRoutes(
+    onCallIncidentService: OnCallIncidentService,
+    actionService: IncidentActionService,
+) {
     get {
-        val routeContext = call.requireIncidentActionRouteContext() ?: return@get
+        val routeContext = call.requireIncidentActionRouteContext(onCallIncidentService) ?: return@get
         call.respond(actionService.list(routeContext.organizationId, routeContext.incidentId))
     }
     get("/metrics") {
-        val routeContext = call.requireIncidentActionRouteContext() ?: return@get
+        val routeContext = call.requireIncidentActionRouteContext(onCallIncidentService) ?: return@get
         call.respond(actionService.metrics(routeContext.organizationId, routeContext.incidentId))
     }
     get("/{actionId}") {
-        val routeContext = call.requireIncidentActionRouteContext() ?: return@get
+        val routeContext = call.requireIncidentActionRouteContext(onCallIncidentService) ?: return@get
         val action = actionService.get(
             routeContext.organizationId,
             routeContext.incidentId,
@@ -1267,7 +1275,7 @@ private fun Route.registerIncidentActionReadRoutes(actionService: IncidentAction
         }
     }
     get("/{actionId}/events") {
-        val routeContext = call.requireIncidentActionRouteContext() ?: return@get
+        val routeContext = call.requireIncidentActionRouteContext(onCallIncidentService) ?: return@get
         val actionId = call.parameters["actionId"].orEmpty()
         if (actionService.get(routeContext.organizationId, routeContext.incidentId, actionId) == null) {
             call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident action not found"))
@@ -1282,7 +1290,7 @@ private fun Route.registerIncidentActionCreateRoute(
     actionService: IncidentActionService,
 ) {
     post {
-        val routeContext = call.requireIncidentActionRouteContext() ?: return@post
+        val routeContext = call.requireIncidentActionRouteContext(onCallIncidentService) ?: return@post
         val request = call.receive<CreateIncidentActionRequest>()
         val source = IncidentActionSource.entries.firstOrNull { it.wire == request.source.trim().uppercase() }
             ?: run {
@@ -1328,18 +1336,20 @@ private fun Route.registerIncidentActionMutationRoutes(
     actionService: IncidentActionService,
 ) {
     post("/{actionId}/claim") {
-        val routeContext = call.requireIncidentActionRouteContext() ?: return@post
+        val routeContext = call.requireIncidentActionRouteContext(onCallIncidentService) ?: return@post
+        val request = call.receiveNullable<IncidentActionVersionRequest>() ?: IncidentActionVersionRequest()
         executeActionCommand(IncidentActionRouteContext(call, onCallIncidentService, actionService, routeContext)) {
             ClaimIncidentActionCommand(
                 commandKey = call.incidentCommandKey("claim-action"),
                 actor = IncidentCommandActor(routeContext.organizationId, routeContext.userId, "REST"),
                 incidentId = routeContext.incidentId,
                 actionResourceId = it,
+                expectedVersion = request.expectedVersion,
             )
         }
     }
     post("/{actionId}/reassign") {
-        val routeContext = call.requireIncidentActionRouteContext() ?: return@post
+        val routeContext = call.requireIncidentActionRouteContext(onCallIncidentService) ?: return@post
         val request = call.receive<ReassignIncidentActionRequest>()
         val assignee = call.requireReassignmentUserId(
             routeContext.organizationId,
@@ -1357,7 +1367,7 @@ private fun Route.registerIncidentActionMutationRoutes(
         }
     }
     post("/{actionId}/complete") {
-        val routeContext = call.requireIncidentActionRouteContext() ?: return@post
+        val routeContext = call.requireIncidentActionRouteContext(onCallIncidentService) ?: return@post
         val request = call.receiveNullable<IncidentActionNoteRequest>() ?: IncidentActionNoteRequest()
         executeActionCommand(IncidentActionRouteContext(call, onCallIncidentService, actionService, routeContext)) {
             CompleteIncidentActionCommand(
@@ -1371,7 +1381,7 @@ private fun Route.registerIncidentActionMutationRoutes(
         }
     }
     post("/{actionId}/cancel") {
-        val routeContext = call.requireIncidentActionRouteContext() ?: return@post
+        val routeContext = call.requireIncidentActionRouteContext(onCallIncidentService) ?: return@post
         val request = call.receiveNullable<IncidentActionNoteRequest>() ?: IncidentActionNoteRequest()
         executeActionCommand(IncidentActionRouteContext(call, onCallIncidentService, actionService, routeContext)) {
             CancelIncidentActionCommand(
@@ -1385,7 +1395,7 @@ private fun Route.registerIncidentActionMutationRoutes(
         }
     }
     post("/{actionId}/convert-to-follow-up") {
-        val routeContext = call.requireIncidentActionRouteContext() ?: return@post
+        val routeContext = call.requireIncidentActionRouteContext(onCallIncidentService) ?: return@post
         val request = call.receiveNullable<IncidentActionNoteRequest>() ?: IncidentActionNoteRequest()
         executeActionCommand(IncidentActionRouteContext(call, onCallIncidentService, actionService, routeContext)) {
             ConvertIncidentActionToFollowUpCommand(
@@ -1400,9 +1410,21 @@ private fun Route.registerIncidentActionMutationRoutes(
     }
 }
 
-private suspend fun ApplicationCall.requireIncidentActionRouteContext(): IncidentActionRouteIdentity? {
+private suspend fun ApplicationCall.requireIncidentActionRouteContext(
+    onCallIncidentService: OnCallIncidentService,
+): IncidentActionRouteIdentity? {
     val context = requireUserContext() ?: return null
     val incidentId = requireIncidentId(context.organizationId) ?: return null
+    val incident = onCallIncidentService.getIncident(incidentId)
+    if (incident == null) {
+        respond(HttpStatusCode.NotFound, ErrorResponse(INCIDENT_NOT_FOUND_MESSAGE))
+        return null
+    }
+    if (incident.visibility == NativeIncidentVisibility.PRIVATE.wire &&
+        !requireIncidentResponderOrAdmin(context, incidentId)
+    ) {
+        return null
+    }
     return IncidentActionRouteIdentity(context.organizationId, context.userId, incidentId)
 }
 
