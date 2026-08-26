@@ -177,6 +177,23 @@ class IncidentAnnouncementServiceTest {
         assertTrue(card.contains("Checkout requests are timing out"))
         assertTrue(card.contains("Next update"))
         assertTrue(card.contains("Update requested"))
+
+        transaction {
+            NativeIncidentAnnouncements.update({ NativeIncidentAnnouncements.incidentId eq incidentId() }) {
+                it[providerMessageTs] = "123.456"
+            }
+        }
+        listOf(
+            "INCIDENT_REQUEST_UPDATE",
+            "INCIDENT_UPDATE_REMINDER",
+            "INCIDENT_PAUSE_UPDATE_REMINDERS",
+        ).forEachIndexed { index, eventType ->
+            service.consume(
+                event(eventType, index + 2, NativeIncidentStatus.ACTIVE.wire),
+                "structured-update-$eventType",
+            )
+        }
+        assertTrue(requests.size >= 4)
     }
 
     @Test
@@ -412,6 +429,14 @@ class IncidentAnnouncementServiceTest {
             it[updatedAt] = now
         }
         resourceId
+    }
+
+    private fun incidentId(): Int = transaction {
+        OnCallIncidents
+            .selectAll()
+            .where { OnCallIncidents.resourceId eq incidentResourceId }
+            .single()[OnCallIncidents.id]
+            .value
     }
 
     private fun event(type: String, version: Int, status: String) = NativeIncidentDomainEvent(
