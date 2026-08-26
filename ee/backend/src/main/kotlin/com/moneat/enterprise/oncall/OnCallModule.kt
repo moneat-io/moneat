@@ -104,6 +104,7 @@ private const val SLACK_FORM_LABEL_MAX_CHARS = 75
 private const val SLACK_FORM_HINT_MAX_CHARS = 200
 private const val SLACK_FORM_OPTION_MAX_CHARS = 75
 private const val SLACK_INCIDENT_MENU_CALLBACK_ID = "moneat_incident_menu"
+private const val SLACK_INCIDENT_DECLARATION_CALLBACK_ID = "moneat_incident_declaration"
 private const val SLACK_CONTEXT_REQUIRED = "Slack workspace and user context are required."
 private val SLACK_INCIDENT_HELP_COMMANDS = setOf("help", "menu", "commands", "incident help", "incident menu")
 
@@ -448,6 +449,9 @@ class OnCallModule :
         value: (String) -> String?,
     ): String? {
         if (root == null) return slackEphemeral(SLACK_CONTEXT_REQUIRED)
+        if (value("callback_id") == SLACK_INCIDENT_DECLARATION_CALLBACK_ID) {
+            return openSlackIncident(root, value)
+        }
         return slackIncidentCommandService.handleShortcut(
             root = root,
             incidentResourceId = incidentResourceIdForSlackChannel(root, value),
@@ -584,8 +588,7 @@ class OnCallModule :
         } != null
         if (!linkedUser) return slackEphemeral("Link your Slack identity in Moneat before declaring an incident.")
 
-        val contextText = value("text")
-            ?: root?.get("message")?.jsonObject?.get("text")?.jsonPrimitive?.contentOrNull
+        val contextText = slackMessageContextText(root, value)
         if (triggerId.isNullOrBlank()) return slackEphemeral("Slack did not provide a modal trigger.")
         val opened = slackService.openModal(
             organizationId = organizationId,
@@ -693,6 +696,15 @@ class OnCallModule :
         userId: Int,
     ): Boolean = onCallAlertService.acknowledge(alertId, userId)
 }
+
+internal fun slackMessageContextText(
+    root: JsonObject?,
+    value: (String) -> String?,
+): String? = sequenceOf(
+    value("text"),
+    root?.get("message")?.jsonObject?.get("text")?.jsonPrimitive?.contentOrNull,
+).mapNotNull { it?.trim()?.takeIf(String::isNotEmpty) }
+    .firstOrNull()
 
 private fun slackEphemeral(message: String): String =
     buildJsonObject {
@@ -845,7 +857,7 @@ internal fun slackIncidentDeclarationView(
 ): JsonObject =
     buildJsonObject {
         put("type", "modal")
-        put("callback_id", "moneat_incident_declaration")
+        put("callback_id", SLACK_INCIDENT_DECLARATION_CALLBACK_ID)
         putJsonObject("title") {
             put("type", "plain_text")
             put("text", "Declare incident")

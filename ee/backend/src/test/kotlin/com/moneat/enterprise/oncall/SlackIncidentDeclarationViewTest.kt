@@ -14,6 +14,8 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import org.junit.jupiter.api.Test
 import kotlinx.coroutines.runBlocking
 import kotlin.test.assertEquals
@@ -44,6 +46,58 @@ class SlackIncidentDeclarationViewTest {
             blocks.get(4).jsonObject["element"]?.jsonObject?.get("initial_option")
                 ?.jsonObject?.get("value")?.toString()?.trim('"'),
         )
+    }
+
+    @Test
+    fun `message shortcut context is read from public dm and connect payloads`() {
+        val payloads = listOf(
+            """
+            {
+              "type": "message_action",
+              "channel": {"id": "C123", "name": "support"},
+              "message": {"text": "Public checkout failures"}
+            }
+            """ to "Public checkout failures",
+            """
+            {
+              "type": "message_action",
+              "channel": {"id": "D123"},
+              "message": {"text": "DM reports a failed payment"}
+            }
+            """ to "DM reports a failed payment",
+            """
+            {
+              "type": "message_action",
+              "team": {"id": "T-CONNECT"},
+              "channel": {"id": "C-CONNECT", "name": "partner"},
+              "text": "Partner workspace outage"
+            }
+            """ to "Partner workspace outage",
+        )
+
+        payloads.forEach { (payload, expected) ->
+            val root = Json.parseToJsonElement(payload).jsonObject
+            assertEquals(expected, slackMessageContextText(root) { key ->
+                root[key]?.jsonPrimitive?.contentOrNull
+            })
+            val view = slackIncidentDeclarationView(slackMessageContextText(root) { key ->
+                root[key]?.jsonPrimitive?.contentOrNull
+            })
+            assertEquals(expected, view["blocks"]?.jsonArray?.first()
+                ?.jsonObject?.get("element")?.jsonObject?.get("initial_value")?.toString()?.trim('"'))
+        }
+    }
+
+    @Test
+    fun `declaration message shortcut does not fall through to incident menu handling`() = runBlocking {
+        val response = OnCallModule().handleSlackInbound(
+            "shortcuts",
+            "payload=%7B%22type%22%3A%22message_action%22%2C%22callback_id%22%3A" +
+                "%22moneat_incident_declaration%22%7D",
+            null,
+        )
+
+        assertTrue(response?.contains("workspace and user context") == true)
     }
 
     @Test
