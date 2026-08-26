@@ -544,6 +544,74 @@ class WorkflowTrustedActionExecutorTest {
         }
     }
 
+    @Test
+    fun `on-call incident action reports missing enterprise bridge`() {
+        val result = run(
+            WorkflowTrustedActionExecutor.ON_CALL_CREATE_INCIDENT_ACTION_STEP,
+            mapOf(
+                "incident_id" to "77777777-7777-4777-8777-777777777777",
+                "description" to "Verify the fallback provider",
+            ),
+        )
+
+        assertEquals(true, result["requires_enterprise"]?.jsonPrimitive?.content?.toBoolean())
+    }
+
+    @Test
+    fun `on-call incident action fails closed before invoking enterprise bridge`() {
+        val bridge = mockk<OnCallBridge>()
+        val disabledExecutor = WorkflowTrustedActionExecutor(
+            logService = logService,
+            dashboardService = dashboardService,
+            monitorService = monitorService,
+            monitorAlertServiceProvider = { monitorAlertService },
+            statusPageService = statusPageService,
+            nativeIncidentEntitlement = { false },
+        )
+        mockkObject(FeatureRegistry)
+        try {
+            every { FeatureRegistry.getOnCallBridge() } returns bridge
+
+            assertFailsWith<IllegalStateException> {
+                runBlocking {
+                    disabledExecutor.execute(
+                        orgId,
+                        WorkflowTrustedActionExecutor.ON_CALL_CREATE_INCIDENT_ACTION_STEP,
+                        mapOf(
+                            "incident_id" to "77777777-7777-4777-8777-777777777777",
+                            "description" to "Verify the fallback provider",
+                        ),
+                    )
+                }
+            }
+            coVerify(exactly = 0) { bridge.createIncidentAction(any()) }
+        } finally {
+            unmockkObject(FeatureRegistry)
+        }
+    }
+
+    @Test
+    fun `on-call incident action rejects a bridge without a resource id`() {
+        val bridge = mockk<OnCallBridge>()
+        mockkObject(FeatureRegistry)
+        try {
+            every { FeatureRegistry.getOnCallBridge() } returns bridge
+            coEvery { bridge.createIncidentAction(any()) } returns null
+
+            assertFailsWith<IllegalStateException> {
+                run(
+                    WorkflowTrustedActionExecutor.ON_CALL_CREATE_INCIDENT_ACTION_STEP,
+                    mapOf(
+                        "incident_id" to "77777777-7777-4777-8777-777777777777",
+                        "description" to "Verify the fallback provider",
+                    ),
+                )
+            }
+        } finally {
+            unmockkObject(FeatureRegistry)
+        }
+    }
+
     // ──── Helpers ────
 
     private fun silenceResponse(): SilencePeriodResponse =

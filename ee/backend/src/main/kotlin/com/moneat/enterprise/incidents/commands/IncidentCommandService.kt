@@ -1110,10 +1110,10 @@ class IncidentCommandService(
             is CompleteIncidentActionCommand -> command.actionResourceId
             is CancelIncidentActionCommand -> command.actionResourceId
             is ConvertIncidentActionToFollowUpCommand -> command.actionResourceId
-            else -> throw IncidentCommandNotFoundException("Incident action not found")
+            else -> throw IncidentCommandNotFoundException(INCIDENT_ACTION_NOT_FOUND_MESSAGE)
         }
         return runCatching { Uuid.parse(value) }
-            .getOrElse { throw IncidentCommandNotFoundException("Incident action not found") }
+            .getOrElse { throw IncidentCommandNotFoundException(INCIDENT_ACTION_NOT_FOUND_MESSAGE) }
     }
 
     private fun requireAction(organizationId: Int, incidentId: Int, resourceId: Uuid): ResultRow =
@@ -1123,7 +1123,7 @@ class IncidentCommandService(
                 (NativeIncidentActions.organizationId eq organizationId) and
                     (NativeIncidentActions.incidentId eq incidentId) and
                     (NativeIncidentActions.resourceId eq resourceId)
-            }.singleOrNull() ?: throw IncidentCommandNotFoundException("Incident action not found")
+            }.singleOrNull() ?: throw IncidentCommandNotFoundException(INCIDENT_ACTION_NOT_FOUND_MESSAGE)
 
     private fun actionTransitionIsNoop(
         currentState: IncidentActionState,
@@ -1882,6 +1882,7 @@ class IncidentCommandService(
         private const val MAX_SLACK_CHANNEL_ID_LENGTH = 128
         private const val MAX_SLACK_MESSAGE_TS_LENGTH = 64
         private const val MAX_SOURCE_KEY_LENGTH = 500
+        private const val INCIDENT_ACTION_NOT_FOUND_MESSAGE = "Incident action not found"
         private const val SEVERITY_REQUIRED_MESSAGE =
             "Incident severity is required before an incident is accepted"
         private val SAFE_EXTERNAL_SOURCE_SCHEMES = setOf("http", "https")

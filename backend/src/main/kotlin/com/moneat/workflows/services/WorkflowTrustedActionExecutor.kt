@@ -326,8 +326,8 @@ class WorkflowTrustedActionExecutor(
         actorUserId: Int?,
         idempotencyKey: String?,
     ): Map<String, JsonElement> {
-        if (!nativeIncidentEntitlement(organizationId)) {
-            throw IllegalStateException("Native incident response is not enabled for this organization")
+        check(nativeIncidentEntitlement(organizationId)) {
+            "Native incident response is not enabled for this organization"
         }
         val bridge = FeatureRegistry.getOnCallBridge()
             ?: return mapOf(
@@ -361,8 +361,8 @@ class WorkflowTrustedActionExecutor(
         actorUserId: Int?,
         idempotencyKey: String?,
     ): Map<String, JsonElement> {
-        if (!nativeIncidentEntitlement(organizationId)) {
-            throw IllegalStateException("Native incident response is not enabled for this organization")
+        check(nativeIncidentEntitlement(organizationId)) {
+            "Native incident response is not enabled for this organization"
         }
         val bridge = FeatureRegistry.getOnCallBridge()
             ?: return mapOf(

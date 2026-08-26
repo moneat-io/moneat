@@ -99,6 +99,7 @@ private const val INVALID_ALERT_ID_MESSAGE = "Invalid alert ID"
 private const val ALERT_NOT_FOUND_MESSAGE = "Alert not found"
 private const val INVALID_INCIDENT_ID_MESSAGE = "Invalid incident ID"
 private const val INCIDENT_NOT_FOUND_MESSAGE = "Incident not found"
+private const val INCIDENT_ACTION_NOT_FOUND_MESSAGE = "Incident action not found"
 private const val FORBIDDEN_MESSAGE = "Insufficient permissions"
 private const val INCIDENT_COMMANDER_ROLE_KEY = "incident-commander"
 private const val IDEMPOTENCY_KEY_HEADER = "Idempotency-Key"
@@ -1269,7 +1270,7 @@ private fun Route.registerIncidentActionReadRoutes(
             call.parameters["actionId"].orEmpty(),
         )
         if (action == null) {
-            call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident action not found"))
+            call.respond(HttpStatusCode.NotFound, ErrorResponse(INCIDENT_ACTION_NOT_FOUND_MESSAGE))
         } else {
             call.respond(action)
         }
@@ -1278,7 +1279,7 @@ private fun Route.registerIncidentActionReadRoutes(
         val routeContext = call.requireIncidentActionRouteContext(onCallIncidentService) ?: return@get
         val actionId = call.parameters["actionId"].orEmpty()
         if (actionService.get(routeContext.organizationId, routeContext.incidentId, actionId) == null) {
-            call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident action not found"))
+            call.respond(HttpStatusCode.NotFound, ErrorResponse(INCIDENT_ACTION_NOT_FOUND_MESSAGE))
             return@get
         }
         call.respond(actionService.events(routeContext.organizationId, routeContext.incidentId, actionId))
@@ -1434,7 +1435,7 @@ private suspend fun executeActionCommand(
 ) {
     val actionId = routeContext.call.parameters["actionId"].orEmpty()
     if (routeContext.actionService.get(routeContext.organizationId, routeContext.incidentId, actionId) == null) {
-        routeContext.call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident action not found"))
+        routeContext.call.respond(HttpStatusCode.NotFound, ErrorResponse(INCIDENT_ACTION_NOT_FOUND_MESSAGE))
         return
     }
     try {

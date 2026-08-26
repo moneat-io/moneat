@@ -41,6 +41,7 @@ import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
@@ -530,6 +531,11 @@ class IncidentCommandServiceTest {
     @Test
     fun `persists action lifecycle and audit history`() {
         val incident = service.execute(declareCommand("action-lifecycle", actor()))
+        val actionService = IncidentActionService()
+        assertTrue(actionService.list(member.organizationId, incident.incidentId).isEmpty())
+        assertNull(actionService.get(member.organizationId, incident.incidentId, "not-a-uuid"))
+        assertTrue(actionService.events(member.organizationId, incident.incidentId, "not-a-uuid").isEmpty())
+        assertNull(actionService.internalId(member.organizationId, incident.incidentId, "not-a-uuid"))
         val addCommand = AddIncidentActionCommand(
             commandKey = "action-created",
             actor = actor(),
@@ -547,7 +553,7 @@ class IncidentCommandServiceTest {
         assertEquals(created.actionResourceId, replay.actionResourceId)
         val actionResourceId = checkNotNull(created.actionResourceId)
 
-        assertEquals(IncidentActionState.OPEN.wire, IncidentActionService().get(
+        assertEquals(IncidentActionState.OPEN.wire, actionService.get(
             member.organizationId,
             incident.incidentId,
             actionResourceId,
@@ -587,15 +593,21 @@ class IncidentCommandServiceTest {
         assertEquals(4, reassigned.version)
         assertEquals(5, completed.version)
         val action = checkNotNull(
-            IncidentActionService().get(member.organizationId, incident.incidentId, actionResourceId),
+            actionService.get(member.organizationId, incident.incidentId, actionResourceId),
         )
         assertEquals(incident.incidentResourceId, action.incidentId)
         assertEquals(IncidentActionState.COMPLETED.wire, action.state)
         assertEquals("C123", action.slackChannelId)
         assertEquals("1712345678.000100", action.slackMessageTs)
+        assertEquals(1, actionService.list(member.organizationId, incident.incidentId).size)
+        assertEquals(
+            1,
+            actionService.metrics(member.organizationId, incident.incidentId).completed,
+        )
+        assertNotNull(actionService.internalId(member.organizationId, incident.incidentId, actionResourceId))
         assertEquals(
             4,
-            IncidentActionService().events(member.organizationId, incident.incidentId, actionResourceId).size,
+            actionService.events(member.organizationId, incident.incidentId, actionResourceId).size,
         )
         transaction {
             assertEquals(4, NativeIncidentActionEvents.selectAll().count())
