@@ -26,6 +26,7 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -398,6 +399,12 @@ class IncidentAnnouncementService(
                 put("channel", destination.channelId)
                 messageTs?.let { put("ts", it) }
                 put("text", "Incident: ${snapshot.title}")
+                putJsonObject("metadata") {
+                    put("event_type", "moneat_incident")
+                    putJsonObject("event_payload") {
+                        put("incident_id", snapshot.resourceId)
+                    }
+                }
                 put("blocks", buildJsonArray {
                     add(buildJsonObject {
                         put("type", "header")
