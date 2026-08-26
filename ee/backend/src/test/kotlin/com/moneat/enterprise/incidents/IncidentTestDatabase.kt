@@ -43,9 +43,13 @@ import com.moneat.enterprise.incidents.models.NativeIncidentSourceLinks
 import com.moneat.enterprise.incidents.models.NativeIncidentTimelineRevisions
 import com.moneat.enterprise.incidents.models.NativeIncidentTypes
 import com.moneat.enterprise.oncall.models.OnCallAlerts
+import com.moneat.enterprise.oncall.models.OnCallAlertTimeline
 import com.moneat.enterprise.oncall.models.OnCallIncidentAlerts
 import com.moneat.enterprise.oncall.models.OnCallIncidentTimeline
 import com.moneat.enterprise.oncall.models.OnCallIncidents
+import com.moneat.enterprise.oncall.models.EscalationExecutionEvents
+import com.moneat.enterprise.oncall.models.EscalationExecutionStates
+import com.moneat.enterprise.oncall.models.EscalationPolicyVersions
 import com.moneat.enterprise.sso.support.EnterpriseTestDatabaseHelper
 import com.moneat.shared.models.EscalationPolicies
 import com.moneat.shared.models.Memberships
@@ -89,8 +93,12 @@ object IncidentTestDatabase {
             NativeIncidentFormFields,
             OnCallIncidents,
             OnCallAlerts,
+            OnCallAlertTimeline,
             OnCallIncidentAlerts,
             OnCallIncidentTimeline,
+            EscalationPolicyVersions,
+            EscalationExecutionStates,
+            EscalationExecutionEvents,
             NativeIncidentTimelineRevisions,
             NativeIncidentFormSubmissions,
             NativeIncidentAlertEpisodeLinks,

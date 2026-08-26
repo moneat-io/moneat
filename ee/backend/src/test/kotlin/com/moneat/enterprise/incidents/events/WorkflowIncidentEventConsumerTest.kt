@@ -5,6 +5,7 @@
 package com.moneat.enterprise.incidents.events
 
 import com.moneat.alerts.models.IncidentSeverity
+import com.moneat.workflows.services.DeclaredIncidentRoleChange
 import com.moneat.workflows.services.WorkflowService
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -67,6 +68,37 @@ class WorkflowIncidentEventConsumerTest {
 
         coVerify(exactly = 1) {
             workflowService.publishDeclaredIncidentCreated(7, 42, "Checkout unavailable", IncidentSeverity.SEV1)
+        }
+    }
+
+    @Test
+    fun `role changes publish the role workflow with incident context`() = runBlocking {
+        coEvery {
+            workflowService.publishDeclaredIncidentRoleChanged(any())
+        } returns Unit
+
+        consumer.consume(
+            event(
+                eventType = "INCIDENT_ASSIGN_ROLE",
+                status = "ACTIVE",
+                severity = "SEV-1",
+            ),
+            deliveryKey = "workflows:role-assignment",
+        )
+
+        coVerify(exactly = 1) {
+            workflowService.publishDeclaredIncidentRoleChanged(
+                DeclaredIncidentRoleChange(
+                    organizationId = 7,
+                    incidentId = 42,
+                    title = "Checkout unavailable",
+                    severity = IncidentSeverity.SEV1,
+                    role = "Incident role",
+                    assignee = null,
+                    action = "assign_role",
+                    eventResourceId = "event-resource-id",
+                ),
+            )
         }
     }
 

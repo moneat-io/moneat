@@ -9,6 +9,7 @@ import com.moneat.enterprise.oncall.alertResourceId
 import com.moneat.enterprise.oncall.incidentResourceIdOrNull
 import com.moneat.enterprise.oncall.organizationResourceId
 import com.moneat.enterprise.oncall.userResourceIdOrNull
+import com.moneat.enterprise.incidents.timeline.IncidentAlertTimelineBridge
 import com.moneat.shared.services.TaskLock
 import com.moneat.config.RedisClient
 import com.moneat.enterprise.oncall.models.EscalationStepTarget
@@ -33,7 +34,6 @@ import org.jetbrains.exposed.v1.core.JoinType
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
-import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -63,6 +63,7 @@ class EscalationEngine(
     private var timeoutPollingJob: Job? = null
     private val twilioService = TwilioService()
     private val notificationPrefsService = UserNotificationPreferencesService()
+    private val incidentAlertTimelineBridge = IncidentAlertTimelineBridge()
 
     companion object {
         private const val TIMEOUT_KEY_PREFIX = "escalation:timeout:"
@@ -877,13 +878,14 @@ class EscalationEngine(
         actorUserId: Int?,
         details: Map<String, JsonElement>?,
     ) {
-        OnCallAlertTimeline.insert {
+        val timelineId = OnCallAlertTimeline.insertAndGetId {
             it[OnCallAlertTimeline.alertId] = incidentId
             it[OnCallAlertTimeline.eventType] = eventType
             it[OnCallAlertTimeline.actorUserId] = actorUserId
             it[OnCallAlertTimeline.details] = details
             it[createdAt] = Clock.System.now()
-        }
+        }.value
+        incidentAlertTimelineBridge.recordForAlertTimeline(timelineId)
     }
 
     fun getNextEscalationTimes(): Map<Int, String> {

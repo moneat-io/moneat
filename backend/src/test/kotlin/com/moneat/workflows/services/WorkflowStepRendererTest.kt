@@ -53,7 +53,20 @@ class WorkflowStepRendererTest {
         assertTrue(renderer.sampleScopeForTrigger(WEBHOOK_TRIGGER).containsKey("webhook.payload"))
         assertEquals("created", renderer.sampleScopeForTrigger(INCIDENT_CREATED_TRIGGER)["incident.status"])
         assertEquals("resolved", renderer.sampleScopeForTrigger(INCIDENT_RESOLVED_TRIGGER)["incident.status"])
+        assertFalse(renderer.sampleScopeForTrigger(INCIDENT_CREATED_TRIGGER).containsKey("incident.role"))
+        assertFalse(renderer.sampleScopeForTrigger(INCIDENT_RESOLVED_TRIGGER).containsKey("incident.role"))
         assertTrue(renderer.sampleScopeForTrigger(SECURITY_SIGNAL_TRIGGER).containsKey("security.rule_id"))
+    }
+
+    @Test
+    fun `role change incident sample scope exposes role context`() {
+        val scope = renderer.sampleScopeForTrigger(INCIDENT_ROLE_CHANGED_TRIGGER)
+
+        assertEquals("role_changed", scope["incident.status"])
+        assertEquals("Incident Commander", scope["incident.role"])
+        assertEquals("123e4567-e89b-12d3-a456-426614170002", scope["incident.assignee"])
+        assertEquals("assign_role", scope["incident.role_action"])
+        assertEquals("123e4567-e89b-12d3-a456-426614170006", scope["incident.role_event_id"])
     }
 
     // ──── channelForStep / priorityLabel ────

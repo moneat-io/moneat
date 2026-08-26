@@ -29,6 +29,7 @@ import com.moneat.enterprise.incidents.models.IncidentActionState
 import com.moneat.enterprise.incidents.models.NativeIncidentActions
 import com.moneat.enterprise.incidents.models.NativeIncidentActionEvents
 import com.moneat.enterprise.incidents.timeline.IncidentTimelineWriter
+import com.moneat.enterprise.incidents.timeline.IncidentAlertTimelineBridge
 import com.moneat.enterprise.incidents.timeline.PendingIncidentTimelineEvent
 import com.moneat.enterprise.incidents.timeline.toIncidentTimelineProvenance
 import com.moneat.enterprise.oncall.models.OnCallAlerts
@@ -62,6 +63,7 @@ class IncidentCommandService(
     private val policy: IncidentCommandPolicy = IncidentCommandPolicy(),
     private val outboxWriter: IncidentOutboxWriter = IncidentOutboxWriter(),
     private val timelineWriter: IncidentTimelineWriter = IncidentTimelineWriter(),
+    private val incidentAlertTimelineBridge: IncidentAlertTimelineBridge = IncidentAlertTimelineBridge(),
     private val configurationService: IncidentConfigurationService = IncidentConfigurationService(),
 ) {
     fun execute(command: IncidentCommand): IncidentCommandResult {
@@ -259,6 +261,7 @@ class IncidentCommandService(
         }
         command.onCallAlertId?.let { alertId ->
             linkAlertRecord(incidentId, alertId)
+            incidentAlertTimelineBridge.backfill(incidentId, alertId)
             val alert = requireAlert(command.actor.organizationId, alertId)
             insertSourceLink(
                 command.actor,
@@ -1252,9 +1255,11 @@ class IncidentCommandService(
             if (existing[OnCallIncidentAlerts.incidentId] != command.incidentId) {
                 throw IncidentCommandConflictException("On-call alert is already linked to another native incident")
             }
+            incidentAlertTimelineBridge.backfill(command.incidentId, command.alertId)
             return loadMutation(command.incidentId, changed = false)
         }
         linkAlertRecord(command.incidentId, command.alertId)
+        incidentAlertTimelineBridge.backfill(command.incidentId, command.alertId)
         val now = Clock.System.now()
         val nextVersion = current[OnCallIncidents.version] + 1
         val updated =
@@ -1307,8 +1312,11 @@ class IncidentCommandService(
 
         val now = Clock.System.now()
         when (source.sourceType) {
-            com.moneat.enterprise.incidents.models.IncidentSourceType.ON_CALL_ALERT ->
-                linkAlertRecord(command.incidentId, checkNotNull(source.onCallAlertId))
+            com.moneat.enterprise.incidents.models.IncidentSourceType.ON_CALL_ALERT -> {
+                val alertId = checkNotNull(source.onCallAlertId)
+                linkAlertRecord(command.incidentId, alertId)
+                incidentAlertTimelineBridge.backfill(command.incidentId, alertId)
+            }
             com.moneat.enterprise.incidents.models.IncidentSourceType.ALERT_EPISODE ->
                 linkAlertEpisodeRecord(command, checkNotNull(source.alertEpisodeId), now)
             else -> Unit

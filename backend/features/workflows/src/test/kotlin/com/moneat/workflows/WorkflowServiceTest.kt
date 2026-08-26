@@ -53,6 +53,7 @@ import com.moneat.workflows.models.WorkflowVersions
 import com.moneat.workflows.models.Workflows
 import com.moneat.workflows.models.typedWorkflowScope
 import com.moneat.workflows.services.AlertResolvedWorkflowEvent
+import com.moneat.workflows.services.DeclaredIncidentRoleChange
 import com.moneat.workflows.services.WorkflowService
 import io.mockk.clearMocks
 import io.mockk.coEvery
@@ -1534,6 +1535,54 @@ class WorkflowServiceTest {
             assertEquals(
                 listOf("incident.id=$incidentResourceId|incident.status=resolved"),
                 runIdentities(resolvedWorkflow.id)
+            )
+        }
+
+    @Test
+    fun `declared incident role workflows include role context and deduplicate actions`() =
+        runBlocking {
+            val workflow =
+                service.createWorkflow(
+                    orgId,
+                    CreateWorkflowRequest(
+                        name = "Declared incident role changed",
+                        triggerName = "incident.role_changed",
+                        steps = emptyList(),
+                    ),
+                )
+            publish(workflow.id)
+            val incidentResourceId = "11111111-2222-4333-8444-555555555555"
+            transaction {
+                OnCallIncidents.insert {
+                    it[id] = 42
+                    it[resourceId] = kotlin.uuid.Uuid.parse(incidentResourceId)
+                    it[organizationId] = orgId
+                }
+            }
+
+            val change =
+                DeclaredIncidentRoleChange(
+                    organizationId = orgId,
+                    incidentId = 42,
+                    title = "Checkout degraded",
+                    severity = IncidentSeverity.SEV1,
+                    role = "Incident Commander",
+                    assignee = "user-resource",
+                    action = "assigned",
+                    eventResourceId = "event-resource-id",
+                )
+            service.publishDeclaredIncidentRoleChanged(change)
+            service.publishDeclaredIncidentRoleChanged(change)
+            service.publishDeclaredIncidentRoleChanged(change.copy(eventResourceId = "event-resource-id-2"))
+
+            assertEquals(
+                listOf(
+                    "incident.id=$incidentResourceId|incident.role_action=assigned|" +
+                        "incident.role_event_id=event-resource-id",
+                    "incident.id=$incidentResourceId|incident.role_action=assigned|" +
+                        "incident.role_event_id=event-resource-id-2",
+                ),
+                runIdentities(workflow.id),
             )
         }
 

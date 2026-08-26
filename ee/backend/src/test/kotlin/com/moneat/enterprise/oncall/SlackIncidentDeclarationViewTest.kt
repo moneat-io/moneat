@@ -84,6 +84,9 @@ class SlackIncidentDeclarationViewTest {
         assertTrue(menu.contains("Incident menu"))
         assertTrue(menu.contains("incident-resource-123"))
         assertTrue(menu.contains("incident_menu_declare"))
+        listOf("overview", "update", "action", "timeline", "join", "observe", "leave", "accept", "decline",
+            "resolve", "cancel", "reopen", "refresh")
+            .forEach { action -> assertTrue(menu.contains("incident_$action:incident-resource-123")) }
     }
 
     @Test

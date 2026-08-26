@@ -77,6 +77,8 @@ class IncidentAnnouncementServiceTest {
         assertEquals("MESSAGE", requests.single().operation.wire)
         assertTrue(requests.single().payload.contains("incident_accept"))
         assertTrue(requests.single().payload.contains("Incident summary"))
+        assertTrue(requests.single().payload.contains("moneat_incident"))
+        assertTrue(requests.single().payload.contains(incidentResourceId.toString()))
         assertEquals(1, transaction { NativeIncidentAnnouncements.selectAll().count() })
     }
 

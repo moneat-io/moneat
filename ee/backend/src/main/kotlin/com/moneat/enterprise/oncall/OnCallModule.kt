@@ -46,8 +46,10 @@ import com.moneat.enterprise.incidents.models.NativeIncidentVisibility
 import com.moneat.enterprise.incidents.authorization.SlackIncidentAccessRequest
 import com.moneat.enterprise.incidents.authorization.SlackIncidentAction
 import com.moneat.enterprise.incidents.authorization.SlackIncidentAuthorizationService
+import com.moneat.enterprise.incidents.announcements.NativeIncidentAnnouncements
 import com.moneat.enterprise.incidents.slack.IncidentSlackChannelState
 import com.moneat.enterprise.incidents.slack.NativeIncidentSlackChannels
+import com.moneat.enterprise.incidents.slack.SlackIncidentCommandService
 import com.moneat.enterprise.oncall.models.OnCallIncidents
 import com.moneat.enterprise.oncall.routes.deviceRoutes
 import com.moneat.enterprise.oncall.routes.escalationRoutes
@@ -77,6 +79,7 @@ import com.moneat.notifications.services.SlackService
 import com.moneat.notifications.services.SlackInstallationService
 import com.moneat.notifications.services.SlackIdentityRequest
 import com.moneat.notifications.services.SlackIdentityResolver
+import com.moneat.shared.models.SlackOutboundDeliveries
 import com.moneat.shared.models.SlackUserMappings
 import com.moneat.shared.models.Users
 import com.moneat.shared.models.Memberships
@@ -88,6 +91,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
@@ -117,6 +121,7 @@ private const val SLACK_INCIDENT_ACTION_BUTTON_ID = "incident_action_add"
 private const val SLACK_ACTION_METADATA_PARTS = 4
 private const val SLACK_ACTION_METADATA_CHANNEL_INDEX = 2
 private const val SLACK_ACTION_METADATA_MESSAGE_INDEX = 3
+private const val SLACK_CONTEXT_REQUIRED = "Slack workspace and user context are required."
 private val SLACK_INCIDENT_HELP_COMMANDS = setOf("help", "menu", "commands", "incident help", "incident menu")
 
 private data class SlackIncidentSubmitter(
@@ -145,6 +150,12 @@ class OnCallModule :
     private val pushNotificationService by lazy { PushNotificationService() }
     private val slackInstallationService by lazy { SlackInstallationService() }
     private val slackService by lazy { SlackService(installationService = slackInstallationService) }
+    private val slackIncidentCommandService by lazy {
+        SlackIncidentCommandService(
+            installationService = slackInstallationService,
+            slackService = slackService,
+        )
+    }
     private val redisClient by lazy { RedisClient() }
     private val escalationEngineDelegate =
         lazy {
@@ -431,14 +442,17 @@ class OnCallModule :
     ): String? {
         val form = parseQueryString(payload)
         val root = form["payload"]?.let { Json.parseToJsonElement(it).jsonObject }
+            ?: runCatching { Json.parseToJsonElement(payload).jsonObject }.getOrNull()
         val value: (String) -> String? = { key ->
             root?.get(key)?.jsonPrimitive?.contentOrNull ?: form[key]
         }
-        if (requestType == "interactions") return handleSlackInteraction(root, value, payload, deliveryId)
-        if (requestType == "events" || requestType == "mentions") return null
-        slackCommandResponse(requestType, root, value)?.let { return it }
-
-        return openSlackIncident(root, value)
+        return when {
+            requestType == "interactions" -> handleSlackInteraction(root, value, payload, deliveryId)
+            requestType == "events" -> handleSlackEvent(root, value, deliveryId)
+            requestType == "mentions" -> null
+            requestType == "shortcuts" -> handleSlackShortcut(root, value)
+            else -> slackCommandResponse(requestType, root, value) ?: openSlackIncident(root, value)
+        }
     }
 
     private suspend fun slackCommandResponse(
@@ -451,7 +465,20 @@ class OnCallModule :
         if (requestType == "commands" && value("text")?.trim()?.lowercase() in SLACK_INCIDENT_HELP_COMMANDS) {
             return slackIncidentCommandMenu()
         }
-        if (requestType == "shortcuts") return handleSlackShortcut(root, value)
+        return null
+    }
+
+    private fun handleSlackEvent(
+        root: JsonObject?,
+        value: (String) -> String?,
+        deliveryId: String?,
+    ): String? {
+        if (root == null) return null
+        slackIncidentCommandService.handleReaction(
+            root = root,
+            incidentResourceId = incidentResourceIdForSlackChannel(root, value),
+            deliveryId = deliveryId,
+        )
         return null
     }
 
@@ -459,12 +486,13 @@ class OnCallModule :
         root: JsonObject?,
         value: (String) -> String?,
     ): String? {
-        val channelId = value("channel_id")
-            ?: root?.get("channel")?.jsonObject?.get("id")?.jsonPrimitive?.contentOrNull
+        val event = root?.get("event")?.jsonObject
+        val channelId = slackChannelId(root, event, value)
         if (channelId.isNullOrBlank()) return null
         val submitter = resolveSlackSubmitter(root, value, slackInstallationService) ?: return null
         val teamId = root?.get("team")?.jsonObject?.get("id")?.jsonPrimitive?.contentOrNull
             ?: value("team_id")
+            ?: event?.get("team")?.jsonPrimitive?.contentOrNull
             ?: return null
         return transaction {
             val channel = NativeIncidentSlackChannels
@@ -476,8 +504,15 @@ class OnCallModule :
                         (NativeIncidentSlackChannels.state eq IncidentSlackChannelState.ACTIVE.wire)
                 }
                 .firstOrNull()
+            val messageTs = event?.get("item")?.jsonObject?.get("ts")?.jsonPrimitive?.contentOrNull
+            val announcementIncidentId = if (channel == null) {
+                findAnnouncementIncidentId(submitter.organizationId, teamId, channelId, messageTs)
+            } else {
+                null
+            }
+            val incidentId = channel?.get(NativeIncidentSlackChannels.incidentId)
+                ?: announcementIncidentId
                 ?: return@transaction null
-            val incidentId = channel[NativeIncidentSlackChannels.incidentId]
             OnCallIncidents
                 .selectAll()
                 .where {
@@ -490,42 +525,96 @@ class OnCallModule :
         }
     }
 
+    private fun slackChannelId(
+        root: JsonObject?,
+        event: JsonObject?,
+        value: (String) -> String?,
+    ): String? {
+        value("channel_id")?.let { return it }
+        val rootChannel = root?.get("channel") as? JsonObject
+        (rootChannel?.get("id") as? JsonPrimitive)?.contentOrNull?.let { return it }
+        (event?.get("channel") as? JsonPrimitive)?.contentOrNull?.let { return it }
+        val item = event?.get("item") as? JsonObject
+        return (item?.get("channel") as? JsonPrimitive)?.contentOrNull
+    }
+
+    private fun findAnnouncementIncidentId(
+        organizationId: Int,
+        teamId: String,
+        channelId: String,
+        messageTs: String?,
+    ): Int? {
+        if (messageTs.isNullOrBlank()) return null
+        val deliveryResourceId = SlackOutboundDeliveries
+            .selectAll()
+            .where {
+                (SlackOutboundDeliveries.organizationId eq organizationId) and
+                    (SlackOutboundDeliveries.teamId eq teamId) and
+                    (SlackOutboundDeliveries.channelId eq channelId) and
+                    (SlackOutboundDeliveries.providerMessageTs eq messageTs)
+            }
+            .firstOrNull()
+            ?.get(SlackOutboundDeliveries.resourceId)
+        return NativeIncidentAnnouncements
+            .selectAll()
+            .where {
+                (NativeIncidentAnnouncements.organizationId eq organizationId) and
+                    (NativeIncidentAnnouncements.teamId eq teamId) and
+                    (NativeIncidentAnnouncements.channelId eq channelId)
+            }
+            .firstOrNull { row ->
+                row[NativeIncidentAnnouncements.providerMessageTs] == messageTs ||
+                    (deliveryResourceId != null &&
+                        row[NativeIncidentAnnouncements.deliveryResourceId] == deliveryResourceId)
+            }
+            ?.get(NativeIncidentAnnouncements.incidentId)
+    }
+
     private suspend fun handleSlackInteraction(
         root: JsonObject?,
         value: (String) -> String?,
         payload: String,
         deliveryId: String?,
-    ): String? = when (root?.get("type")?.jsonPrimitive?.contentOrNull) {
-        "block_actions" -> {
-            val action = root["actions"]?.jsonArray?.firstOrNull()?.jsonObject
+    ): String? {
+        if (root == null) return slackEphemeral(SLACK_CONTEXT_REQUIRED)
+        return when (root["type"]?.jsonPrimitive?.contentOrNull) {
+            "block_actions" -> {
+                val action = root["actions"]?.jsonArray?.firstOrNull()?.jsonObject
             val actionId = action?.get("action_id")?.jsonPrimitive?.contentOrNull
             val actionValue = action?.get("value")?.jsonPrimitive?.contentOrNull
             when (actionId) {
                 "incident_menu_declare" -> openSlackIncident(root, value)
                 SLACK_INCIDENT_ACTION_BUTTON_ID ->
                     openSlackIncidentAction(root, value, actionValue, IncidentActionSource.MODAL)
-                else -> alertRouteSlackActionService.handle(payload, deliveryId)
+                else -> slackIncidentCommandService.handleBlockAction(root, deliveryId)
+                    ?: alertRouteSlackActionService.handle(payload, deliveryId)
             }
-        }
-        "view_submission" -> {
-            val callbackId = root["view"]?.jsonObject?.get("callback_id")?.jsonPrimitive?.contentOrNull
-            if (callbackId == SLACK_INCIDENT_ACTION_CALLBACK_ID) {
-                submitSlackIncidentAction(root, value, deliveryId)
-            } else {
-                submitSlackIncident(root, value, deliveryId)
             }
+            "view_submission" -> {
+                val callbackId = root["view"]?.jsonObject?.get("callback_id")?.jsonPrimitive?.contentOrNull
+                when {
+                    callbackId == SLACK_INCIDENT_ACTION_CALLBACK_ID ->
+                        submitSlackIncidentAction(root, value, deliveryId)
+                    else -> slackIncidentCommandService.handleSubmission(root, deliveryId)
+                        ?: submitSlackIncident(root, value, deliveryId)
+                }
+            }
+            else -> openSlackIncident(root, value)
         }
-        else -> openSlackIncident(root, value)
     }
 
     private suspend fun handleSlackShortcut(
         root: JsonObject?,
         value: (String) -> String?,
-    ): String? = when (value("callback_id")) {
-        SLACK_INCIDENT_MENU_CALLBACK_ID -> slackIncidentCommandMenu()
-        SLACK_INCIDENT_ACTION_CALLBACK_ID ->
-            openSlackIncidentAction(root, value, null, IncidentActionSource.MESSAGE_SHORTCUT)
-        else -> openSlackIncident(root, value)
+    ): String? {
+        if (root == null) return slackEphemeral(SLACK_CONTEXT_REQUIRED)
+        return when (value("callback_id")) {
+            SLACK_INCIDENT_MENU_CALLBACK_ID -> slackIncidentCommandMenu()
+            SLACK_INCIDENT_ACTION_CALLBACK_ID ->
+                openSlackIncidentAction(root, value, null, IncidentActionSource.MESSAGE_SHORTCUT)
+            else -> slackIncidentCommandService.handleShortcut(root, incidentResourceIdForSlackChannel(root, value))
+                ?: openSlackIncident(root, value)
+        }
     }
 
     private suspend fun openSlackIncident(
