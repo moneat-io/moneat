@@ -441,7 +441,7 @@ class OnCallModule :
         return openSlackIncident(root, value)
     }
 
-    private fun slackCommandResponse(
+    private suspend fun slackCommandResponse(
         requestType: String,
         root: JsonObject?,
         value: (String) -> String?,
