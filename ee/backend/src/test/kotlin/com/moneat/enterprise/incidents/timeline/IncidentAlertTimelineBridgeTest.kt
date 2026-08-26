@@ -14,6 +14,9 @@ import com.moneat.enterprise.incidents.commands.LinkOnCallAlertCommand
 import com.moneat.enterprise.oncall.models.OnCallAlertTimeline
 import com.moneat.enterprise.oncall.models.OnCallAlerts
 import com.moneat.enterprise.oncall.models.OnCallIncidentTimeline
+import com.moneat.enterprise.oncall.models.EscalationPolicyVersions
+import com.moneat.enterprise.oncall.services.EscalationPathService
+import com.moneat.shared.models.EscalationPolicies
 import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -107,6 +110,34 @@ class IncidentAlertTimelineBridgeTest {
         }
     }
 
+    @Test
+    fun `records escalation events for an already linked incident`() {
+        val alertId = seedAlert()
+        val incident = declareIncident()
+        val service = IncidentCommandService(policy = IncidentCommandPolicy.allowForTests())
+        service.execute(
+            LinkOnCallAlertCommand(
+                commandKey = "link-escalation-event",
+                actor = actor(),
+                incidentId = incident,
+                alertId = alertId,
+                expectedVersion = 1,
+            ),
+        )
+
+        EscalationPathService().createExecution(member.organizationId, alertId, seedPolicyVersion(), "root")
+
+        transaction {
+            val entries = OnCallIncidentTimeline.selectAll().where {
+                (OnCallIncidentTimeline.incidentId eq incident) and
+                    (OnCallIncidentTimeline.eventType eq "ESCALATION_STARTED")
+            }.toList()
+            assertEquals(1, entries.size)
+            assertEquals("INTEGRATION", entries.single()[OnCallIncidentTimeline.provenance])
+            assertTrue(entries.single()[OnCallIncidentTimeline.eventKey].startsWith("on-call-escalation:"))
+        }
+    }
+
     private fun actor() = IncidentCommandActor(member.organizationId, member.userId, "REST")
 
     private fun declareIncident(): Int =
@@ -142,6 +173,28 @@ class IncidentAlertTimelineBridgeTest {
             it[metadata] = null
             it[createdAt] = now
             it[updatedAt] = now
+        }.value
+    }
+
+    private fun seedPolicyVersion(): Int = transaction {
+        val now = Clock.System.now()
+        val policyId = EscalationPolicies.insertAndGetId {
+            it[organizationId] = member.organizationId
+            it[name] = "Incident escalation"
+            it[description] = null
+            it[repeatCount] = 1
+            it[createdAt] = now
+            it[updatedAt] = now
+        }.value
+        EscalationPolicyVersions.insertAndGetId {
+            it[organizationId] = member.organizationId
+            it[escalationPolicyId] = policyId
+            it[version] = 1
+            it[status] = "PUBLISHED"
+            it[path] = emptyMap()
+            it[createdBy] = member.userId
+            it[createdAt] = now
+            it[publishedAt] = now
         }.value
     }
 

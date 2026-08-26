@@ -9,9 +9,12 @@ import com.moneat.enterprise.incidents.models.IncidentTimelineProvenance
 import com.moneat.enterprise.oncall.models.OnCallAlertTimeline
 import com.moneat.enterprise.oncall.models.OnCallAlerts
 import com.moneat.enterprise.oncall.models.OnCallIncidentAlerts
+import com.moneat.enterprise.oncall.models.EscalationExecutionEvents
+import com.moneat.enterprise.oncall.models.EscalationExecutionStates
 import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -53,7 +56,32 @@ class IncidentAlertTimelineBridge(
             .where { OnCallAlertTimeline.alertId eq alertId }
             .toList()
         events.forEach { record(linked[OnCallIncidentAlerts.incidentId], alert, it) }
-        events.size
+        val executionIds = EscalationExecutionStates.selectAll()
+            .where { EscalationExecutionStates.alertId eq alertId }
+            .map { it[EscalationExecutionStates.id].value }
+        val escalationEvents = EscalationExecutionEvents.selectAll()
+            .where { EscalationExecutionEvents.executionId inList executionIds }
+            .toList()
+        escalationEvents.forEach { record(linked[OnCallIncidentAlerts.incidentId], alert, it) }
+        events.size + escalationEvents.size
+    }
+
+    /** Records one escalation-path event when its alert is linked to a native incident. */
+    fun recordForEscalationEvent(eventId: Int): Boolean = inTransaction {
+        val event = EscalationExecutionEvents.selectAll()
+            .where { EscalationExecutionEvents.id eq eventId }
+            .singleOrNull() ?: return@inTransaction false
+        val execution = EscalationExecutionStates.selectAll()
+            .where { EscalationExecutionStates.id eq event[EscalationExecutionEvents.executionId] }
+            .singleOrNull() ?: return@inTransaction false
+        val alert = OnCallAlerts.selectAll()
+            .where { OnCallAlerts.id eq execution[EscalationExecutionStates.alertId] }
+            .singleOrNull() ?: return@inTransaction false
+        val link = OnCallIncidentAlerts.selectAll()
+            .where { OnCallIncidentAlerts.alertId eq execution[EscalationExecutionStates.alertId] }
+            .singleOrNull() ?: return@inTransaction false
+        record(link[OnCallIncidentAlerts.incidentId], alert, event, execution)
+        true
     }
 
     private fun <T> inTransaction(block: () -> T): T =
@@ -75,6 +103,35 @@ class IncidentAlertTimelineBridge(
                 details = (event[OnCallAlertTimeline.details] ?: emptyMap()) + mapOf(
                     "alertId" to JsonPrimitive(alert[OnCallAlerts.resourceId].toString()),
                     "alertTimelineEventId" to JsonPrimitive(event[OnCallAlertTimeline.resourceId].toString()),
+                ),
+                provenance = IncidentTimelineProvenance.INTEGRATION,
+                originalOccurredAt = occurredAt,
+                observedAt = clock.now(),
+                sourceType = IncidentSourceType.ON_CALL_ALERT.wire,
+                sourceReference = alert[OnCallAlerts.resourceId].toString(),
+            ),
+        )
+    }
+
+    private fun record(
+        incidentId: Int,
+        alert: org.jetbrains.exposed.v1.core.ResultRow,
+        event: org.jetbrains.exposed.v1.core.ResultRow,
+        execution: org.jetbrains.exposed.v1.core.ResultRow,
+    ) {
+        val occurredAt = event[EscalationExecutionEvents.createdAt]
+        timelineWriter.record(
+            PendingIncidentTimelineEvent(
+                organizationId = alert[OnCallAlerts.organizationId],
+                incidentId = incidentId,
+                eventKey = "on-call-escalation:${alert[OnCallAlerts.resourceId]}:" +
+                    event[EscalationExecutionEvents.resourceId],
+                eventType = "ESCALATION_${event[EscalationExecutionEvents.eventType]}",
+                actorUserId = event[EscalationExecutionEvents.actorUserId],
+                details = event[EscalationExecutionEvents.details] + mapOf(
+                    "alertId" to JsonPrimitive(alert[OnCallAlerts.resourceId].toString()),
+                    "executionId" to JsonPrimitive(execution[EscalationExecutionStates.resourceId].toString()),
+                    "executionEventId" to JsonPrimitive(event[EscalationExecutionEvents.resourceId].toString()),
                 ),
                 provenance = IncidentTimelineProvenance.INTEGRATION,
                 originalOccurredAt = occurredAt,

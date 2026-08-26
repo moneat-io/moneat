@@ -4,6 +4,7 @@
 
 package com.moneat.enterprise.oncall.services
 
+import com.moneat.enterprise.incidents.timeline.IncidentAlertTimelineBridge
 import com.moneat.enterprise.oncall.models.EscalationExecutionEvents
 import com.moneat.enterprise.oncall.models.EscalationExecutionStates
 import com.moneat.enterprise.oncall.models.EscalationPath
@@ -25,7 +26,6 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.SerialName
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -65,6 +65,8 @@ data class EscalationExecutionTransition(
 )
 
 class EscalationPathService {
+    private val incidentAlertTimelineBridge = IncidentAlertTimelineBridge()
+
     companion object {
         const val STATUS_DRAFT = "DRAFT"
         const val STATUS_PUBLISHED = "PUBLISHED"
@@ -260,7 +262,7 @@ class EscalationPathService {
         executionId: Int,
         event: EscalationExecutionEvent,
     ) {
-        EscalationExecutionEvents.insert {
+        val eventId = EscalationExecutionEvents.insertAndGetId {
             it[EscalationExecutionEvents.organizationId] = organizationId
             it[EscalationExecutionEvents.executionId] = executionId
             it[EscalationExecutionEvents.eventType] = event.type
@@ -268,7 +270,8 @@ class EscalationPathService {
             it[EscalationExecutionEvents.nodeId] = event.nodeId
             it[EscalationExecutionEvents.details] = event.details
             it[createdAt] = Clock.System.now()
-        }
+        }.value
+        incidentAlertTimelineBridge.recordForEscalationEvent(eventId)
     }
 
     private fun getExecutionInTransaction(executionId: Int): EscalationExecution? =
