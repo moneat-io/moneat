@@ -584,6 +584,16 @@ object WorkflowCatalog {
             )
         ),
         WorkflowStepDefinition(
+            name = "oncall.incident.action.create",
+            label = "Add incident action",
+            description = "Create a tracked response action on an operational incident.",
+            params = listOf(
+                WorkflowStepParamDefinition("incident_id", "Incident ID", "String"),
+                WorkflowStepParamDefinition("description", "Description", "Text"),
+                WorkflowStepParamDefinition("assignee_user_id", "Assignee user ID", "String", required = false)
+            )
+        ),
+        WorkflowStepDefinition(
             name = HTTP_REQUEST_ACTION,
             label = "HTTP request",
             description = "Call an external HTTP endpoint from the isolated egress worker.",
