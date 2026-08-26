@@ -22,6 +22,7 @@ import com.moneat.workflows.engine.temporal.WORKFLOWS_EGRESS_ENABLED_ENV
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -54,5 +55,18 @@ class WorkflowCatalogTest {
         val names = WorkflowCatalog.response().steps.map { it.name }
         assertTrue(names.contains(HTTP_REQUEST_ACTION))
         assertTrue(names.contains(TRANSFORM_GRAALJS_ACTION))
+    }
+
+    @Test
+    fun `incident role trigger exposes role context and action deduplication`() {
+        val trigger = requireNotNull(WorkflowCatalog.trigger("incident.role_changed"))
+
+        assertEquals("When an incident role changes", trigger.label)
+        assertEquals(
+            listOf("incident.id", "incident.role_action"),
+            trigger.defaultOnceForTemplate,
+        )
+        assertTrue(trigger.scope.any { it.name == "incident.role" && it.type == "String" })
+        assertTrue(trigger.scope.any { it.name == "incident.assignee" && it.type == "String" })
     }
 }

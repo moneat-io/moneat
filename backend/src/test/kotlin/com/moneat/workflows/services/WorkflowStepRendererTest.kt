@@ -56,6 +56,16 @@ class WorkflowStepRendererTest {
         assertTrue(renderer.sampleScopeForTrigger(SECURITY_SIGNAL_TRIGGER).containsKey("security.rule_id"))
     }
 
+    @Test
+    fun `role change incident sample scope exposes role context`() {
+        val scope = renderer.sampleScopeForTrigger(INCIDENT_ROLE_CHANGED_TRIGGER)
+
+        assertEquals("created", scope["incident.status"])
+        assertEquals("Incident Commander", scope["incident.role"])
+        assertEquals("123e4567-e89b-12d3-a456-426614170002", scope["incident.assignee"])
+        assertEquals("assigned", scope["incident.role_action"])
+    }
+
     // ──── channelForStep / priorityLabel ────
 
     @Test
