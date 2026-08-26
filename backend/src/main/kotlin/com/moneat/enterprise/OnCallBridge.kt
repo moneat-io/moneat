@@ -117,6 +117,8 @@ data class OnCallIncidentDeclaration(
     val severity: String,
     val commandKey: String,
     val origin: String = "WORKFLOW",
+    val mode: String = "LIVE",
+    val visibility: String = "ORGANIZATION",
     val formDefinitionId: Int? = null,
     val formDefinitionSnapshot: Map<String, JsonElement> = emptyMap(),
     val formValues: Map<String, JsonElement> = emptyMap(),

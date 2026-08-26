@@ -30,8 +30,20 @@ class SlackIncidentDeclarationViewTest {
         assertEquals("moneat_incident_declaration", view["callback_id"]?.toString()?.trim('"'))
         assertEquals("Checkout API is timing out", blocks?.first()?.jsonObject?.get("element")
             ?.jsonObject?.get("initial_value")?.toString()?.trim('"'))
-        assertEquals(3, blocks?.size)
-        assertNotNull(blocks?.last()?.jsonObject?.get("element")?.jsonObject?.get("options"))
+        assertEquals(5, blocks?.size)
+        assertNotNull(blocks?.get(2)?.jsonObject?.get("element")?.jsonObject?.get("options"))
+        assertEquals("mode", blocks.get(3).jsonObject["block_id"]?.toString()?.trim('"'))
+        assertEquals("visibility", blocks.get(4).jsonObject["block_id"]?.toString()?.trim('"'))
+        assertEquals(
+            "LIVE",
+            blocks.get(3).jsonObject["element"]?.jsonObject?.get("initial_option")
+                ?.jsonObject?.get("value")?.toString()?.trim('"'),
+        )
+        assertEquals(
+            "ORGANIZATION",
+            blocks.get(4).jsonObject["element"]?.jsonObject?.get("initial_option")
+                ?.jsonObject?.get("value")?.toString()?.trim('"'),
+        )
     }
 
     @Test
@@ -47,6 +59,15 @@ class SlackIncidentDeclarationViewTest {
         assertTrue(menu.contains("Incident response"))
         listOf("overview", "timeline", "handover", "status page", "resolve", "reopen", "workflow")
             .forEach { capability -> assertTrue(normalizedMenu.contains(capability)) }
+        assertTrue(menu.contains("incident_menu_declare"))
+    }
+
+    @Test
+    fun `incident menu includes the incident bound to the Slack channel`() {
+        val menu = slackIncidentCommandMenu("incident-resource-123")
+
+        assertTrue(menu.contains("Incident menu"))
+        assertTrue(menu.contains("incident-resource-123"))
         assertTrue(menu.contains("incident_menu_declare"))
     }
 
@@ -98,15 +119,15 @@ class SlackIncidentDeclarationViewTest {
 
         val blocks = slackIncidentDeclarationView(null, form)["blocks"]?.jsonArray
 
-        assertEquals(5, blocks?.size)
-        assertEquals("field_customer_impact", blocks?.get(3)?.jsonObject?.get("block_id")?.toString()?.trim('"'))
-        assertEquals("static_select", blocks?.get(3)?.jsonObject?.get("element")?.jsonObject?.get("type")
+        assertEquals(7, blocks?.size)
+        assertEquals("field_customer_impact", blocks?.get(5)?.jsonObject?.get("block_id")?.toString()?.trim('"'))
+        assertEquals("static_select", blocks?.get(5)?.jsonObject?.get("element")?.jsonObject?.get("type")
             ?.toString()?.trim('"'))
-        assertEquals(false, blocks?.get(3)?.jsonObject?.get("optional")?.toString()?.toBoolean())
-        assertEquals("Who is affected?", blocks?.get(3)?.jsonObject?.get("hint")?.jsonObject?.get("text")
+        assertEquals(false, blocks?.get(5)?.jsonObject?.get("optional")?.toString()?.toBoolean())
+        assertEquals("Who is affected?", blocks?.get(5)?.jsonObject?.get("hint")?.jsonObject?.get("text")
             ?.toString()?.trim('"'))
-        assertEquals("field_named_accounts", blocks?.get(4)?.jsonObject?.get("block_id")?.toString()?.trim('"'))
-        assertEquals("multi_static_select", blocks?.get(4)?.jsonObject?.get("element")?.jsonObject?.get("type")
+        assertEquals("field_named_accounts", blocks?.get(6)?.jsonObject?.get("block_id")?.toString()?.trim('"'))
+        assertEquals("multi_static_select", blocks?.get(6)?.jsonObject?.get("element")?.jsonObject?.get("type")
             ?.toString()?.trim('"'))
     }
 
