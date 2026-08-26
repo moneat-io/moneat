@@ -35,6 +35,21 @@ class SlackIncidentDeclarationViewTest {
     }
 
     @Test
+    fun `incident action modal preserves its source context`() {
+        val view = slackIncidentActionView(
+            "MESSAGE_SHORTCUT|77777777-7777-4777-8777-777777777777|C123|1712345678.000100",
+        )
+
+        assertEquals("moneat_incident_action", view["callback_id"]?.toString()?.trim('"'))
+        assertEquals(
+            "MESSAGE_SHORTCUT|77777777-7777-4777-8777-777777777777|C123|1712345678.000100",
+            view["private_metadata"]?.toString()?.trim('"'),
+        )
+        assertEquals("description", view["blocks"]?.jsonArray?.single()?.jsonObject?.get("block_id")
+            ?.toString()?.trim('"'))
+    }
+
+    @Test
     fun `incident help command exposes the response menu`() = runBlocking {
         val response = OnCallModule().handleSlackInbound(
             "commands",
