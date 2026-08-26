@@ -121,6 +121,7 @@ private const val SLACK_INCIDENT_ACTION_BUTTON_ID = "incident_action_add"
 private const val SLACK_ACTION_METADATA_PARTS = 4
 private const val SLACK_ACTION_METADATA_CHANNEL_INDEX = 2
 private const val SLACK_ACTION_METADATA_MESSAGE_INDEX = 3
+private const val SLACK_INCIDENT_DECLARATION_CALLBACK_ID = "moneat_incident_declaration"
 private const val SLACK_CONTEXT_REQUIRED = "Slack workspace and user context are required."
 private val SLACK_INCIDENT_HELP_COMMANDS = setOf("help", "menu", "commands", "incident help", "incident menu")
 
@@ -482,6 +483,24 @@ class OnCallModule :
         return null
     }
 
+    private suspend fun handleSlackShortcut(
+        root: JsonObject?,
+        value: (String) -> String?,
+    ): String? {
+        if (root == null) return slackEphemeral(SLACK_CONTEXT_REQUIRED)
+        if (value("callback_id") == SLACK_INCIDENT_DECLARATION_CALLBACK_ID) {
+            return openSlackIncident(root, value)
+        }
+        return when (value("callback_id")) {
+            SLACK_INCIDENT_MENU_CALLBACK_ID -> slackIncidentCommandMenu()
+            SLACK_INCIDENT_ACTION_CALLBACK_ID ->
+                openSlackIncidentAction(root, value, null, IncidentActionSource.MESSAGE_SHORTCUT)
+            else -> slackIncidentCommandService.handleShortcut(
+                root = root,
+                incidentResourceId = incidentResourceIdForSlackChannel(root, value),
+            ) ?: slackCommandResponse("shortcuts", root, value)
+        }
+    }
     private fun incidentResourceIdForSlackChannel(
         root: JsonObject?,
         value: (String) -> String?,
@@ -603,20 +622,6 @@ class OnCallModule :
         }
     }
 
-    private suspend fun handleSlackShortcut(
-        root: JsonObject?,
-        value: (String) -> String?,
-    ): String? {
-        if (root == null) return slackEphemeral(SLACK_CONTEXT_REQUIRED)
-        return when (value("callback_id")) {
-            SLACK_INCIDENT_MENU_CALLBACK_ID -> slackIncidentCommandMenu()
-            SLACK_INCIDENT_ACTION_CALLBACK_ID ->
-                openSlackIncidentAction(root, value, null, IncidentActionSource.MESSAGE_SHORTCUT)
-            else -> slackIncidentCommandService.handleShortcut(root, incidentResourceIdForSlackChannel(root, value))
-                ?: openSlackIncident(root, value)
-        }
-    }
-
     private suspend fun openSlackIncident(
         root: JsonObject?,
         value: (String) -> String?,
@@ -643,8 +648,7 @@ class OnCallModule :
         } != null
         if (!linkedUser) return slackEphemeral("Link your Slack identity in Moneat before declaring an incident.")
 
-        val contextText = value("text")
-            ?: root?.get("message")?.jsonObject?.get("text")?.jsonPrimitive?.contentOrNull
+        val contextText = slackMessageContextText(root, value)
         if (triggerId.isNullOrBlank()) return slackEphemeral("Slack did not provide a modal trigger.")
         val opened = slackService.openModal(
             organizationId = organizationId,
@@ -895,6 +899,15 @@ class OnCallModule :
     ): Boolean = onCallAlertService.acknowledge(alertId, userId)
 }
 
+internal fun slackMessageContextText(
+    root: JsonObject?,
+    value: (String) -> String?,
+): String? = sequenceOf(
+    value("text"),
+    (root?.get("message") as? JsonObject)?.get("text")?.jsonPrimitive?.contentOrNull,
+).mapNotNull { it?.trim()?.takeIf(String::isNotEmpty) }
+    .firstOrNull()
+
 private fun slackEphemeral(message: String): String =
     buildJsonObject {
         put("response_type", "ephemeral")
@@ -1043,7 +1056,7 @@ internal fun slackIncidentDeclarationView(
 ): JsonObject =
     buildJsonObject {
         put("type", "modal")
-        put("callback_id", "moneat_incident_declaration")
+        put("callback_id", SLACK_INCIDENT_DECLARATION_CALLBACK_ID)
         putJsonObject("title") {
             put("type", "plain_text")
             put("text", "Declare incident")
