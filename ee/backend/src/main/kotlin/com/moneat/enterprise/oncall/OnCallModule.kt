@@ -10,6 +10,7 @@ import com.moneat.enterprise.EnterpriseModule
 import com.moneat.enterprise.IncidentInfo
 import com.moneat.enterprise.OnCallBridge
 import com.moneat.enterprise.OnCallIncidentDeclaration
+import com.moneat.enterprise.OnCallIncidentActionRequest
 import com.moneat.enterprise.OnCallUserInfo
 import com.moneat.enterprise.PriorityInfo
 import com.moneat.enterprise.alertroutes.routes.alertRouteRoutes
@@ -19,7 +20,9 @@ import com.moneat.enterprise.alertroutes.services.AlertRouteExecutionService
 import com.moneat.enterprise.alertroutes.services.AlertRouteRecoveryWorker
 import com.moneat.enterprise.alertroutes.services.AlertRouteSlackActionService
 import com.moneat.enterprise.incidents.commands.DeclareIncidentCommand
+import com.moneat.enterprise.incidents.commands.AddIncidentActionCommand
 import com.moneat.enterprise.incidents.commands.IncidentCommandActor
+import com.moneat.enterprise.incidents.commands.IncidentCommandService
 import com.moneat.enterprise.incidents.events.IncidentOutboxService
 import com.moneat.enterprise.incidents.events.IncidentOutboxWorker
 import com.moneat.enterprise.incidents.updates.IncidentUpdateReminderWorker
@@ -37,6 +40,7 @@ import com.moneat.enterprise.incidents.config.IncidentFormFieldDefinition
 import com.moneat.enterprise.incidents.config.ResolvedIncidentForm
 import com.moneat.enterprise.incidents.models.IncidentCustomFieldValueType
 import com.moneat.enterprise.incidents.models.IncidentFormStage
+import com.moneat.enterprise.incidents.models.IncidentActionSource
 import com.moneat.enterprise.oncall.routes.deviceRoutes
 import com.moneat.enterprise.oncall.routes.escalationRoutes
 import com.moneat.enterprise.oncall.routes.incidentRoutes
@@ -64,6 +68,9 @@ import com.moneat.mcp.protocol.McpToolRegistry
 import com.moneat.notifications.services.SlackService
 import com.moneat.notifications.services.SlackInstallationService
 import com.moneat.shared.models.SlackUserMappings
+import com.moneat.shared.models.Users
+import com.moneat.shared.models.Memberships
+import com.moneat.shared.services.toUuidOrNull
 import io.ktor.server.application.Application
 import io.ktor.http.parseQueryString
 import io.ktor.server.routing.Route
@@ -83,6 +90,7 @@ import kotlinx.serialization.json.addJsonObject
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.module.Module
@@ -360,6 +368,43 @@ class OnCallModule :
                     onCallAlertId = declaration.alertId,
                 ),
             ).id
+
+    override suspend fun createIncidentAction(request: OnCallIncidentActionRequest): String? {
+        val incidentId = onCallIncidentService.getIncidentIdByResourceId(
+            request.organizationId,
+            request.incidentResourceId,
+        ) ?: return null
+        val assigneeUserId = request.assigneeUserResourceId?.let { resourceId ->
+            val parsed = resourceId.toUuidOrNull() ?: return null
+            transaction {
+                val memberUserIds = Memberships
+                    .selectAll()
+                    .where { Memberships.organization_id eq request.organizationId }
+                    .map { it[Memberships.user_id] }
+                Users
+                    .selectAll()
+                    .where { (Users.resource_id eq parsed) and (Users.id inList memberUserIds) }
+                    .singleOrNull()
+                    ?.get(Users.id)
+            } ?: return null
+        }
+        val source = IncidentActionSource.entries
+            .firstOrNull { it.wire == request.source }
+            ?: return null
+        return IncidentCommandService().execute(
+            AddIncidentActionCommand(
+                commandKey = request.commandKey,
+                actor = IncidentCommandActor(request.organizationId, request.userId, "WORKFLOW"),
+                incidentId = incidentId,
+                title = request.description,
+                description = request.description,
+                assigneeUserId = assigneeUserId,
+                source = source,
+                slackChannelId = request.slackChannelId,
+                slackMessageTs = request.slackMessageTs,
+            ),
+        ).actionResourceId
+    }
 
     override suspend fun handleSlackInbound(
         requestType: String,

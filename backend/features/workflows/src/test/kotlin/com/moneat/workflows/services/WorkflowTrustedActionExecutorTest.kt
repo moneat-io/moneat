@@ -18,6 +18,7 @@ package com.moneat.workflows.services
 
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.enterprise.OnCallBridge
+import com.moneat.enterprise.OnCallIncidentActionRequest
 import com.moneat.enterprise.OnCallIncidentDeclaration
 import com.moneat.events.services.DashboardService
 import com.moneat.logs.models.LogAggregateResponse
@@ -165,6 +166,7 @@ class WorkflowTrustedActionExecutorTest {
         assertTrue(executor.supports(WorkflowTrustedActionExecutor.LOGS_SEARCH_STEP))
         assertTrue(executor.supports(WorkflowTrustedActionExecutor.ON_CALL_PAGE_STEP))
         assertTrue(executor.supports(WorkflowTrustedActionExecutor.ON_CALL_DECLARE_INCIDENT_STEP))
+        assertTrue(executor.supports(WorkflowTrustedActionExecutor.ON_CALL_CREATE_INCIDENT_ACTION_STEP))
         assertFalse(executor.supports("notification.slack"))
     }
 
@@ -501,6 +503,42 @@ class WorkflowTrustedActionExecutorTest {
 
             assertEquals(incidentResourceId, result["incident_id"]?.jsonPrimitive?.content)
             coVerify(exactly = 1) { bridge.declareIncident(declaration) }
+        } finally {
+            unmockkObject(FeatureRegistry)
+        }
+    }
+
+    @Test
+    fun `workflow incident action uses the canonical bridge request`() {
+        val bridge = mockk<OnCallBridge>()
+        val actionResourceId = "88888888-8888-4888-8888-888888888888"
+        val request = OnCallIncidentActionRequest(
+            organizationId = orgId,
+            incidentResourceId = "77777777-7777-4777-8777-777777777777",
+            userId = 99,
+            description = "Verify the fallback provider",
+            assigneeUserResourceId = "66666666-6666-4666-8666-666666666666",
+            source = "WORKFLOW",
+            commandKey = "workflow:75:incident-action",
+        )
+        mockkObject(FeatureRegistry)
+        try {
+            every { FeatureRegistry.getOnCallBridge() } returns bridge
+            coEvery { bridge.createIncidentAction(request) } returns actionResourceId
+
+            val result = run(
+                WorkflowTrustedActionExecutor.ON_CALL_CREATE_INCIDENT_ACTION_STEP,
+                mapOf(
+                    "incident_id" to request.incidentResourceId,
+                    "description" to request.description,
+                    "assignee_user_id" to request.assigneeUserResourceId!!,
+                ),
+                actorUserId = request.userId,
+                idempotencyKey = request.commandKey,
+            )
+
+            assertEquals(actionResourceId, result["action_id"]?.jsonPrimitive?.content)
+            coVerify(exactly = 1) { bridge.createIncidentAction(request) }
         } finally {
             unmockkObject(FeatureRegistry)
         }
