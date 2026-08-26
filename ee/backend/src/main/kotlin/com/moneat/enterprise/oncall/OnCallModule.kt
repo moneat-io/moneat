@@ -79,6 +79,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
@@ -103,6 +104,7 @@ private const val SLACK_FORM_LABEL_MAX_CHARS = 75
 private const val SLACK_FORM_HINT_MAX_CHARS = 200
 private const val SLACK_FORM_OPTION_MAX_CHARS = 75
 private const val SLACK_INCIDENT_MENU_CALLBACK_ID = "moneat_incident_menu"
+private const val SLACK_CONTEXT_REQUIRED = "Slack workspace and user context are required."
 private val SLACK_INCIDENT_HELP_COMMANDS = setOf("help", "menu", "commands", "incident help", "incident menu")
 
 private data class SlackIncidentSubmitter(
@@ -405,7 +407,7 @@ class OnCallModule :
         payload: String,
         deliveryId: String?,
     ): String? {
-        if (root == null) return slackEphemeral("Slack workspace and user context are required.")
+        if (root == null) return slackEphemeral(SLACK_CONTEXT_REQUIRED)
         return when (type) {
             "block_actions" -> handleSlackBlockActions(root, value, payload, deliveryId)
             "view_submission" -> slackIncidentCommandService.handleSubmission(root, deliveryId)
@@ -445,7 +447,7 @@ class OnCallModule :
         root: JsonObject?,
         value: (String) -> String?,
     ): String? {
-        if (root == null) return slackEphemeral("Slack workspace and user context are required.")
+        if (root == null) return slackEphemeral(SLACK_CONTEXT_REQUIRED)
         return slackIncidentCommandService.handleShortcut(
             root = root,
             incidentResourceId = incidentResourceIdForSlackChannel(root, value),
@@ -473,10 +475,7 @@ class OnCallModule :
         value: (String) -> String?,
     ): String? {
         val event = root?.get("event")?.jsonObject
-        val channelId = value("channel_id")
-            ?: root?.get("channel")?.jsonObject?.get("id")?.jsonPrimitive?.contentOrNull
-            ?: event?.get("channel")?.jsonPrimitive?.contentOrNull
-            ?: event?.get("item")?.jsonObject?.get("channel")?.jsonPrimitive?.contentOrNull
+        val channelId = slackChannelId(root, event, value)
         if (channelId.isNullOrBlank()) return null
         val messageTs = event?.get("item")?.jsonObject?.get("ts")?.jsonPrimitive?.contentOrNull
         val submitter = resolveSlackSubmitter(root, value, slackInstallationService) ?: return null
@@ -512,6 +511,19 @@ class OnCallModule :
                 ?.get(OnCallIncidents.resourceId)
                 ?.toString()
         }
+    }
+
+    private fun slackChannelId(
+        root: JsonObject?,
+        event: JsonObject?,
+        value: (String) -> String?,
+    ): String? {
+        value("channel_id")?.let { return it }
+        val rootChannel = root?.get("channel") as? JsonObject
+        (rootChannel?.get("id") as? JsonPrimitive)?.contentOrNull?.let { return it }
+        (event?.get("channel") as? JsonPrimitive)?.contentOrNull?.let { return it }
+        val item = event?.get("item") as? JsonObject
+        return (item?.get("channel") as? JsonPrimitive)?.contentOrNull
     }
 
     private fun findAnnouncementIncidentId(
@@ -554,7 +566,7 @@ class OnCallModule :
         val slackUserId = value("user_id") ?: root?.get("user")?.jsonObject?.get("id")?.jsonPrimitive?.contentOrNull
         val triggerId = value("trigger_id") ?: root?.get("trigger_id")?.jsonPrimitive?.contentOrNull
         if (teamId.isNullOrBlank() || slackUserId.isNullOrBlank()) {
-            return slackEphemeral("Slack workspace and user context are required.")
+            return slackEphemeral(SLACK_CONTEXT_REQUIRED)
         }
         val organizationId = slackInstallationService.organizationIdForTeam(teamId)
             ?: return slackEphemeral("This Slack workspace is not connected to a Moneat organization.")

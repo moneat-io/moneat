@@ -54,6 +54,7 @@ private const val ACTION_CALLBACK_ID = "moneat_incident_action"
 private const val TIMELINE_CALLBACK_ID = "moneat_incident_timeline"
 private const val FOLLOW_UP_CALLBACK_ID = "moneat_incident_follow_up"
 private const val DECISION_CALLBACK_ID = "moneat_incident_decision"
+private const val UNAUTHORIZED_RESPONSE = "You are not authorized to respond to this incident in Slack."
 private const val MAX_TEXT_LENGTH = 2_000
 private const val MODAL_TITLE_MAX_LENGTH = 24
 private const val MODAL_LABEL_MAX_LENGTH = 75
@@ -97,7 +98,7 @@ class SlackIncidentCommandService(
         val context = context(identity, resourceId)
             ?: return staleResponse(resourceId)
         if (!authorize(identity, context, SlackIncidentAction.RESPOND)) {
-            return response("You are not authorized to respond to this incident in Slack.")
+            return response(UNAUTHORIZED_RESPONSE)
         }
         return handleAction(actionName, root, context, identity, deliveryId)
     }
@@ -189,14 +190,11 @@ class SlackIncidentCommandService(
         val actionName = submissionAction(callbackId) ?: return null
         val identity = resolveIdentity(root)
         if (!identity.isMapped) return response(identity.message)
-        val resourceId = incidentResourceId
-            ?: root["private_metadata"]?.jsonPrimitive?.contentOrNull
-            ?: root["message"]?.jsonObject?.get("metadata")?.jsonObject
-                ?.get("event_payload")?.jsonObject?.get("incident_id")?.jsonPrimitive?.contentOrNull
+        val resourceId = incidentResourceId ?: shortcutIncidentResourceId(root)
         val context = resourceId?.let { context(identity, it) }
             ?: return staleResponse(resourceId)
         if (!authorize(identity, context, SlackIncidentAction.RESPOND)) {
-            return response("You are not authorized to respond to this incident in Slack.")
+            return response(UNAUTHORIZED_RESPONSE)
         }
         return openModal(
             root = root,
@@ -272,7 +270,7 @@ class SlackIncidentCommandService(
         val context = resourceId?.let { context(identity, it) }
             ?: return staleResponse(resourceId)
         if (!authorize(identity, context, SlackIncidentAction.RESPOND)) {
-            return response("You are not authorized to respond to this incident in Slack.")
+            return response(UNAUTHORIZED_RESPONSE)
         }
         val values = view["state"]?.jsonObject?.get("values")?.jsonObject
         val text = values?.let { value(it, "text") }?.trim().orEmpty()
@@ -422,6 +420,15 @@ class SlackIncidentCommandService(
         return identityResolver.resolve(
             SlackIdentityRequest(teamId = teamId, userId = userId, organizationId = organizationId),
         )
+    }
+
+    private fun shortcutIncidentResourceId(root: JsonObject): String? {
+        val privateMetadata = (root["private_metadata"] as? JsonPrimitive)?.contentOrNull
+        if (privateMetadata != null) return privateMetadata
+        val message = root["message"] as? JsonObject ?: return null
+        val metadata = message["metadata"] as? JsonObject ?: return null
+        val eventPayload = metadata["event_payload"] as? JsonObject ?: return null
+        return (eventPayload["incident_id"] as? JsonPrimitive)?.contentOrNull
     }
 
     private fun context(identity: SlackIdentityResolution, resourceId: String): IncidentContext? {
