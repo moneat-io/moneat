@@ -82,13 +82,12 @@ export function AlertRouteIncidentSection({
       </label>
 
       {!incident.create && (
-        <p
+        <output
           className="rounded-md border border-warning-border bg-warning-bg px-3 py-2 text-xs text-warning-fg"
-          role="status"
         >
           This route will not create incidents while this option is off. Matching alerts may still
           be grouped or paged.
-        </p>
+        </output>
       )}
 
       {incident.create && (
