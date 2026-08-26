@@ -637,6 +637,60 @@ describe('onCallMethods', () => {
     })
   })
 
+  describe('incident update reminders', () => {
+    it('publishes updates and controls reminder state', async () => {
+      const update = {
+        message: 'Mitigation is rolling out',
+        customerImpact: 'Checkout requests are degraded',
+        nextUpdateAt: '2026-08-25T01:00:00Z',
+        expectedVersion: 4,
+      }
+      const request = {
+        message: 'Please share the next update',
+        dueAt: '2026-08-25T00:30:00Z',
+        expectedVersion: 5,
+      }
+      const response = { id: ON_CALL_INCIDENT_ID_PRIMARY, status: 'ACTIVE' }
+      server.use(
+        http.post(
+          `${API_BASE}/on-call/incidents/${ON_CALL_INCIDENT_ID_PRIMARY}/updates`,
+          async ({ request: req }) => {
+            expect(await req.json()).toEqual(update)
+            return HttpResponse.json(response)
+          }
+        ),
+        http.post(
+          `${API_BASE}/on-call/incidents/${ON_CALL_INCIDENT_ID_PRIMARY}/update-requests`,
+          async ({ request: req }) => {
+            expect(await req.json()).toEqual(request)
+            return HttpResponse.json(response)
+          }
+        ),
+        http.post(
+          `${API_BASE}/on-call/incidents/${ON_CALL_INCIDENT_ID_PRIMARY}/update-reminders/pause`,
+          async ({ request: req }) => {
+            expect(await req.json()).toEqual({ expectedVersion: 6 })
+            return HttpResponse.json(response)
+          }
+        ),
+        http.post(
+          `${API_BASE}/on-call/incidents/${ON_CALL_INCIDENT_ID_PRIMARY}/update-reminders/resume`,
+          async ({ request: req }) => {
+            expect(await req.json()).toEqual({})
+            return HttpResponse.json(response)
+          }
+        )
+      )
+
+      expect(await api.publishOnCallIncidentUpdate(ON_CALL_INCIDENT_ID_PRIMARY, update)).toEqual(response)
+      expect(await api.requestOnCallIncidentUpdate(ON_CALL_INCIDENT_ID_PRIMARY, request)).toEqual(response)
+      expect(
+        await api.pauseOnCallIncidentUpdateReminders(ON_CALL_INCIDENT_ID_PRIMARY, { expectedVersion: 6 })
+      ).toEqual(response)
+      expect(await api.resumeOnCallIncidentUpdateReminders(ON_CALL_INCIDENT_ID_PRIMARY)).toEqual(response)
+    })
+  })
+
   describe('resolveOnCallIncident', () => {
     it('sends POST with optional note to resolve on-call incident', async () => {
       const mock = { id: ON_CALL_INCIDENT_ID_PRIMARY, status: 'RESOLVED' }
