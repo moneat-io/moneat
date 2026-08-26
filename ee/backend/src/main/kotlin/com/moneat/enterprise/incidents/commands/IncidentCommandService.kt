@@ -239,6 +239,7 @@ class IncidentCommandService(
         }
         command.onCallAlertId?.let { alertId ->
             linkAlertRecord(incidentId, alertId)
+            incidentAlertTimelineBridge.backfill(incidentId, alertId)
             val alert = requireAlert(command.actor.organizationId, alertId)
             insertSourceLink(
                 command.actor,
@@ -1037,8 +1038,11 @@ class IncidentCommandService(
 
         val now = Clock.System.now()
         when (source.sourceType) {
-            com.moneat.enterprise.incidents.models.IncidentSourceType.ON_CALL_ALERT ->
-                linkAlertRecord(command.incidentId, checkNotNull(source.onCallAlertId))
+            com.moneat.enterprise.incidents.models.IncidentSourceType.ON_CALL_ALERT -> {
+                val alertId = checkNotNull(source.onCallAlertId)
+                linkAlertRecord(command.incidentId, alertId)
+                incidentAlertTimelineBridge.backfill(command.incidentId, alertId)
+            }
             com.moneat.enterprise.incidents.models.IncidentSourceType.ALERT_EPISODE ->
                 linkAlertEpisodeRecord(command, checkNotNull(source.alertEpisodeId), now)
             else -> Unit

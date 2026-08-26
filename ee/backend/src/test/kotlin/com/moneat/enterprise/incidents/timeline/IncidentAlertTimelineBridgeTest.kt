@@ -10,7 +10,10 @@ import com.moneat.enterprise.incidents.commands.DeclareIncidentCommand
 import com.moneat.enterprise.incidents.commands.IncidentCommandActor
 import com.moneat.enterprise.incidents.commands.IncidentCommandPolicy
 import com.moneat.enterprise.incidents.commands.IncidentCommandService
+import com.moneat.enterprise.incidents.commands.IncidentSourceReference
 import com.moneat.enterprise.incidents.commands.LinkOnCallAlertCommand
+import com.moneat.enterprise.incidents.commands.LinkIncidentSourceCommand
+import com.moneat.enterprise.incidents.models.IncidentSourceType
 import com.moneat.enterprise.oncall.models.OnCallAlertTimeline
 import com.moneat.enterprise.oncall.models.OnCallAlerts
 import com.moneat.enterprise.oncall.models.OnCallIncidentTimeline
@@ -135,6 +138,67 @@ class IncidentAlertTimelineBridgeTest {
             assertEquals(1, entries.size)
             assertEquals("INTEGRATION", entries.single()[OnCallIncidentTimeline.provenance])
             assertTrue(entries.single()[OnCallIncidentTimeline.eventKey].startsWith("on-call-escalation:"))
+        }
+    }
+
+    @Test
+    fun `backfills alert events when declaration links the alert`() {
+        val alertId = seedAlert()
+        seedAlertTimeline(alertId, "ACKNOWLEDGED", Instant.parse("2026-08-25T00:03:00Z"))
+
+        val incident = IncidentCommandService(policy = IncidentCommandPolicy.allowForTests()).execute(
+            DeclareIncidentCommand(
+                commandKey = "declare-linked-alert",
+                actor = actor(),
+                title = "Checkout unavailable",
+                description = null,
+                severity = "SEV-2",
+                onCallAlertId = alertId,
+            ),
+        ).incidentId
+
+        transaction {
+            assertEquals(
+                1,
+                OnCallIncidentTimeline.selectAll().where {
+                    (OnCallIncidentTimeline.incidentId eq incident) and
+                        (OnCallIncidentTimeline.eventType eq "ALERT_ACKNOWLEDGED")
+                }.count(),
+            )
+        }
+    }
+
+    @Test
+    fun `backfills alert events when a source link links the alert`() {
+        val alertId = seedAlert()
+        seedAlertTimeline(alertId, "RESOLVED", Instant.parse("2026-08-25T00:04:00Z"))
+        val incident = declareIncident()
+        val alertResourceId = transaction {
+            OnCallAlerts.selectAll().where { OnCallAlerts.id eq alertId }.single()[OnCallAlerts.resourceId].toString()
+        }
+
+        IncidentCommandService(policy = IncidentCommandPolicy.allowForTests()).execute(
+            LinkIncidentSourceCommand(
+                commandKey = "link-source-alert",
+                actor = actor(),
+                incidentId = incident,
+                source = IncidentSourceReference(
+                    sourceType = IncidentSourceType.ON_CALL_ALERT,
+                    sourceKey = alertResourceId,
+                    onCallAlertId = alertId,
+                ),
+                expectedVersion = 1,
+            ),
+        )
+
+        transaction {
+            assertEquals(
+                1,
+                OnCallIncidentTimeline.selectAll().where {
+                    (OnCallIncidentTimeline.incidentId eq incident) and
+                        (OnCallIncidentTimeline.eventType eq "ALERT_RESOLVED")
+                }.count(),
+            )
         }
     }
 

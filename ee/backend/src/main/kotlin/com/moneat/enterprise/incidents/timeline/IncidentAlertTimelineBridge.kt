@@ -56,13 +56,25 @@ class IncidentAlertTimelineBridge(
             .where { OnCallAlertTimeline.alertId eq alertId }
             .toList()
         events.forEach { record(linked[OnCallIncidentAlerts.incidentId], alert, it) }
-        val executionIds = EscalationExecutionStates.selectAll()
+        val executions = EscalationExecutionStates.selectAll()
             .where { EscalationExecutionStates.alertId eq alertId }
-            .map { it[EscalationExecutionStates.id].value }
-        val escalationEvents = EscalationExecutionEvents.selectAll()
-            .where { EscalationExecutionEvents.executionId inList executionIds }
             .toList()
-        escalationEvents.forEach { record(linked[OnCallIncidentAlerts.incidentId], alert, it) }
+        val executionsById = executions.associateBy { it[EscalationExecutionStates.id].value }
+        val escalationEvents = if (executionsById.isEmpty()) {
+            emptyList()
+        } else {
+            EscalationExecutionEvents.selectAll()
+                .where { EscalationExecutionEvents.executionId inList executionsById.keys }
+                .toList()
+        }
+        escalationEvents.forEach { event ->
+            record(
+                linked[OnCallIncidentAlerts.incidentId],
+                alert,
+                event,
+                executionsById.getValue(event[EscalationExecutionEvents.executionId]),
+            )
+        }
         events.size + escalationEvents.size
     }
 
