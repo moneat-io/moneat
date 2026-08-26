@@ -71,7 +71,6 @@ import com.moneat.enterprise.oncall.services.PriorityService
 import com.moneat.enterprise.oncall.services.PushNotificationService
 import com.moneat.enterprise.oncall.services.ShiftChangeNotifier
 import com.moneat.enterprise.oncall.services.SlackUserGroupSyncService
-import com.moneat.enterprise.oncall.models.OnCallIncidents
 import com.moneat.mcp.McpToolContributor
 import com.moneat.mcp.protocol.McpToolRegistry
 import com.moneat.notifications.services.SlackService
