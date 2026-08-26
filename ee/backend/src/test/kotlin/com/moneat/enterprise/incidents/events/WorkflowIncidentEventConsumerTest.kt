@@ -96,6 +96,7 @@ class WorkflowIncidentEventConsumerTest {
                     role = "Incident role",
                     assignee = null,
                     action = "assign_role",
+                    eventResourceId = "event-resource-id",
                 ),
             )
         }

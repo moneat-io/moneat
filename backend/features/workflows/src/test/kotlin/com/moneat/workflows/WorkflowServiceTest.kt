@@ -1568,12 +1568,19 @@ class WorkflowServiceTest {
                     role = "Incident Commander",
                     assignee = "user-resource",
                     action = "assigned",
+                    eventResourceId = "event-resource-id",
                 )
             service.publishDeclaredIncidentRoleChanged(change)
             service.publishDeclaredIncidentRoleChanged(change)
+            service.publishDeclaredIncidentRoleChanged(change.copy(eventResourceId = "event-resource-id-2"))
 
             assertEquals(
-                listOf("incident.id=$incidentResourceId|incident.role_action=assigned"),
+                listOf(
+                    "incident.id=$incidentResourceId|incident.role_action=assigned|" +
+                        "incident.role_event_id=event-resource-id",
+                    "incident.id=$incidentResourceId|incident.role_action=assigned|" +
+                        "incident.role_event_id=event-resource-id-2",
+                ),
                 runIdentities(workflow.id),
             )
         }

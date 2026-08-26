@@ -182,19 +182,27 @@ class WorkflowStepRenderer {
     private fun incidentSampleScope(triggerName: String): Map<String, String> {
         val status = when (triggerName) {
             INCIDENT_RESOLVED_TRIGGER -> "resolved"
+            INCIDENT_ROLE_CHANGED_TRIGGER -> "role_changed"
             else -> "created"
         }
-        return mapOf(
+        val baseScope = mapOf(
             "incident.id" to SAMPLE_INCIDENT_ID,
             "incident.kind" to "native_incident",
             "incident.title" to "Checkout latency incident",
             "incident.status" to status,
             "incident.severity" to IncidentSeverity.SEV1.wire,
-            "incident.role" to "Incident Commander",
-            "incident.assignee" to SAMPLE_USER_ID,
-            "incident.role_action" to if (triggerName == INCIDENT_ROLE_CHANGED_TRIGGER) "assigned" else "",
             ORGANIZATION_ID_REFERENCE to SAMPLE_ORGANIZATION_ID
         )
+        return if (triggerName == INCIDENT_ROLE_CHANGED_TRIGGER) {
+            baseScope + mapOf(
+                "incident.role" to "Incident Commander",
+                "incident.assignee" to SAMPLE_USER_ID,
+                "incident.role_action" to "assign_role",
+                "incident.role_event_id" to "123e4567-e89b-12d3-a456-426614170006",
+            )
+        } else {
+            baseScope
+        }
     }
 
     private fun securitySampleScope(): Map<String, String> =

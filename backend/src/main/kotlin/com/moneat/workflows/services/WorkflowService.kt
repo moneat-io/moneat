@@ -60,6 +60,7 @@ import com.moneat.workflows.models.ALERT_NOTIFICATION_SEQUENCE_REFERENCE
 import com.moneat.workflows.models.ALERT_OPENED_AT_REFERENCE
 import com.moneat.workflows.models.INCIDENT_ASSIGNEE_REFERENCE
 import com.moneat.workflows.models.INCIDENT_ROLE_ACTION_REFERENCE
+import com.moneat.workflows.models.INCIDENT_ROLE_EVENT_ID_REFERENCE
 import com.moneat.workflows.models.INCIDENT_ROLE_REFERENCE
 import com.moneat.workflows.models.CreateWorkflowRequest
 import com.moneat.workflows.models.ManualWorkflowRunRequest
@@ -168,6 +169,7 @@ data class DeclaredIncidentRoleChange(
     val role: String,
     val assignee: String?,
     val action: String,
+    val eventResourceId: String,
 )
 
 class WorkflowService(
@@ -1653,6 +1655,7 @@ class WorkflowService(
             INCIDENT_ROLE_REFERENCE to change.role,
             INCIDENT_ASSIGNEE_REFERENCE to change.assignee.orEmpty(),
             INCIDENT_ROLE_ACTION_REFERENCE to change.action,
+            INCIDENT_ROLE_EVENT_ID_REFERENCE to change.eventResourceId,
             ORGANIZATION_ID_REFERENCE to organizationResourceId(change.organizationId),
         ).typedWorkflowScope()
     }

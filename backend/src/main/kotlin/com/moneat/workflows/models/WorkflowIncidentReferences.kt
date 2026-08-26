@@ -19,3 +19,4 @@ package com.moneat.workflows.models
 internal const val INCIDENT_ROLE_REFERENCE = "incident.role"
 internal const val INCIDENT_ASSIGNEE_REFERENCE = "incident.assignee"
 internal const val INCIDENT_ROLE_ACTION_REFERENCE = "incident.role_action"
+internal const val INCIDENT_ROLE_EVENT_ID_REFERENCE = "incident.role_event_id"

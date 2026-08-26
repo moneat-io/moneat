@@ -63,10 +63,11 @@ class WorkflowCatalogTest {
 
         assertEquals("When an incident role changes", trigger.label)
         assertEquals(
-            listOf("incident.id", "incident.role_action"),
+            listOf("incident.id", "incident.role_action", "incident.role_event_id"),
             trigger.defaultOnceForTemplate,
         )
         assertTrue(trigger.scope.any { it.name == "incident.role" && it.type == "String" })
         assertTrue(trigger.scope.any { it.name == "incident.assignee" && it.type == "String" })
+        assertTrue(trigger.scope.any { it.name == "incident.role_event_id" && it.type == "String" })
     }
 }

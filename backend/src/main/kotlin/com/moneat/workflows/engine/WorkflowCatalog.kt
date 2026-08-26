@@ -33,6 +33,7 @@ import com.moneat.workflows.models.ALERT_NOTIFICATION_SEQUENCE_REFERENCE
 import com.moneat.workflows.models.ALERT_OPENED_AT_REFERENCE
 import com.moneat.workflows.models.INCIDENT_ASSIGNEE_REFERENCE
 import com.moneat.workflows.models.INCIDENT_ROLE_ACTION_REFERENCE
+import com.moneat.workflows.models.INCIDENT_ROLE_EVENT_ID_REFERENCE
 import com.moneat.workflows.models.INCIDENT_ROLE_REFERENCE
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -309,6 +310,7 @@ object WorkflowCatalog {
         WorkflowScopeReferenceDefinition(INCIDENT_ROLE_REFERENCE, "Incident role", "String"),
         WorkflowScopeReferenceDefinition(INCIDENT_ASSIGNEE_REFERENCE, "Role assignee", "String"),
         WorkflowScopeReferenceDefinition(INCIDENT_ROLE_ACTION_REFERENCE, "Role action", "String"),
+        WorkflowScopeReferenceDefinition(INCIDENT_ROLE_EVENT_ID_REFERENCE, "Role event ID", "String"),
         WorkflowScopeReferenceDefinition(ALERT_DEDUPLICATION_KEY_REFERENCE, DEDUPLICATION_KEY_LABEL, "String"),
         WorkflowScopeReferenceDefinition(ALERT_EPISODE_ID_REFERENCE, "Episode ID", "String"),
         WorkflowScopeReferenceDefinition(ALERT_EPISODE_KEY_REFERENCE, "Episode key", "String"),
@@ -404,7 +406,11 @@ object WorkflowCatalog {
             label = "When an incident role changes",
             description = "Runs when an incident role is assigned, claimed, handed over, or unassigned.",
             scope = incidentScope,
-            defaultOnceForTemplate = listOf(INCIDENT_ID_REFERENCE, INCIDENT_ROLE_ACTION_REFERENCE)
+            defaultOnceForTemplate = listOf(
+                INCIDENT_ID_REFERENCE,
+                INCIDENT_ROLE_ACTION_REFERENCE,
+                INCIDENT_ROLE_EVENT_ID_REFERENCE,
+            )
         ),
         WorkflowTriggerDefinition(
             name = "security.signal",

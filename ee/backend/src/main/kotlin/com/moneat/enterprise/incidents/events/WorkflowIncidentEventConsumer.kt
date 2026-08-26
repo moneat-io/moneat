@@ -52,6 +52,7 @@ class WorkflowIncidentEventConsumer(
                 role = payload["role"]?.jsonPrimitive?.contentOrNull ?: "Incident role",
                 assignee = payload["assigneeUserId"]?.jsonPrimitive?.contentOrNull,
                 action = eventType.removePrefix("INCIDENT_").lowercase(),
+                eventResourceId = resourceId,
             ),
         )
     }
