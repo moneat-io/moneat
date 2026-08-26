@@ -467,6 +467,7 @@ tasks.jacocoTestReport {
     val enterpriseClasses =
         fileTree(eeProject.layout.buildDirectory.dir("classes/kotlin/main")) {
             include("com/moneat/enterprise/incidents/announcements/**")
+            include("com/moneat/enterprise/incidents/updates/IncidentUpdateReminderService*")
         }
     classDirectories.setFrom(files(backendFiltered, enterpriseClasses))
 

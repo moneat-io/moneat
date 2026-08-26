@@ -13,6 +13,9 @@ import com.moneat.enterprise.incidents.models.NativeIncidentSourceLinks
 import com.moneat.enterprise.incidents.models.NativeIncidentStatus
 import com.moneat.enterprise.incidents.models.NativeIncidentVisibility
 import com.moneat.enterprise.incidents.models.IncidentSourceType
+import com.moneat.enterprise.incidents.models.IncidentUpdateRequestStatus
+import com.moneat.enterprise.incidents.models.NativeIncidentUpdateRequests
+import com.moneat.enterprise.incidents.updates.IncidentUpdateReminderService
 import com.moneat.enterprise.oncall.models.OnCallAlerts
 import com.moneat.enterprise.oncall.models.OnCallIncidentAlerts
 import com.moneat.enterprise.oncall.models.OnCallIncidentTimeline
@@ -26,6 +29,7 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -34,6 +38,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.minutes
 import kotlin.uuid.Uuid
 
 class IncidentCommandServiceTest {
@@ -130,6 +135,153 @@ class IncidentCommandServiceTest {
         }
         transaction {
             assertEquals(0, OnCallIncidents.selectAll().count())
+        }
+    }
+
+    @Test
+    fun `publishes structured updates and fulfils the active update request`() {
+        val declared = service.execute(declareCommand("structured-update", actor()))
+        val dueAt = Clock.System.now().plus(5.minutes)
+        val requested = service.execute(
+            RequestIncidentUpdateCommand(
+                commandKey = "request-structured-update",
+                actor = actor(),
+                incidentId = declared.incidentId,
+                message = "Share customer impact and mitigation progress",
+                dueAt = dueAt,
+                expectedVersion = 1,
+            ),
+        )
+        assertEquals(2, requested.version)
+
+        val updated = service.execute(
+            UpdateIncidentCommand(
+                commandKey = "publish-structured-update",
+                actor = actor(),
+                incidentId = declared.incidentId,
+                expectedVersion = 2,
+                message = "Mitigation is rolling out",
+                customerImpact = "Checkout requests fail for a subset of customers",
+                nextUpdateAt = dueAt,
+                status = NativeIncidentStatus.RESOLVED,
+            ),
+        )
+
+        assertEquals(NativeIncidentStatus.RESOLVED, updated.status)
+        transaction {
+            val incident = OnCallIncidents.selectAll().where { OnCallIncidents.id eq declared.incidentId }.single()
+            assertEquals("Mitigation is rolling out", incident[OnCallIncidents.summary])
+            assertEquals("Checkout requests fail for a subset of customers", incident[OnCallIncidents.customerImpact])
+            assertEquals(
+                dueAt.toString().substringBefore('.'),
+                incident[OnCallIncidents.nextUpdateAt]?.toString()?.substringBefore('.'),
+            )
+            assertEquals(NativeIncidentStatus.RESOLVED.wire, incident[OnCallIncidents.status])
+            assertEquals(
+                IncidentUpdateRequestStatus.FULFILLED.wire,
+                NativeIncidentUpdateRequests.selectAll().single()[NativeIncidentUpdateRequests.status],
+            )
+        }
+    }
+
+    @Test
+    fun `escalates overdue update reminders and stops them when paused`() {
+        val declared = service.execute(declareCommand("reminder-update", actor()))
+        val now = Clock.System.now()
+        service.execute(
+            RequestIncidentUpdateCommand(
+                commandKey = "request-reminder-update",
+                actor = actor(),
+                incidentId = declared.incidentId,
+                dueAt = now.minus(1.minutes),
+                expectedVersion = 1,
+            ),
+        )
+
+        val reminderService = IncidentUpdateReminderService()
+        assertEquals(1, reminderService.processDue(now))
+        transaction {
+            val request = NativeIncidentUpdateRequests.selectAll().single()
+            assertEquals(1, request[NativeIncidentUpdateRequests.escalationLevel])
+            assertNotNull(request[NativeIncidentUpdateRequests.lastRemindedAt])
+            assertEquals(
+                "INCIDENT_UPDATE_REMINDER",
+                NativeIncidentOutboxEvents.selectAll()
+                    .where { NativeIncidentOutboxEvents.eventType eq "INCIDENT_UPDATE_REMINDER" }
+                    .single()[NativeIncidentOutboxEvents.eventType],
+            )
+        }
+
+        val paused = service.execute(
+            PauseIncidentUpdateRemindersCommand(
+                commandKey = "pause-reminder-update",
+                actor = actor(),
+                incidentId = declared.incidentId,
+                paused = true,
+                expectedVersion = 3,
+            ),
+        )
+        assertEquals(4, paused.version)
+        transaction {
+            assertEquals(
+                IncidentUpdateRequestStatus.PAUSED.wire,
+                NativeIncidentUpdateRequests.selectAll().single()[NativeIncidentUpdateRequests.status],
+            )
+            assertTrue(OnCallIncidents.selectAll().single()[OnCallIncidents.updateReminderPaused])
+        }
+    }
+
+    @Test
+    fun `reminder processing pauses and cancels overdue requests from incident state`() {
+        val now = Clock.System.now()
+        val pausedIncident = service.execute(declareCommand("paused-reminder", actor()))
+        service.execute(
+            RequestIncidentUpdateCommand(
+                commandKey = "request-paused-reminder",
+                actor = actor(),
+                incidentId = pausedIncident.incidentId,
+                dueAt = now.minus(1.minutes),
+                expectedVersion = 1,
+            ),
+        )
+        transaction {
+            OnCallIncidents.update({ OnCallIncidents.id eq pausedIncident.incidentId }) {
+                it[OnCallIncidents.updateReminderPaused] = true
+            }
+        }
+
+        val reminderService = IncidentUpdateReminderService()
+        assertEquals(0, reminderService.processDue(now))
+        transaction {
+            assertEquals(
+                IncidentUpdateRequestStatus.PAUSED.wire,
+                NativeIncidentUpdateRequests.selectAll().single()[NativeIncidentUpdateRequests.status],
+            )
+        }
+
+        val terminalIncident = service.execute(declareCommand("terminal-reminder", actor()))
+        service.execute(
+            RequestIncidentUpdateCommand(
+                commandKey = "request-terminal-reminder",
+                actor = actor(),
+                incidentId = terminalIncident.incidentId,
+                dueAt = now.minus(1.minutes),
+                expectedVersion = 1,
+            ),
+        )
+        transaction {
+            OnCallIncidents.update({ OnCallIncidents.id eq terminalIncident.incidentId }) {
+                it[OnCallIncidents.status] = NativeIncidentStatus.RESOLVED.wire
+            }
+        }
+
+        assertEquals(0, reminderService.processDue(now))
+        transaction {
+            val requests = NativeIncidentUpdateRequests.selectAll().toList()
+            assertEquals(
+                IncidentUpdateRequestStatus.CANCELLED.wire,
+                requests.last()[NativeIncidentUpdateRequests.status],
+            )
         }
     }
 

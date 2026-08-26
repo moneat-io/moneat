@@ -23,6 +23,8 @@ import com.moneat.enterprise.incidents.models.NativeIncidentRoleAssignments
 import com.moneat.enterprise.incidents.models.NativeIncidentRoleDefinitions
 import com.moneat.enterprise.incidents.models.NativeIncidentSourceLinks
 import com.moneat.enterprise.incidents.models.NativeIncidentStatus
+import com.moneat.enterprise.incidents.models.IncidentUpdateRequestStatus
+import com.moneat.enterprise.incidents.models.NativeIncidentUpdateRequests
 import com.moneat.enterprise.incidents.timeline.IncidentTimelineWriter
 import com.moneat.enterprise.incidents.timeline.PendingIncidentTimelineEvent
 import com.moneat.enterprise.incidents.timeline.toIncidentTimelineProvenance
@@ -50,6 +52,7 @@ import org.jetbrains.exposed.v1.jdbc.update
 import org.postgresql.util.PSQLException
 import java.net.URI
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.minutes
 import kotlin.uuid.Uuid
 
 class IncidentCommandService(
@@ -105,6 +108,8 @@ class IncidentCommandService(
             is DeclineIncidentCommand -> transition(command, NativeIncidentStatus.DECLINED, command.reason)
             is MergeIncidentCommand -> merge(command)
             is UpdateIncidentCommand -> update(command)
+            is RequestIncidentUpdateCommand -> requestUpdate(command)
+            is PauseIncidentUpdateRemindersCommand -> pauseUpdateReminders(command)
             is TransitionIncidentCommand -> transition(command, command.targetStatus, command.note)
             else -> applySupportingCommand(command)
         }
@@ -264,37 +269,212 @@ class IncidentCommandService(
 
     private fun update(command: UpdateIncidentCommand): IncidentMutation {
         val current = requireIncident(command)
-        val severity = command.severity?.let(::requireSeverity)
-        command.title?.let {
-            require(it.isNotBlank()) { "Incident title is required" }
-            require(it.trim().length <= MAX_TITLE_LENGTH) { "Incident title is too long" }
-        }
+        val prepared = prepareUpdate(command, current)
         val now = Clock.System.now()
         val nextVersion = current[OnCallIncidents.version] + 1
         val updated =
             OnCallIncidents.update({ versionPredicate(command, current) }) {
-                command.title?.let { value -> it[title] = value.trim() }
-                command.description?.let { value -> it[description] = value.trim().takeIf(String::isNotEmpty) }
-                command.summary?.let { value -> it[summary] = value.trim().takeIf(String::isNotEmpty) }
-                severity?.let { value -> it[OnCallIncidents.severity] = value }
-                command.mode?.let { value -> it[mode] = value.wire }
-                command.visibility?.let { value -> it[visibility] = value.wire }
-                command.incidentType?.let { value -> it[incidentType] = value.trim().takeIf(String::isNotEmpty) }
+                applyUpdateFields(it, command, prepared, now)
                 it[version] = nextVersion
                 it[updatedAt] = now
             }
         requireVersionUpdate(updated, command.incidentId)
+        fulfillUpdateRequests(command.actor.organizationId, command.incidentId, now)
+        command.pauseUpdateReminders?.let { paused ->
+            setUpdateRequestStatus(
+                UpdateRequestStatusChange(
+                    organizationId = command.actor.organizationId,
+                    incidentId = command.incidentId,
+                    from = if (paused) IncidentUpdateRequestStatus.OPEN else IncidentUpdateRequestStatus.PAUSED,
+                    to = if (paused) IncidentUpdateRequestStatus.PAUSED else IncidentUpdateRequestStatus.OPEN,
+                    now = now,
+                    dueAt = command.nextUpdateAt,
+                ),
+            )
+        }
         insertTimelineEvent(
             command,
             CommandTimelineEvent(
                 command.incidentId,
                 command.commandKey,
                 "UPDATED",
-                mapOf("origin" to JsonPrimitive(command.actor.origin)),
+                buildMap {
+                    put("origin", JsonPrimitive(command.actor.origin))
+                    prepared.targetStatus?.let { put("status", JsonPrimitive(it.wire)) }
+                    prepared.message?.let { put("message", JsonPrimitive(it)) }
+                    prepared.customerImpact?.let { put("customerImpact", JsonPrimitive(it)) }
+                    prepared.nextUpdateAt?.let { put("nextUpdateAt", JsonPrimitive(it.toString())) }
+                },
                 now,
             ),
         )
         return loadMutation(command.incidentId)
+    }
+
+    private fun prepareUpdate(command: UpdateIncidentCommand, current: ResultRow): PreparedIncidentUpdate {
+        val currentStatus = statusOf(current)
+        val targetStatus = command.status
+        if (targetStatus != null && targetStatus != currentStatus) {
+            requireTransitionAllowed(currentStatus, targetStatus)
+            require(currentStatus != NativeIncidentStatus.TRIAGE) {
+                "Triage incidents must be accepted before their lifecycle status can be changed"
+            }
+        }
+        command.title?.let {
+            require(it.isNotBlank()) { "Incident title is required" }
+            require(it.trim().length <= MAX_TITLE_LENGTH) { "Incident title is too long" }
+        }
+        val message = command.message?.trim()?.takeIf(String::isNotEmpty)
+        val customerImpact = command.customerImpact?.trim()?.takeIf(String::isNotEmpty)
+        require(message == null || message.length <= MAX_UPDATE_MESSAGE_LENGTH) {
+            "Incident update message is too long"
+        }
+        require(customerImpact == null || customerImpact.length <= MAX_CUSTOMER_IMPACT_LENGTH) {
+            "Customer impact is too long"
+        }
+        return PreparedIncidentUpdate(
+            severity = command.severity?.let(::requireSeverity),
+            message = message,
+            customerImpact = customerImpact,
+            nextUpdateAt = when {
+                command.clearNextUpdateAt -> null
+                command.nextUpdateAt != null -> command.nextUpdateAt
+                else -> current[OnCallIncidents.nextUpdateAt]
+            },
+            targetStatus = targetStatus,
+        )
+    }
+
+    private fun applyUpdateFields(
+        statement: UpdateBuilder<*>,
+        command: UpdateIncidentCommand,
+        prepared: PreparedIncidentUpdate,
+        now: kotlin.time.Instant,
+    ) {
+        command.title?.let { statement[OnCallIncidents.title] = it.trim() }
+        command.description?.let { statement[OnCallIncidents.description] = it.trim().takeIf(String::isNotEmpty) }
+        command.summary?.let { statement[OnCallIncidents.summary] = it.trim().takeIf(String::isNotEmpty) }
+        prepared.message?.let { statement[OnCallIncidents.summary] = it }
+        prepared.severity?.let { statement[OnCallIncidents.severity] = it }
+        prepared.customerImpact?.let { statement[OnCallIncidents.customerImpact] = it }
+        statement[OnCallIncidents.nextUpdateAt] = prepared.nextUpdateAt
+        command.pauseUpdateReminders?.let { statement[OnCallIncidents.updateReminderPaused] = it }
+        statement[OnCallIncidents.lastUpdateAt] = now
+        prepared.targetStatus?.let {
+            statement[OnCallIncidents.status] = it.wire
+            applyStatusTimestamps(statement, it, command.actor.userId, now)
+        }
+        command.mode?.let { statement[OnCallIncidents.mode] = it.wire }
+        command.visibility?.let { statement[OnCallIncidents.visibility] = it.wire }
+        command.incidentType?.let { statement[OnCallIncidents.incidentType] = it.trim().takeIf(String::isNotEmpty) }
+    }
+
+    private fun requestUpdate(command: RequestIncidentUpdateCommand): IncidentMutation {
+        requireIncident(command)
+        val now = Clock.System.now()
+        val dueAt = command.dueAt ?: now.plus(DEFAULT_UPDATE_REQUEST_DELAY)
+        require(command.message?.length ?: 0 <= MAX_UPDATE_MESSAGE_LENGTH) {
+            "Incident update request message is too long"
+        }
+        cancelActiveUpdateRequests(command.actor.organizationId, command.incidentId, now)
+        NativeIncidentUpdateRequests.insert {
+            it[resourceId] = Uuid.random()
+            it[organizationId] = command.actor.organizationId
+            it[incidentId] = command.incidentId
+            it[requestedBy] = command.actor.userId
+            it[message] = command.message?.trim()?.takeIf(String::isNotEmpty)
+            it[NativeIncidentUpdateRequests.dueAt] = dueAt
+            it[status] = IncidentUpdateRequestStatus.OPEN.wire
+            it[escalationLevel] = 0
+            it[lastRemindedAt] = null
+            it[fulfilledAt] = null
+            it[createdAt] = now
+            it[updatedAt] = now
+        }
+        return appendVersionedEvent(
+            command,
+            "UPDATE_REQUESTED",
+            buildMap {
+                command.message?.trim()?.takeIf(String::isNotEmpty)?.let { put("message", JsonPrimitive(it)) }
+                put("dueAt", JsonPrimitive(dueAt.toString()))
+            },
+        )
+    }
+
+    private fun pauseUpdateReminders(command: PauseIncidentUpdateRemindersCommand): IncidentMutation {
+        val current = requireIncident(command)
+        val now = Clock.System.now()
+        val nextVersion = current[OnCallIncidents.version] + 1
+        val target = if (command.paused) IncidentUpdateRequestStatus.PAUSED else IncidentUpdateRequestStatus.OPEN
+        val updated = OnCallIncidents.update({ versionPredicate(command, current) }) {
+            it[OnCallIncidents.updateReminderPaused] = command.paused
+            it[version] = nextVersion
+            it[updatedAt] = now
+        }
+        requireVersionUpdate(updated, command.incidentId)
+        setUpdateRequestStatus(
+            UpdateRequestStatusChange(
+                organizationId = command.actor.organizationId,
+                incidentId = command.incidentId,
+                from = if (command.paused) IncidentUpdateRequestStatus.OPEN else IncidentUpdateRequestStatus.PAUSED,
+                to = target,
+                now = now,
+                dueAt = command.rescheduleAt,
+            ),
+        )
+        val details = buildMap {
+            put("paused", JsonPrimitive(command.paused))
+            command.rescheduleAt?.let { put("rescheduleAt", JsonPrimitive(it.toString())) }
+        } + ("origin" to JsonPrimitive(command.actor.origin))
+        insertTimelineEvent(
+            command,
+            CommandTimelineEvent(
+                command.incidentId,
+                command.commandKey,
+                "UPDATE_REMINDERS_${if (command.paused) "PAUSED" else "RESUMED"}",
+                details,
+                now,
+            ),
+        )
+        return loadMutation(command.incidentId)
+    }
+
+    private fun fulfillUpdateRequests(organizationId: Int, incidentId: Int, now: kotlin.time.Instant) {
+        NativeIncidentUpdateRequests.update({
+            (NativeIncidentUpdateRequests.organizationId eq organizationId) and
+                (NativeIncidentUpdateRequests.incidentId eq incidentId) and
+                (NativeIncidentUpdateRequests.status eq IncidentUpdateRequestStatus.OPEN.wire)
+        }) {
+            it[status] = IncidentUpdateRequestStatus.FULFILLED.wire
+            it[fulfilledAt] = now
+            it[updatedAt] = now
+        }
+    }
+
+    private fun setUpdateRequestStatus(change: UpdateRequestStatusChange) {
+        NativeIncidentUpdateRequests.update({
+            (NativeIncidentUpdateRequests.organizationId eq change.organizationId) and
+                (NativeIncidentUpdateRequests.incidentId eq change.incidentId) and
+                (NativeIncidentUpdateRequests.status eq change.from.wire)
+        }) {
+            it[status] = change.to.wire
+            change.dueAt?.let { value -> it[NativeIncidentUpdateRequests.dueAt] = value }
+            it[updatedAt] = change.now
+        }
+    }
+
+    private fun cancelActiveUpdateRequests(organizationId: Int, incidentId: Int, now: kotlin.time.Instant) {
+        NativeIncidentUpdateRequests.update({
+            (NativeIncidentUpdateRequests.organizationId eq organizationId) and
+                (NativeIncidentUpdateRequests.incidentId eq incidentId) and
+                (NativeIncidentUpdateRequests.status inList listOf(
+                    IncidentUpdateRequestStatus.OPEN.wire,
+                    IncidentUpdateRequestStatus.PAUSED.wire,
+                ))
+        }) {
+            it[status] = IncidentUpdateRequestStatus.CANCELLED.wire
+            it[updatedAt] = now
+        }
     }
 
     private fun transition(
@@ -328,6 +508,15 @@ class IncidentCommandService(
                 applyStatusTimestamps(it, target, command.actor.userId, now)
             }
         requireVersionUpdate(updated, command.incidentId)
+        if (target in setOf(
+                NativeIncidentStatus.RESOLVED,
+                NativeIncidentStatus.CANCELLED,
+                NativeIncidentStatus.DECLINED,
+                NativeIncidentStatus.MERGED,
+                NativeIncidentStatus.CLOSED,
+            )) {
+            cancelActiveUpdateRequests(command.actor.organizationId, command.incidentId, now)
+        }
         insertTimelineEvent(
             command,
             CommandTimelineEvent(
@@ -1387,6 +1576,23 @@ class IncidentCommandService(
         val changed: Boolean,
     )
 
+    private data class PreparedIncidentUpdate(
+        val severity: String?,
+        val message: String?,
+        val customerImpact: String?,
+        val nextUpdateAt: kotlin.time.Instant?,
+        val targetStatus: NativeIncidentStatus?,
+    )
+
+    private data class UpdateRequestStatusChange(
+        val organizationId: Int,
+        val incidentId: Int,
+        val from: IncidentUpdateRequestStatus,
+        val to: IncidentUpdateRequestStatus,
+        val now: kotlin.time.Instant,
+        val dueAt: kotlin.time.Instant?,
+    )
+
     private data class CommandTimelineEvent(
         val incidentId: Int,
         val eventKey: String,
@@ -1400,11 +1606,14 @@ class IncidentCommandService(
         private const val COMMAND_KEY_CONSTRAINT = "uq_native_incident_commands_org_command_key"
         private const val INITIAL_VERSION = 1
         private const val MAX_TITLE_LENGTH = 255
+        private const val MAX_UPDATE_MESSAGE_LENGTH = 2_000
+        private const val MAX_CUSTOMER_IMPACT_LENGTH = 64
         private const val MAX_TIMELINE_EVENT_TYPE_LENGTH = 80
         private const val MAX_SOURCE_KEY_LENGTH = 500
         private const val SEVERITY_REQUIRED_MESSAGE =
             "Incident severity is required before an incident is accepted"
         private val SAFE_EXTERNAL_SOURCE_SCHEMES = setOf("http", "https")
+        private val DEFAULT_UPDATE_REQUEST_DELAY = 30.minutes
 
         private val DECLARABLE_STATUSES = setOf(NativeIncidentStatus.TRIAGE, NativeIncidentStatus.ACTIVE)
 

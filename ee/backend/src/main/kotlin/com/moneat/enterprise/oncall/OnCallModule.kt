@@ -22,6 +22,7 @@ import com.moneat.enterprise.incidents.commands.DeclareIncidentCommand
 import com.moneat.enterprise.incidents.commands.IncidentCommandActor
 import com.moneat.enterprise.incidents.events.IncidentOutboxService
 import com.moneat.enterprise.incidents.events.IncidentOutboxWorker
+import com.moneat.enterprise.incidents.updates.IncidentUpdateReminderWorker
 import com.moneat.enterprise.incidents.events.IncidentResponseEventConsumer
 import com.moneat.enterprise.incidents.events.IncidentAnnouncementEventConsumer
 import com.moneat.enterprise.incidents.events.IncidentSlackChannelEventConsumer
@@ -204,6 +205,7 @@ class OnCallModule :
             )
         }
     private val incidentOutboxWorker by incidentOutboxWorkerDelegate
+    private val incidentUpdateReminderWorker = IncidentUpdateReminderWorker()
     private val alertRouteExecutionService = AlertRouteExecutionService()
     private val alertRouteFanout = EnterpriseAlertRouteFanout(alertRouteExecutionService)
     private val alertRouteRecoveryWorker = AlertRouteRecoveryWorker(alertRouteExecutionService)
@@ -252,6 +254,7 @@ class OnCallModule :
         onCallHandoffService.start()
         shiftChangeNotifier.start()
         incidentOutboxWorker.start()
+        incidentUpdateReminderWorker.start()
     }
 
     override fun stopBackgroundJobs() {
@@ -262,6 +265,7 @@ class OnCallModule :
         if (onCallHandoffServiceDelegate.isInitialized()) onCallHandoffService.stop()
         if (shiftChangeNotifierDelegate.isInitialized()) shiftChangeNotifier.stop()
         if (incidentOutboxWorkerDelegate.isInitialized()) incidentOutboxWorker.stop()
+        incidentUpdateReminderWorker.stop()
     }
 
     // OnCallBridge implementation

@@ -101,6 +101,34 @@ object NativeIncidentCommands : IntIdTable("native_incident_commands") {
     }
 }
 
+enum class IncidentUpdateRequestStatus(val wire: String) {
+    OPEN("OPEN"),
+    FULFILLED("FULFILLED"),
+    PAUSED("PAUSED"),
+    CANCELLED("CANCELLED"),
+}
+
+object NativeIncidentUpdateRequests : IntIdTable("native_incident_update_requests") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
+    val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
+    val incidentId = integer("incident_id").references(OnCallIncidents.id, onDelete = ReferenceOption.CASCADE)
+    val requestedBy = integer("requested_by").references(Users.id, onDelete = ReferenceOption.SET_NULL).nullable()
+    val message = text("message").nullable()
+    val dueAt = timestamp("due_at")
+    val status = varchar("status", 24)
+    val escalationLevel = integer("escalation_level").default(0)
+    val lastRemindedAt = timestamp("last_reminded_at").nullable()
+    val fulfilledAt = timestamp("fulfilled_at").nullable()
+    val createdAt = timestamp("created_at")
+    val updatedAt = timestamp("updated_at")
+
+    init {
+        uniqueIndex(organizationId, resourceId)
+        index(false, organizationId, status, dueAt)
+        index(false, incidentId, status)
+    }
+}
+
 enum class IncidentOutboxStatus(val wire: String) {
     PENDING("PENDING"),
     PROCESSING("PROCESSING"),

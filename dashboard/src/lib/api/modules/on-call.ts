@@ -67,6 +67,9 @@ import type {
   AcceptIncidentInput,
   DeclineIncidentInput,
   MergeIncidentInput,
+  IncidentUpdateInput,
+  IncidentUpdateRequestInput,
+  IncidentUpdateReminderInput,
 } from '../types'
 
 /** Normalize the entitlement and quota payload into a strict, fail-closed shape. */
@@ -389,6 +392,45 @@ export function onCallMethods(core: ApiClientCore) {
         method: 'POST',
         body: JSON.stringify(input),
       }),
+
+    publishOnCallIncidentUpdate: (id: string, input: IncidentUpdateInput) =>
+      core.request<OnCallIncident>(`${base}/on-call/incidents/${encodeURIComponent(id)}/updates`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+
+    requestOnCallIncidentUpdate: (id: string, input: IncidentUpdateRequestInput = {}) =>
+      core.request<OnCallIncident>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/update-requests`,
+        {
+          method: 'POST',
+          body: JSON.stringify(input),
+        }
+      ),
+
+    pauseOnCallIncidentUpdateReminders: (
+      id: string,
+      input: IncidentUpdateReminderInput = {}
+    ) =>
+      core.request<OnCallIncident>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/update-reminders/pause`,
+        {
+          method: 'POST',
+          body: JSON.stringify(input),
+        }
+      ),
+
+    resumeOnCallIncidentUpdateReminders: (
+      id: string,
+      input: IncidentUpdateReminderInput = {}
+    ) =>
+      core.request<OnCallIncident>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/update-reminders/resume`,
+        {
+          method: 'POST',
+          body: JSON.stringify(input),
+        }
+      ),
 
     // Canonical, evidence-preserving incident timeline. Supersedes the legacy
     // merged timeline shape at the same path; entries carry provenance,
