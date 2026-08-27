@@ -5,6 +5,7 @@
 package com.moneat.enterprise.incidents.statuspage
 
 import com.moneat.enterprise.incidents.commands.IncidentCommandActor
+import com.moneat.enterprise.incidents.commands.IncidentCommandConflictException
 import com.moneat.enterprise.incidents.commands.IncidentCommandDeniedException
 import com.moneat.enterprise.incidents.commands.IncidentCommandNotFoundException
 import com.moneat.enterprise.incidents.commands.IncidentCommandService
@@ -76,37 +77,52 @@ class IncidentStatusPageLinkService(
         requireCorrelationKey(request.correlationKey)
 
         val sourceKey = sourceKey(target.statusPageId, request.correlationKey)
-        existingLinkedIncident(target.organizationId, target.incidentId, sourceKey)?.let { linkedId ->
-            return statusPageService.getIncident(target.statusPageId, target.organizationId, linkedId)
-                ?: throw IncidentCommandNotFoundException("Linked status-page incident not found")
-        }
+        return try {
+            transaction {
+                existingLinkedIncident(target.organizationId, target.incidentId, sourceKey)?.let { linkedId ->
+                    return@transaction statusPageService.getIncident(
+                        target.statusPageId,
+                        target.organizationId,
+                        linkedId,
+                    )
+                        ?: throw IncidentCommandNotFoundException("Linked status-page incident not found")
+                }
 
-        val created = statusPageService.createIncident(
-            target.statusPageId,
-            target.organizationId,
-            CreateIncidentRequest(
-                title = request.title.trim(),
-                status = request.status.trim(),
-                impact = request.impact.trim(),
-                message = request.message.trim(),
-            ),
-        )
-        linkAndRecord(
-            LinkRecordRequest(
-                target = target,
-                statusPageIncident = created,
-                sourceKey = sourceKey,
-                sourceUrl = request.sourceUrl,
-                commandKey = commandKey,
-                eventType = "STATUS_PAGE_INCIDENT_CREATED",
-                details = mapOf(
-                    "statusPageIncidentId" to JsonPrimitive(created.id),
-                    "status" to JsonPrimitive(created.status),
-                    "impact" to JsonPrimitive(created.impact),
-                ),
-            ),
-        )
-        return created
+                val statusPageIncidentId = UUID.randomUUID()
+                val created = statusPageService.createIncidentWithId(
+                    target.statusPageId,
+                    target.organizationId,
+                    statusPageIncidentId,
+                    CreateIncidentRequest(
+                        title = request.title.trim(),
+                        status = request.status.trim(),
+                        impact = request.impact.trim(),
+                        message = request.message.trim(),
+                    ),
+                )
+                linkAndRecord(
+                    LinkRecordRequest(
+                        target = target,
+                        statusPageIncident = created,
+                        sourceKey = sourceKey,
+                        sourceUrl = request.sourceUrl,
+                        commandKey = commandKey,
+                        eventType = "STATUS_PAGE_INCIDENT_CREATED",
+                        details = mapOf(
+                            "statusPageIncidentId" to JsonPrimitive(created.id),
+                            "status" to JsonPrimitive(created.status),
+                            "impact" to JsonPrimitive(created.impact),
+                        ),
+                    ),
+                )
+                created
+            }
+        } catch (exception: IncidentCommandConflictException) {
+            existingLinkedIncident(target.organizationId, target.incidentId, sourceKey)?.let { linkedId ->
+                statusPageService.getIncident(target.statusPageId, target.organizationId, linkedId)
+                    ?: throw IncidentCommandNotFoundException("Linked status-page incident not found")
+            } ?: throw exception
+        }
     }
 
     fun update(
@@ -120,6 +136,9 @@ class IncidentStatusPageLinkService(
         requireIncidentAccess(target.organizationId, target.actorUserId, target.incidentId)
         request.title?.let { validateCustomerContent(it, null) }
         request.message?.let { validateCustomerContent(null, it) }
+
+        val source = linkedSource(target.organizationId, target.incidentId, target.statusPageId, statusPageIncidentId)
+            ?: throw IncidentCommandNotFoundException("Status-page incident is not linked to this incident")
 
         val current = statusPageService.getIncident(target.statusPageId, target.organizationId, statusPageIncidentId)
             ?: throw IncidentCommandNotFoundException("Status-page incident not found")
@@ -160,7 +179,6 @@ class IncidentStatusPageLinkService(
             )
         } ?: throw IncidentCommandNotFoundException("Status-page incident not found")
 
-        val source = linkedSource(target.organizationId, target.incidentId, statusPageIncidentId)
         timelineProducer.recordStatusPageChange(
             IncidentTimelineProducerEvent(
                 organizationId = target.organizationId,
@@ -169,8 +187,8 @@ class IncidentStatusPageLinkService(
                 eventType = "STATUS_PAGE_INCIDENT_UPDATED",
                 originalOccurredAt = Clock.System.now(),
                 actorUserId = target.actorUserId,
-                sourceReference = source?.sourceKey ?: "status-page:$statusPageIncidentId",
-                sourceUrl = source?.sourceUrl,
+                sourceReference = source.sourceKey,
+                sourceUrl = source.sourceUrl,
                 details = mapOf(
                     "statusPageIncidentId" to JsonPrimitive(updated.id),
                     "status" to JsonPrimitive(updated.status),
@@ -237,6 +255,7 @@ class IncidentStatusPageLinkService(
     private fun linkedSource(
         organizationId: Int,
         incidentId: Int,
+        statusPageId: UUID,
         statusPageIncidentId: UUID,
     ): LinkedSource? = transaction {
         NativeIncidentSourceLinks
@@ -251,7 +270,14 @@ class IncidentStatusPageLinkService(
                     ?.let { (it as? JsonPrimitive)?.content }
                     ?.let { runCatching { UUID.fromString(it) }.getOrNull() }
                 if (linkedId == statusPageIncidentId) {
-                    LinkedSource(row[NativeIncidentSourceLinks.sourceKey], row[NativeIncidentSourceLinks.sourceUrl])
+                    val linkedPageId = row[NativeIncidentSourceLinks.metadata]["statusPageId"]
+                        ?.let { (it as? JsonPrimitive)?.content }
+                        ?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+                    if (linkedPageId == statusPageId) {
+                        LinkedSource(row[NativeIncidentSourceLinks.sourceKey], row[NativeIncidentSourceLinks.sourceUrl])
+                    } else {
+                        null
+                    }
                 } else {
                     null
                 }

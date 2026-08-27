@@ -355,7 +355,15 @@ class StatusPageService(
         organizationId: Int,
         request: CreateIncidentRequest
     ): IncidentResponse {
-        val incidentId = UUID.randomUUID()
+        return createIncidentWithId(pageId, organizationId, UUID.randomUUID(), request)
+    }
+
+    fun createIncidentWithId(
+        pageId: UUID,
+        organizationId: Int,
+        incidentId: UUID,
+        request: CreateIncidentRequest,
+    ): IncidentResponse {
         val now = Clock.System.now()
 
         return transaction {

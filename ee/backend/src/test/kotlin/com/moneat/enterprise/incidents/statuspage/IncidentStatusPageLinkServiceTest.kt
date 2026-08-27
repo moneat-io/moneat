@@ -8,6 +8,7 @@ import com.moneat.enterprise.incidents.IncidentTestDatabase
 import com.moneat.enterprise.incidents.SeededMember
 import com.moneat.enterprise.incidents.commands.DeclareIncidentCommand
 import com.moneat.enterprise.incidents.commands.IncidentCommandActor
+import com.moneat.enterprise.incidents.commands.IncidentCommandNotFoundException
 import com.moneat.enterprise.incidents.commands.IncidentCommandPolicy
 import com.moneat.enterprise.incidents.commands.IncidentCommandService
 import com.moneat.enterprise.incidents.models.NativeIncidentMode
@@ -16,6 +17,8 @@ import com.moneat.enterprise.incidents.models.NativeIncidentVisibility
 import com.moneat.enterprise.incidents.models.NativeIncidentSourceLinks
 import com.moneat.enterprise.oncall.models.OnCallIncidentTimeline
 import com.moneat.statuspage.models.CreateStatusPageRequest
+import com.moneat.statuspage.models.IncidentResponse
+import com.moneat.statuspage.models.StatusPageIncidents
 import com.moneat.statuspage.services.StatusPageService
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -25,6 +28,9 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
@@ -92,6 +98,37 @@ class IncidentStatusPageLinkServiceTest {
     }
 
     @Test
+    fun `concurrent creates with the same correlation key return one incident`() {
+        val executor = Executors.newFixedThreadPool(2)
+        val ready = CountDownLatch(2)
+        val start = CountDownLatch(1)
+        try {
+            val futures = (1..2).map { index ->
+                executor.submit<IncidentResponse> {
+                    ready.countDown()
+                    check(start.await(10, TimeUnit.SECONDS)) { "Concurrent create did not start" }
+                    service.create(target(), createRequest(), "concurrent-create-$index")
+                }
+            }
+            check(ready.await(10, TimeUnit.SECONDS)) { "Concurrent create workers did not become ready" }
+            start.countDown()
+
+            val results = futures.map { it.get(10, TimeUnit.SECONDS) }
+            assertEquals(1, results.map(IncidentResponse::id).distinct().size)
+            assertEquals(
+                1,
+                transaction {
+                    StatusPageIncidents.selectAll().where {
+                        StatusPageIncidents.statusPageId eq statusPageId
+                    }.count()
+                },
+            )
+        } finally {
+            executor.shutdownNow()
+        }
+    }
+
+    @Test
     fun `update with a message publishes a status-page update and resolve changes status`() {
         val created = service.create(target(), createRequest(), "create")
         val updated = service.update(
@@ -107,6 +144,34 @@ class IncidentStatusPageLinkServiceTest {
 
         assertEquals("investigating", updated.status)
         assertEquals("resolved", resolved.status)
+    }
+
+    @Test
+    fun `update rejects a status-page incident linked to another native incident`() {
+        val otherIncidentId = IncidentCommandService(policy = IncidentCommandPolicy.allowForTests()).execute(
+            DeclareIncidentCommand(
+                commandKey = "declare-other-status-page",
+                actor = actor(),
+                title = "Other incident",
+                description = null,
+                severity = "SEV-2",
+                mode = NativeIncidentMode.TEST,
+                visibility = NativeIncidentVisibility.ORGANIZATION,
+                initialStatus = NativeIncidentStatus.ACTIVE,
+            ),
+        ).incidentId
+        val created = service.create(target(), createRequest(), "create-linked-other")
+
+        assertFailsWith<IncidentCommandNotFoundException> {
+            service.update(
+                target().copy(
+                    incidentId = otherIncidentId,
+                    statusPageIncidentId = UUID.fromString(created.id),
+                ),
+                UpdateLinkedStatusPageIncidentRequest(status = "resolved"),
+                "cross-incident-update",
+            )
+        }
     }
 
     @Test
