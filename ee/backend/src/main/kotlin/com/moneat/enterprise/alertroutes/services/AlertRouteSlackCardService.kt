@@ -167,7 +167,7 @@ class AlertRouteSlackCardService(
                         put("type", "actions")
                         putJsonArray("elements") {
                             add(linkButton("Open source", event.moneatUrl))
-                            add(linkButton("Open Moneat", event.moneatUrl))
+                            add(linkButton("View details", event.moneatUrl))
                         }
                     }
                 }
