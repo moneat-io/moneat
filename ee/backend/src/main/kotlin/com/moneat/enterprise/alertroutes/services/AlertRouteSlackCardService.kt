@@ -155,7 +155,8 @@ class AlertRouteSlackCardService(
                             )
                             add(action("join_incident", "Join incident", null, outcome.incidentId))
                             add(action("acknowledge_alert", "Acknowledge", null, episode.resourceId.toString()))
-                            add(action("silence_alert", "Silence", null, episode.resourceId.toString()))
+                            add(action("snooze_alert", "Snooze", null, episode.resourceId.toString()))
+                            add(action("unavailable_alert", "Unavailable", "danger", episode.resourceId.toString()))
                             add(action("resolve_alert", "Resolve", null, episode.resourceId.toString()))
                             add(action("confirm_grouping", "Confirm grouping", null, outcome.groupId))
                             add(action("unrelated_alert", "Unrelated", "danger", outcome.groupId))
@@ -166,7 +167,7 @@ class AlertRouteSlackCardService(
                         put("type", "actions")
                         putJsonArray("elements") {
                             add(linkButton("Open source", event.moneatUrl))
-                            add(linkButton("Open Moneat", event.moneatUrl))
+                            add(linkButton("View details", event.moneatUrl))
                         }
                     }
                 }
