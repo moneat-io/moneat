@@ -355,7 +355,15 @@ class StatusPageService(
         organizationId: Int,
         request: CreateIncidentRequest
     ): IncidentResponse {
-        val incidentId = UUID.randomUUID()
+        return createIncidentWithId(pageId, organizationId, UUID.randomUUID(), request)
+    }
+
+    fun createIncidentWithId(
+        pageId: UUID,
+        organizationId: Int,
+        incidentId: UUID,
+        request: CreateIncidentRequest,
+    ): IncidentResponse {
         val now = Clock.System.now()
 
         return transaction {
@@ -394,6 +402,25 @@ class StatusPageService(
                 .where { StatusPageIncidents.id eq incidentId }
                 .first()
                 .toIncidentResponse()
+        }
+    }
+
+    fun getIncident(
+        pageId: UUID,
+        organizationId: Int,
+        incidentId: UUID,
+    ): IncidentResponse? {
+        return transaction {
+            StatusPageIncidents
+                .innerJoin(StatusPages, { statusPageId }, { StatusPages.id })
+                .selectAll()
+                .where {
+                    (StatusPageIncidents.id eq incidentId) and
+                        (StatusPageIncidents.statusPageId eq pageId) and
+                        (StatusPages.organizationId eq organizationId)
+                }
+                .firstOrNull()
+                ?.toIncidentResponse()
         }
     }
 

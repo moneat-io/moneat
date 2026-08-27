@@ -41,6 +41,10 @@ import com.moneat.enterprise.incidents.config.IncidentConfigurationService
 import com.moneat.enterprise.incidents.responders.IncidentResponderService
 import com.moneat.enterprise.incidents.response.IncidentResponseActivationService
 import com.moneat.enterprise.incidents.response.IncidentResponsePolicyInput
+import com.moneat.enterprise.incidents.statuspage.CreateLinkedStatusPageIncidentRequest
+import com.moneat.enterprise.incidents.statuspage.IncidentStatusPageLinkService
+import com.moneat.enterprise.incidents.statuspage.IncidentStatusPageLinkTarget
+import com.moneat.enterprise.incidents.statuspage.UpdateLinkedStatusPageIncidentRequest
 import com.moneat.enterprise.incidents.timeline.IncidentTimelineService
 import com.moneat.enterprise.incidents.models.IncidentFormStage
 import com.moneat.enterprise.incidents.models.IncidentParticipationType
@@ -77,6 +81,7 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.delete
+import io.ktor.server.routing.patch
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import kotlinx.serialization.Serializable
@@ -88,6 +93,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.uuid.Uuid
 import kotlin.time.Instant
+import java.util.UUID
 
 private const val JWT_AUTH_PROVIDER = "auth-jwt"
 
@@ -287,6 +293,30 @@ data class IncidentResponsePolicyRequest(
     val pageRetrospectiveIncidents: Boolean = false,
 )
 
+@Serializable
+data class CreateStatusPageIncidentRouteRequest(
+    val statusPageId: String,
+    val title: String,
+    val status: String,
+    val impact: String = "none",
+    val message: String,
+    val sourceUrl: String,
+    val correlationKey: String,
+)
+
+@Serializable
+data class UpdateStatusPageIncidentRouteRequest(
+    val title: String? = null,
+    val status: String? = null,
+    val impact: String? = null,
+    val message: String? = null,
+)
+
+@Serializable
+data class ResolveStatusPageIncidentRouteRequest(
+    val message: String? = null,
+)
+
 private data class IncidentRouteServices(
     val alertServiceProvider: () -> OnCallAlertService,
     val incidentService: OnCallIncidentService,
@@ -295,6 +325,7 @@ private data class IncidentRouteServices(
     val responderService: IncidentResponderService,
     val timelineService: IncidentTimelineService,
     val actionService: IncidentActionService,
+    val statusPageLinkService: IncidentStatusPageLinkService,
     val responseService: IncidentResponseActivationService?,
 )
 
@@ -317,6 +348,7 @@ fun Route.incidentRoutes(
             responderService = IncidentResponderService(),
             timelineService = IncidentTimelineService(),
             actionService = IncidentActionService(),
+            statusPageLinkService = IncidentStatusPageLinkService(),
             responseService = incidentResponseActivationService,
         )
     registerIncidentCapabilitiesRoute(entitlementStatusProvider)
@@ -401,6 +433,7 @@ private fun Route.registerDeclaredIncidentRoutes(
             registerTriageCommandRoutes(services.incidentService)
             registerAddAlertToIncidentRoute(services.alertServiceProvider, services.incidentService)
             registerIncidentSourceRoutes(services.incidentService)
+            registerIncidentStatusPageRoutes(services.statusPageLinkService)
             registerIncidentResponderRoutes(services.incidentService, services.responderService)
             services.responseService?.let { registerIncidentResponseIncidentRoutes(it) }
             registerIncidentTimelineRoutes(services.timelineService)
@@ -545,6 +578,135 @@ private fun Route.registerIncidentSourceRoutes(onCallIncidentService: OnCallInci
         }
     }
 }
+
+private fun Route.registerIncidentStatusPageRoutes(
+    linkService: IncidentStatusPageLinkService,
+) {
+    route("/{id}/status-page-incidents") {
+        registerCreateStatusPageIncidentRoute(linkService)
+        registerUpdateStatusPageIncidentRoute(linkService)
+        registerResolveStatusPageIncidentRoute(linkService)
+    }
+}
+
+private fun Route.registerCreateStatusPageIncidentRoute(linkService: IncidentStatusPageLinkService) {
+    post {
+        val context = call.requireUserContext() ?: return@post
+        val incidentId = call.requireIncidentId(context.organizationId) ?: return@post
+        if (!call.requireIncidentResponderOrAdmin(context, incidentId)) return@post
+        val request = call.receive<CreateStatusPageIncidentRouteRequest>()
+        val statusPageId = parseStatusPageId(request.statusPageId)
+        if (statusPageId == null) {
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid status page ID"))
+            return@post
+        }
+        try {
+            call.respond(
+                HttpStatusCode.Created,
+                linkService.create(
+                    target = IncidentStatusPageLinkTarget(
+                        organizationId = context.organizationId,
+                        actorUserId = context.userId,
+                        incidentId = incidentId,
+                        statusPageId = statusPageId,
+                    ),
+                    request = CreateLinkedStatusPageIncidentRequest(
+                        title = request.title,
+                        status = request.status,
+                        impact = request.impact,
+                        message = request.message,
+                        sourceUrl = request.sourceUrl,
+                        correlationKey = request.correlationKey,
+                    ),
+                    commandKey = call.incidentCommandKey("status-page-create"),
+                ),
+            )
+        } catch (error: IncidentCommandException) {
+            call.respondIncidentCommandFailure(error)
+        } catch (error: IllegalArgumentException) {
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse(error.message))
+        }
+    }
+}
+
+private fun Route.registerUpdateStatusPageIncidentRoute(linkService: IncidentStatusPageLinkService) {
+    patch("/{statusPageId}/{statusPageIncidentId}") {
+        val context = call.requireUserContext() ?: return@patch
+        val incidentId = call.requireIncidentId(context.organizationId) ?: return@patch
+        if (!call.requireIncidentResponderOrAdmin(context, incidentId)) return@patch
+        val statusPageId = parseStatusPageId(call.parameters["statusPageId"])
+        val statusPageIncidentId = parseStatusPageId(call.parameters["statusPageIncidentId"])
+        if (statusPageId == null || statusPageIncidentId == null) {
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid status-page incident ID"))
+            return@patch
+        }
+        val request = call.receive<UpdateStatusPageIncidentRouteRequest>()
+        try {
+            call.respond(
+                linkService.update(
+                    target = IncidentStatusPageLinkTarget(
+                        organizationId = context.organizationId,
+                        actorUserId = context.userId,
+                        incidentId = incidentId,
+                        statusPageId = statusPageId,
+                        statusPageIncidentId = statusPageIncidentId,
+                    ),
+                    request = UpdateLinkedStatusPageIncidentRequest(
+                        title = request.title,
+                        status = request.status,
+                        impact = request.impact,
+                        message = request.message,
+                    ),
+                    commandKey = call.incidentCommandKey("status-page-update"),
+                ),
+            )
+        } catch (error: IncidentCommandException) {
+            call.respondIncidentCommandFailure(error)
+        } catch (error: IllegalArgumentException) {
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse(error.message))
+        }
+    }
+}
+
+private fun Route.registerResolveStatusPageIncidentRoute(linkService: IncidentStatusPageLinkService) {
+    post("/{statusPageId}/{statusPageIncidentId}/resolve") {
+        val context = call.requireUserContext() ?: return@post
+        val incidentId = call.requireIncidentId(context.organizationId) ?: return@post
+        if (!call.requireIncidentResponderOrAdmin(context, incidentId)) return@post
+        val statusPageId = parseStatusPageId(call.parameters["statusPageId"])
+        val statusPageIncidentId = parseStatusPageId(call.parameters["statusPageIncidentId"])
+        if (statusPageId == null || statusPageIncidentId == null) {
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid status-page incident ID"))
+            return@post
+        }
+        val request = call.receiveNullable<ResolveStatusPageIncidentRouteRequest>()
+        try {
+            call.respond(
+                linkService.update(
+                    target = IncidentStatusPageLinkTarget(
+                        organizationId = context.organizationId,
+                        actorUserId = context.userId,
+                        incidentId = incidentId,
+                        statusPageId = statusPageId,
+                        statusPageIncidentId = statusPageIncidentId,
+                    ),
+                    request = UpdateLinkedStatusPageIncidentRequest(
+                        status = "resolved",
+                        message = request?.message,
+                    ),
+                    commandKey = call.incidentCommandKey("status-page-resolve"),
+                ),
+            )
+        } catch (error: IncidentCommandException) {
+            call.respondIncidentCommandFailure(error)
+        } catch (error: IllegalArgumentException) {
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse(error.message))
+        }
+    }
+}
+
+private fun parseStatusPageId(raw: String?): UUID? =
+    raw?.let { value -> runCatching { UUID.fromString(value) }.getOrNull() }
 
 private suspend fun ApplicationCall.resolveIncidentSource(
     organizationId: Int,
