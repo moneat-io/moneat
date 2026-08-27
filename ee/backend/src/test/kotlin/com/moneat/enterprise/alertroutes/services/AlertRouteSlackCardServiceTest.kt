@@ -79,6 +79,8 @@ class AlertRouteSlackCardServiceTest {
         assertEquals("C123", payload["channel"]?.jsonPrimitive?.content)
         assertTrue("declare_incident" in actions)
         assertTrue("acknowledge_alert" in actions)
+        assertTrue("snooze_alert" in actions)
+        assertTrue("unavailable_alert" in actions)
         assertTrue("confirm_grouping" in actions)
         assertTrue("unrelated_alert" in actions)
         assertTrue("merge_alert_group" in actions)

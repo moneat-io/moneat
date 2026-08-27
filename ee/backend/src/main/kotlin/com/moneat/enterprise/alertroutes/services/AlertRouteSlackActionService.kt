@@ -103,7 +103,8 @@ class AlertRouteSlackActionService(
             "declare_incident" -> declare(organizationId, userId, context, deliveryId)
             "join_incident" -> join(organizationId, userId, identity, value, deliveryId)
             "acknowledge_alert" -> acknowledge(identity, context, deliveryId)
-            "silence_alert" -> silence(identity, context, deliveryId)
+            "silence_alert", "snooze_alert" -> silence(identity, context, deliveryId)
+            "unavailable_alert", "next_level_alert" -> unavailable(identity, context, deliveryId)
             "resolve_alert" -> resolve(identity, context, deliveryId)
             "confirm_grouping" -> response("This alert is already grouped by the matched route.")
             "unrelated_alert", "merge_alert_group" ->
@@ -114,7 +115,8 @@ class AlertRouteSlackActionService(
 
     private fun actionContext(actionId: String, value: String?, organizationId: Int): AlertActionContext? =
         when (actionId) {
-            "declare_incident", "acknowledge_alert", "silence_alert", "resolve_alert" ->
+            "declare_incident", "acknowledge_alert", "silence_alert", "snooze_alert",
+            "unavailable_alert", "next_level_alert", "resolve_alert" ->
                 value?.let { findByEpisode(organizationId, it) }
             else -> null
         }
@@ -221,6 +223,28 @@ class AlertRouteSlackActionService(
         )
         if (suppressed != null) recordSlackAction(identity, context, "SLACK_ALERT_SILENCED", deliveryId)
         return response("Alert silenced.")
+    }
+
+    private fun unavailable(
+        identity: SlackIdentityResolution,
+        context: AlertActionContext?,
+        deliveryId: String?,
+    ): String {
+        if (context == null || context.onCallAlertId == null) {
+            return response("No page is attached to this alert group.")
+        }
+        if (!canRespondToIncident(identity, context)) {
+            return response("You are not authorized to advance this alert.")
+        }
+        val advanced = onCallAlertService.markUnavailable(context.onCallAlertId, requireNotNull(identity.userId))
+        if (advanced) recordSlackAction(identity, context, "SLACK_ALERT_UNAVAILABLE", deliveryId)
+        return response(
+            if (advanced) {
+                "You were marked unavailable; the alert moved to the next escalation target."
+            } else {
+                "No next escalation target is configured for this alert."
+            },
+        )
     }
 
     private fun resolve(
