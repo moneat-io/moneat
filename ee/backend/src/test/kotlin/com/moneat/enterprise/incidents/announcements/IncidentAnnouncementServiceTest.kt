@@ -20,6 +20,7 @@ import com.moneat.shared.models.OrganizationIntegrations
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -245,6 +246,17 @@ class IncidentAnnouncementServiceTest {
         assertTrue(payload.contains("1 item(s)"))
         assertTrue(payload.contains("manage details in the incident workspace"))
         assertTrue(!payload.contains("Document customer communication"))
+
+        transaction {
+            NativeIncidentAnnouncements.update({ NativeIncidentAnnouncements.incidentId eq incidentId }) {
+                it[providerMessageTs] = "123.456"
+            }
+            NativeIncidentFollowUps.update({ NativeIncidentFollowUps.incidentId eq incidentId }) {
+                it[status] = "COMPLETED"
+            }
+        }
+        service.consume(event("INCIDENT_COMPLETE_FOLLOW_UP", 3, NativeIncidentStatus.ACTIVE.wire), "follow-up-complete")
+        assertTrue(!requests.last().payload.contains("Follow-up work"))
     }
 
     @Test

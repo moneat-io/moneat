@@ -329,7 +329,8 @@ class IncidentAnnouncementService(
             }
             val followUpCount = NativeIncidentFollowUps.selectAll().where {
                 (NativeIncidentFollowUps.organizationId eq event.organizationId) and
-                    (NativeIncidentFollowUps.incidentId eq event.incidentId)
+                    (NativeIncidentFollowUps.incidentId eq event.incidentId) and
+                    (NativeIncidentFollowUps.status inList listOf("OPEN", "ACCEPTED"))
             }.count().toInt()
             val activation = NativeIncidentResponseActivations.selectAll().where {
                 (NativeIncidentResponseActivations.organizationId eq event.organizationId) and
