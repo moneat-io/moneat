@@ -109,6 +109,7 @@ function DeclaredIncidents() {
   const [severityFilter, setSeverityFilter] = useState<IncidentSeverityFilter>('all')
   const [declareOpen, setDeclareOpen] = useState(false)
   const [triageOnly, setTriageOnly] = useState(false)
+  const [showAllFollowUps, setShowAllFollowUps] = useState(false)
   const capabilities = useNativeIncidentCapabilities()
   const isDetailRoute = pathname.startsWith('/on-call/incidents/')
 
@@ -236,7 +237,7 @@ function DeclaredIncidents() {
               </Badge>
             </div>
             <div className="space-y-1.5">
-              {followUpQueue.slice(0, 8).map((followUp) => (
+              {(showAllFollowUps ? followUpQueue : followUpQueue.slice(0, 8)).map((followUp) => (
                 <Link
                   key={followUp.id}
                   to="/on-call/incidents/$incidentId"
@@ -253,6 +254,15 @@ function DeclaredIncidents() {
                 </Link>
               ))}
             </div>
+            {followUpQueue.length > 8 && (
+              <button
+                type="button"
+                className="mt-2 text-xs font-medium text-info-fg hover:underline"
+                onClick={() => setShowAllFollowUps((visible) => !visible)}
+              >
+                {showAllFollowUps ? 'Show fewer follow-ups' : `Show all ${followUpQueue.length} follow-ups`}
+              </button>
+            )}
           </CardContent>
         </Card>
       )}

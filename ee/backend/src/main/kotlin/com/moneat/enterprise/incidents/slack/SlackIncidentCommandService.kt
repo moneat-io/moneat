@@ -59,6 +59,7 @@ private const val FOLLOW_UP_CALLBACK_ID = "moneat_incident_follow_up"
 private const val DECISION_CALLBACK_ID = "moneat_incident_decision"
 private const val UNAUTHORIZED_RESPONSE = "You are not authorized to respond to this incident in Slack."
 private const val MAX_TEXT_LENGTH = 2_000
+private const val MAX_FOLLOW_UP_TITLE_LENGTH = 255
 private const val MODAL_TITLE_MAX_LENGTH = 24
 private const val MODAL_LABEL_MAX_LENGTH = 75
 private const val NUDGE_DISMISS_ACTION = "nudge_dismiss"
@@ -302,6 +303,9 @@ class SlackIncidentCommandService(
         deliveryId: String?,
     ): String {
         if (text.isBlank()) return submissionErrors()
+        if (actionName == "follow_up" && text.length > MAX_FOLLOW_UP_TITLE_LENGTH) {
+            return submissionErrors("Follow-up title must be 255 characters or fewer.")
+        }
         return try {
             commandService.execute(submissionCommand(actionName, identity, context, text, deliveryId))
             buildJsonObject { put("response_action", "clear") }.toString()
@@ -391,9 +395,9 @@ class SlackIncidentCommandService(
         else -> null
     }
 
-    private fun submissionErrors(): String = buildJsonObject {
+    private fun submissionErrors(message: String = "Add a value before submitting."): String = buildJsonObject {
         put("response_action", "errors")
-        putJsonObject("errors") { put("text", "Add a value before submitting.") }
+        putJsonObject("errors") { put("text", message) }
     }.toString()
 
     private fun execute(
@@ -446,6 +450,9 @@ class SlackIncidentCommandService(
                             put("type", "plain_text_input")
                             put("action_id", "value")
                             put("multiline", true)
+                            if (callbackId == FOLLOW_UP_CALLBACK_ID) {
+                                put("max_length", MAX_FOLLOW_UP_TITLE_LENGTH)
+                            }
                         }
                     })
                 }

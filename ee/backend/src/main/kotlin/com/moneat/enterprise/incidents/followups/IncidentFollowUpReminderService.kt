@@ -12,6 +12,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -38,7 +39,7 @@ class IncidentFollowUpReminderService(
                         (NativeIncidentFollowUps.nextReminderAt lessEq now) or
                             (
                                 (NativeIncidentFollowUps.dueAt lessEq now) and
-                                    (NativeIncidentFollowUps.escalationLevel eq 0)
+                                    NativeIncidentFollowUps.slaFiredAt.isNull()
                                 )
                         )
                 }
@@ -73,10 +74,8 @@ class IncidentFollowUpReminderService(
             return false
         }
 
-        val reminderDue = followUp[NativeIncidentFollowUps.nextReminderAt]?.let { it <= now } == true
-        val slaDue = followUp[NativeIncidentFollowUps.dueAt]?.let { it <= now } == true &&
-            followUp[NativeIncidentFollowUps.escalationLevel] == 0
-        if (!reminderDue && !slaDue) return false
+        val dueState = dueState(followUp, now)
+        if (!dueState.isDue) return false
 
         val nextLevel = followUp[NativeIncidentFollowUps.escalationLevel] + 1
         val nextVersion = incident[OnCallIncidents.version] + 1
@@ -91,6 +90,7 @@ class IncidentFollowUpReminderService(
 
         NativeIncidentFollowUps.update({ NativeIncidentFollowUps.id eq followUpId }) {
             it[escalationLevel] = nextLevel
+            if (dueState.slaDue) it[slaFiredAt] = now
             it[nextReminderAt] = followUp[NativeIncidentFollowUps.reminderMinutes]?.let { minutes ->
                 now.plus(minutes.minutes)
             }
@@ -102,11 +102,12 @@ class IncidentFollowUpReminderService(
                 incidentId = followUp[NativeIncidentFollowUps.incidentId],
                 eventType = "INCIDENT_FOLLOW_UP_REMINDER",
                 aggregateVersion = nextVersion,
-                idempotencyKey = "incident-follow-up:$followUpId:reminder:$nextLevel",
+                idempotencyKey = buildReminderIdempotencyKey(followUpId, dueState.slaDue, nextLevel),
                 payload = buildMap {
                     put("incidentId", JsonPrimitive(incident[OnCallIncidents.resourceId].toString()))
                     put("followUpId", JsonPrimitive(followUp[NativeIncidentFollowUps.resourceId].toString()))
                     put("escalationLevel", JsonPrimitive(nextLevel))
+                    put("slaDue", JsonPrimitive(dueState.slaDue))
                     followUp[NativeIncidentFollowUps.dueAt]?.let { dueAt ->
                         put("dueAt", JsonPrimitive(dueAt.toString()))
                     }
@@ -114,6 +115,22 @@ class IncidentFollowUpReminderService(
             ),
         )
         return true
+    }
+
+    private fun dueState(followUp: org.jetbrains.exposed.v1.core.ResultRow, now: Instant): DueState = DueState(
+        reminderDue = followUp[NativeIncidentFollowUps.nextReminderAt]?.let { it <= now } == true,
+        slaDue = followUp[NativeIncidentFollowUps.dueAt]?.let { it <= now } == true &&
+            followUp[NativeIncidentFollowUps.slaFiredAt] == null,
+    )
+
+    private fun buildReminderIdempotencyKey(followUpId: Int, slaDue: Boolean, level: Int): String =
+        "incident-follow-up:$followUpId:${if (slaDue) "sla" else "reminder"}:$level"
+
+    private data class DueState(
+        val reminderDue: Boolean,
+        val slaDue: Boolean,
+    ) {
+        val isDue: Boolean get() = reminderDue || slaDue
     }
 
     companion object {

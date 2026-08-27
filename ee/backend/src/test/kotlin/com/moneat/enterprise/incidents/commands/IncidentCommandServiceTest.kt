@@ -34,6 +34,7 @@ import com.moneat.enterprise.oncall.services.OnCallIncidentService
 import com.moneat.enterprise.incidents.responders.CreateIncidentRole
 import com.moneat.enterprise.incidents.responders.IncidentResponderService
 import com.moneat.shared.models.Users
+import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -47,6 +48,7 @@ import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
@@ -823,6 +825,92 @@ class IncidentCommandServiceTest {
                 NativeIncidentFollowUps.selectAll().single()[NativeIncidentFollowUps.status],
             )
         }
+    }
+
+    @Test
+    fun `fires an overdue SLA after reminder escalation and resets when deadline changes`() {
+        val now = Clock.System.now()
+        val incident = service.execute(declareCommand("follow-up-sla", actor()))
+        val created = service.execute(
+            AddIncidentFollowUpCommand(
+                commandKey = "follow-up-sla-created",
+                actor = actor(),
+                incidentId = incident.incidentId,
+                title = "Review the incident timeline",
+                description = "Capture the missing response milestones",
+                ownerUserId = member.userId,
+                dueAt = now.plus(10.minutes),
+                reminderMinutes = 5,
+                expectedVersion = 1,
+            ),
+        )
+        val followUpId = checkNotNull(created.followUpResourceId)
+        val reminderService = IncidentFollowUpReminderService()
+
+        assertEquals(1, reminderService.processDue(now.plus(6.minutes)))
+        transaction {
+            val followUp = NativeIncidentFollowUps.selectAll().single()
+            assertEquals(1, followUp[NativeIncidentFollowUps.escalationLevel])
+            assertNull(followUp[NativeIncidentFollowUps.slaFiredAt])
+            val event = NativeIncidentOutboxEvents.selectAll()
+                .where { NativeIncidentOutboxEvents.eventType eq "INCIDENT_FOLLOW_UP_REMINDER" }
+                .single()
+            assertEquals(false, event[NativeIncidentOutboxEvents.payload]["slaDue"]?.jsonPrimitive?.boolean)
+        }
+
+        service.execute(
+            UpdateIncidentFollowUpCommand(
+                commandKey = "follow-up-sla-clear-reminder",
+                actor = actor(),
+                incidentId = incident.incidentId,
+                followUpResourceId = followUpId,
+                clearReminderAt = true,
+                expectedVersion = 3,
+            ),
+        )
+        assertEquals(1, reminderService.processDue(now.plus(11.minutes)))
+        transaction {
+            val followUp = NativeIncidentFollowUps.selectAll().single()
+            assertEquals(2, followUp[NativeIncidentFollowUps.escalationLevel])
+            assertNotNull(followUp[NativeIncidentFollowUps.slaFiredAt])
+            val events = NativeIncidentOutboxEvents.selectAll()
+                .where { NativeIncidentOutboxEvents.eventType eq "INCIDENT_FOLLOW_UP_REMINDER" }
+                .toList()
+            assertEquals(2, events.size)
+            assertEquals(true, events.last()[NativeIncidentOutboxEvents.payload]["slaDue"]?.jsonPrimitive?.boolean)
+        }
+        assertEquals(0, reminderService.processDue(now.plus(20.minutes)))
+
+        service.execute(
+            UpdateIncidentFollowUpCommand(
+                commandKey = "follow-up-sla-reset",
+                actor = actor(),
+                incidentId = incident.incidentId,
+                followUpResourceId = followUpId,
+                dueAt = now.plus(30.minutes),
+                expectedVersion = 5,
+            ),
+        )
+        transaction { assertNull(NativeIncidentFollowUps.selectAll().single()[NativeIncidentFollowUps.slaFiredAt]) }
+    }
+
+    @Test
+    fun `fingerprints follow-up label lists without separator collisions`() {
+        val first = AddIncidentFollowUpCommand(
+            commandKey = "fingerprint-first",
+            actor = actor(),
+            incidentId = 1,
+            title = "Title",
+            description = "Description",
+            ownerUserId = member.userId,
+            labels = listOf("a\u001fb", "c"),
+        )
+        val second = first.copy(
+            commandKey = "fingerprint-second",
+            labels = listOf("a", "b\u001fc"),
+        )
+
+        assertNotEquals(IncidentCommandFingerprint.of(first), IncidentCommandFingerprint.of(second))
     }
 
     @Test

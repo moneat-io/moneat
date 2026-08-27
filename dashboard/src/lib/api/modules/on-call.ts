@@ -80,6 +80,7 @@ import type {
   CreateIncidentFollowUpInput,
   UpdateIncidentFollowUpInput,
   IncidentFollowUpStatusInput,
+  IncidentFollowUpStatus,
   IncidentFollowUpPriority,
 } from '../types'
 
@@ -516,7 +517,7 @@ export function onCallMethods(core: ApiClientCore) {
       ),
 
     getIncidentFollowUpQueue: (filters: {
-      status?: string[]
+      status?: IncidentFollowUpStatus[]
       priority?: IncidentFollowUpPriority
     } = {}) => {
       const params = new URLSearchParams()

@@ -87,6 +87,7 @@ internal class IncidentFollowUpCommandHandler(
             it[reminderMinutes] = command.reminderMinutes
             it[nextReminderAt] = command.reminderMinutes?.let { minutes -> now.plus(minutes.minutes) }
             it[escalationLevel] = 0
+            it[slaFiredAt] = null
             it[status] = IncidentFollowUpStatus.OPEN.wire
             it[acceptedBy] = null
             it[acceptedAt] = null
@@ -187,6 +188,7 @@ internal class IncidentFollowUpCommandHandler(
             prepared.labels?.let { value -> it[NativeIncidentFollowUps.labels] = value }
             if (prepared.dueAtChanged) {
                 it[NativeIncidentFollowUps.dueAt] = prepared.dueAt
+                it[NativeIncidentFollowUps.slaFiredAt] = null
             }
             command.slaMinutes?.let { value -> it[NativeIncidentFollowUps.slaMinutes] = value }
             if (command.clearReminderAt) {

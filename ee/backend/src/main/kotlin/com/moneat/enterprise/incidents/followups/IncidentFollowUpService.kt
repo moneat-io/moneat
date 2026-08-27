@@ -11,6 +11,7 @@ import com.moneat.shared.services.toUuidOrNull
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
+import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
@@ -37,18 +38,19 @@ class IncidentFollowUpService {
         priority: IncidentFollowUpPriority? = null,
         visibleIncidentIds: Set<Int>? = null,
     ): List<IncidentFollowUp> = transaction {
+        if (statuses.isEmpty() || visibleIncidentIds?.isEmpty() == true) return@transaction emptyList()
+        var predicate: Op<Boolean> = (NativeIncidentFollowUps.organizationId eq organizationId) and
+            (NativeIncidentFollowUps.status inList statuses.map(IncidentFollowUpStatus::wire))
+        priority?.let { selectedPriority ->
+            predicate = predicate and (NativeIncidentFollowUps.priority eq selectedPriority.wire)
+        }
+        visibleIncidentIds?.let { incidentIds ->
+            predicate = predicate and (NativeIncidentFollowUps.incidentId inList incidentIds)
+        }
         val rows = NativeIncidentFollowUps
             .selectAll()
-            .where { NativeIncidentFollowUps.organizationId eq organizationId }
+            .where { predicate }
             .toList()
-            .filter { row ->
-                val status = IncidentFollowUpStatus.entries.firstOrNull {
-                    it.wire == row[NativeIncidentFollowUps.status]
-                }
-                status in statuses &&
-                    (priority == null || row[NativeIncidentFollowUps.priority] == priority.wire) &&
-                    (visibleIncidentIds == null || row[NativeIncidentFollowUps.incidentId] in visibleIncidentIds)
-            }
             .sortedWith(
                 compareBy<ResultRow> { row ->
                     IncidentFollowUpPriority.parse(row[NativeIncidentFollowUps.priority])?.rank ?: Int.MAX_VALUE

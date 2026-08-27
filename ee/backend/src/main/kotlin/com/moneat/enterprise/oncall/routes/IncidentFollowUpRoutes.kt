@@ -134,9 +134,16 @@ private fun Route.registerFollowUpIncidentRoutes(
 
 private suspend fun ApplicationCall.handleFollowUpQueue(followUpService: IncidentFollowUpService) {
     val context = requireUserContext() ?: return
-    val statuses = parseFollowUpStatuses(request.queryParameters.getAll("status"))
-    val priority = request.queryParameters["priority"]?.let {
-        IncidentFollowUpPriority.parse(it) ?: throw IllegalArgumentException("Invalid follow-up priority")
+    val statuses: Set<IncidentFollowUpStatus>
+    val priority: IncidentFollowUpPriority?
+    try {
+        statuses = parseFollowUpStatuses(request.queryParameters.getAll("status"))
+        priority = request.queryParameters["priority"]?.let {
+            IncidentFollowUpPriority.parse(it) ?: throw IllegalArgumentException("Invalid follow-up priority")
+        }
+    } catch (error: IllegalArgumentException) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse(error.message))
+        return
     }
     respond(
         followUpService.queue(
@@ -160,7 +167,7 @@ private suspend fun ApplicationCall.handleFollowUpCreate(
     onCallIncidentService: OnCallIncidentService,
     followUpService: IncidentFollowUpService,
 ) {
-    val context = requireFollowUpContext(onCallIncidentService) ?: return
+    val context = requireFollowUpContext(onCallIncidentService, requireResponder = true) ?: return
     val request = receive<CreateIncidentFollowUpRequest>()
     val priority = IncidentFollowUpPriority.parse(request.priority)
         ?: return respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid follow-up priority"))
@@ -220,7 +227,7 @@ private suspend fun ApplicationCall.handleFollowUpUpdate(
     onCallIncidentService: OnCallIncidentService,
     followUpService: IncidentFollowUpService,
 ) {
-    val context = requireFollowUpContext(onCallIncidentService) ?: return
+    val context = requireFollowUpContext(onCallIncidentService, requireResponder = true) ?: return
     val request = receive<UpdateIncidentFollowUpRequest>()
     val owner = if (request.ownerUserId == null && request.ownerTeamId == null) {
         FollowUpOwner(null, null)
@@ -262,7 +269,7 @@ private suspend fun ApplicationCall.handleFollowUpTransition(
     followUpService: IncidentFollowUpService,
     transition: String,
 ) {
-    val context = requireFollowUpContext(onCallIncidentService) ?: return
+    val context = requireFollowUpContext(onCallIncidentService, requireResponder = true) ?: return
     val request = receiveNullable<IncidentFollowUpStatusRequest>() ?: IncidentFollowUpStatusRequest()
     val followUpId = parameters["followUpId"].orEmpty()
     executeFollowUpCommand(onCallIncidentService, followUpService, context, this) {
@@ -296,6 +303,7 @@ private suspend fun ApplicationCall.handleFollowUpTransition(
 
 private suspend fun ApplicationCall.requireFollowUpContext(
     onCallIncidentService: OnCallIncidentService,
+    requireResponder: Boolean = false,
 ): IncidentFollowUpRouteContext? {
     val context = requireUserContext() ?: return null
     val incidentId = requireIncidentId(context.organizationId) ?: return null
@@ -304,7 +312,7 @@ private suspend fun ApplicationCall.requireFollowUpContext(
         respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
         return null
     }
-    if (incident.visibility == NativeIncidentVisibility.PRIVATE.wire &&
+    if ((requireResponder || incident.visibility == NativeIncidentVisibility.PRIVATE.wire) &&
         !requireIncidentResponderOrAdmin(context, incidentId)
     ) {
         return null
@@ -394,21 +402,32 @@ private fun visibleIncidentIds(context: OnCallUserContext): Set<Int> = transacti
         .selectAll()
         .where { OnCallIncidents.organizationId eq context.organizationId }
         .toList()
-    incidents.filter { incident ->
-        incident[OnCallIncidents.visibility] != NativeIncidentVisibility.PRIVATE.wire ||
-            context.role.level >= com.moneat.org.services.OrgRole.ADMIN.level ||
-            NativeIncidentRoleAssignments.selectAll().where {
+    val isAdmin = context.role.level >= com.moneat.org.services.OrgRole.ADMIN.level
+    val respondingIncidentIds = if (isAdmin) {
+        emptySet()
+    } else {
+        val assignedIncidentIds = NativeIncidentRoleAssignments
+            .selectAll()
+            .where {
                 (NativeIncidentRoleAssignments.organizationId eq context.organizationId) and
-                    (NativeIncidentRoleAssignments.incidentId eq incident[OnCallIncidents.id].value) and
                     (NativeIncidentRoleAssignments.assigneeUserId eq context.userId) and
                     NativeIncidentRoleAssignments.endedAt.isNull()
-            }.limit(1).any() ||
-            NativeIncidentParticipants.selectAll().where {
+            }
+            .map { it[NativeIncidentRoleAssignments.incidentId] }
+        val participatingIncidentIds = NativeIncidentParticipants
+            .selectAll()
+            .where {
                 (NativeIncidentParticipants.organizationId eq context.organizationId) and
-                    (NativeIncidentParticipants.incidentId eq incident[OnCallIncidents.id].value) and
                     (NativeIncidentParticipants.userId eq context.userId) and
                     (NativeIncidentParticipants.participationType eq IncidentParticipationType.PARTICIPANT.wire) and
                     NativeIncidentParticipants.leftAt.isNull()
-            }.limit(1).any()
+            }
+            .map { it[NativeIncidentParticipants.incidentId] }
+        (assignedIncidentIds + participatingIncidentIds).toSet()
+    }
+    incidents.filter { incident ->
+        incident[OnCallIncidents.visibility] != NativeIncidentVisibility.PRIVATE.wire ||
+            isAdmin ||
+            incident[OnCallIncidents.id].value in respondingIncidentIds
     }.map { it[OnCallIncidents.id].value }.toSet()
 }

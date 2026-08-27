@@ -192,7 +192,7 @@ internal object IncidentCommandFingerprint {
                     command.ownerUserId?.toString(),
                     command.ownerTeamId?.toString(),
                     command.priority.wire,
-                    command.labels.joinToString("\u001f"),
+                    canonicalLabels(command.labels),
                     command.dueAt?.toString(),
                     command.slaMinutes?.toString(),
                     command.reminderMinutes?.toString(),
@@ -209,7 +209,7 @@ internal object IncidentCommandFingerprint {
                     command.ownerUserId?.toString(),
                     command.ownerTeamId?.toString(),
                     command.priority?.wire,
-                    command.labels?.joinToString("\u001f"),
+                    command.labels?.let(::canonicalLabels),
                     command.dueAt?.toString(),
                     command.clearDueAt.toString(),
                     command.slaMinutes?.toString(),
@@ -232,6 +232,8 @@ internal object IncidentCommandFingerprint {
         json.encodeToString<JsonElement>(
             JsonObject(details.toSortedMap().mapValues { (_, value) -> value.canonical() }),
         )
+
+    private fun canonicalLabels(labels: List<String>): String = json.encodeToString(labels)
 
     private fun JsonElement.canonical(): JsonElement =
         when (this) {

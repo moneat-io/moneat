@@ -58,6 +58,7 @@ object NativeIncidentFollowUps : IntIdTable("native_incident_follow_ups") {
     val reminderMinutes = integer("reminder_minutes").nullable()
     val nextReminderAt = timestamp("next_reminder_at").nullable()
     val escalationLevel = integer("escalation_level")
+    val slaFiredAt = timestamp("sla_fired_at").nullable()
     val status = varchar("status", 16)
     val acceptedBy = integer("accepted_by").references(Users.id, onDelete = ReferenceOption.SET_NULL).nullable()
     val acceptedAt = timestamp("accepted_at").nullable()
