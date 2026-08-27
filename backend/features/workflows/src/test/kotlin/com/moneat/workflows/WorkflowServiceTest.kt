@@ -307,6 +307,7 @@ class WorkflowServiceTest {
         assertTrue(response.steps.any { it.name == "moneat.logs.search" })
         assertTrue(response.steps.any { it.name == "statuspage.incident.create" })
         assertTrue(response.steps.any { it.name == "oncall.incident.declare" })
+        assertTrue(response.steps.any { it.name == "oncall.incident.action.create" })
         // http.request and transform.graaljs are hidden unless WORKFLOWS_EGRESS_ENABLED is set;
         // their visibility in both states is covered by WorkflowCatalogTest.
         assertFalse(response.steps.any { it.name == "http.request" })

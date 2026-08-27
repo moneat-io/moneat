@@ -19,6 +19,7 @@ package com.moneat.workflows.services
 import com.moneat.alerts.models.IncidentSeverity
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.enterprise.OnCallIncidentDeclaration
+import com.moneat.enterprise.OnCallIncidentActionRequest
 import com.moneat.events.services.DashboardService
 import com.moneat.logs.models.LogAnalyticsFilters
 import com.moneat.logs.models.LogQueryRequest
@@ -96,8 +97,9 @@ class WorkflowTrustedActionExecutor(
         params: Map<String, String>,
         actorUserId: Int?,
         idempotencyKey: String?,
-    ): Map<String, JsonElement> =
-        when (stepName) {
+    ): Map<String, JsonElement> {
+        executeOnCallBuiltInOrNull(organizationId, stepName, params, actorUserId, idempotencyKey)?.let { return it }
+        return when (stepName) {
             LOGS_SEARCH_STEP -> executeLogSearch(organizationId, params)
             LOGS_AGGREGATE_STEP -> executeLogAggregate(organizationId, params)
             METRICS_QUERY_STEP -> executeMetricsQuery(organizationId, params)
@@ -108,11 +110,24 @@ class WorkflowTrustedActionExecutor(
             STATUS_PAGE_UPDATE_STEP -> executeStatusPageUpdate(organizationId, params)
             STATUS_PAGE_INCIDENT_CREATE_STEP -> executeStatusPageIncidentCreate(organizationId, params)
             ALERT_SILENCE_STEP -> executeAlertSilence(organizationId, params, actorUserId)
-            ON_CALL_PAGE_STEP -> executeOnCallPage(organizationId, params)
-            ON_CALL_DECLARE_INCIDENT_STEP ->
-                executeOnCallDeclareIncident(organizationId, params, actorUserId, idempotencyKey)
             else -> throw IllegalArgumentException("Unknown workflow step $stepName")
         }
+    }
+
+    private suspend fun executeOnCallBuiltInOrNull(
+        organizationId: Int,
+        stepName: String,
+        params: Map<String, String>,
+        actorUserId: Int?,
+        idempotencyKey: String?,
+    ): Map<String, JsonElement>? = when (stepName) {
+        ON_CALL_PAGE_STEP -> executeOnCallPage(organizationId, params)
+        ON_CALL_DECLARE_INCIDENT_STEP ->
+            executeOnCallDeclareIncident(organizationId, params, actorUserId, idempotencyKey)
+        ON_CALL_CREATE_INCIDENT_ACTION_STEP ->
+            executeOnCallCreateIncidentAction(organizationId, params, actorUserId, idempotencyKey)
+        else -> null
+    }
 
     fun supports(stepName: String): Boolean =
         stepName in SUPPORTED_ACTIONS
@@ -311,8 +326,8 @@ class WorkflowTrustedActionExecutor(
         actorUserId: Int?,
         idempotencyKey: String?,
     ): Map<String, JsonElement> {
-        if (!nativeIncidentEntitlement(organizationId)) {
-            throw IllegalStateException("Native incident response is not enabled for this organization")
+        check(nativeIncidentEntitlement(organizationId)) {
+            "Native incident response is not enabled for this organization"
         }
         val bridge = FeatureRegistry.getOnCallBridge()
             ?: return mapOf(
@@ -338,6 +353,34 @@ class WorkflowTrustedActionExecutor(
                 ),
             ) ?: throw IllegalStateException("On-call incident declaration did not return an incident ID")
         return mapOf("incident_id" to JsonPrimitive(incidentId))
+    }
+
+    private suspend fun executeOnCallCreateIncidentAction(
+        organizationId: Int,
+        params: Map<String, String>,
+        actorUserId: Int?,
+        idempotencyKey: String?,
+    ): Map<String, JsonElement> {
+        check(nativeIncidentEntitlement(organizationId)) {
+            "Native incident response is not enabled for this organization"
+        }
+        val bridge = FeatureRegistry.getOnCallBridge()
+            ?: return mapOf(
+                "requires_enterprise" to JsonPrimitive(true),
+                "message" to JsonPrimitive("On-call incident actions require an enabled on-call bridge"),
+            )
+        val actionResourceId = bridge.createIncidentAction(
+            OnCallIncidentActionRequest(
+                organizationId = organizationId,
+                incidentResourceId = params.required("incident_id"),
+                userId = actorUserId ?: workflowActorUserId(organizationId),
+                description = params.required("description"),
+                assigneeUserResourceId = params.optional("assignee_user_id"),
+                source = "WORKFLOW",
+                commandKey = idempotencyKey ?: "workflow:${UUID.randomUUID()}:incident-action",
+            ),
+        ) ?: throw IllegalStateException("On-call incident action was not created")
+        return mapOf("action_id" to JsonPrimitive(actionResourceId))
     }
 
     private suspend fun executePremiumConnector(
@@ -464,6 +507,7 @@ class WorkflowTrustedActionExecutor(
         const val ALERT_SILENCE_STEP = "alert.silence"
         const val ON_CALL_PAGE_STEP = "oncall.page"
         const val ON_CALL_DECLARE_INCIDENT_STEP = "oncall.incident.declare"
+        const val ON_CALL_CREATE_INCIDENT_ACTION_STEP = "oncall.incident.action.create"
         const val JIRA_CREATE_ISSUE_STEP = CONNECTOR_JIRA_CREATE_ISSUE_ACTION
         const val PAGERDUTY_TRIGGER_INCIDENT_STEP = CONNECTOR_PAGERDUTY_TRIGGER_INCIDENT_ACTION
         const val GITHUB_CREATE_ISSUE_STEP = CONNECTOR_GITHUB_CREATE_ISSUE_ACTION
@@ -483,6 +527,7 @@ class WorkflowTrustedActionExecutor(
                 ALERT_SILENCE_STEP,
                 ON_CALL_PAGE_STEP,
                 ON_CALL_DECLARE_INCIDENT_STEP,
+                ON_CALL_CREATE_INCIDENT_ACTION_STEP,
             ) + WORKFLOW_PREMIUM_CONNECTOR_ACTIONS
     }
 }

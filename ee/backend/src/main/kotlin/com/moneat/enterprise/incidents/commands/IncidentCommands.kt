@@ -8,6 +8,7 @@ import com.moneat.enterprise.incidents.models.NativeIncidentMode
 import com.moneat.enterprise.incidents.models.NativeIncidentStatus
 import com.moneat.enterprise.incidents.models.NativeIncidentVisibility
 import com.moneat.enterprise.incidents.models.IncidentSourceType
+import com.moneat.enterprise.incidents.models.IncidentActionSource
 import kotlinx.serialization.json.JsonElement
 import kotlin.time.Instant
 
@@ -34,6 +35,11 @@ enum class IncidentCommandType(val wire: String) {
     OBSERVE("OBSERVE"),
     LEAVE("LEAVE"),
     ADD_ACTION("ADD_ACTION"),
+    CLAIM_ACTION("CLAIM_ACTION"),
+    REASSIGN_ACTION("REASSIGN_ACTION"),
+    COMPLETE_ACTION("COMPLETE_ACTION"),
+    CANCEL_ACTION("CANCEL_ACTION"),
+    CONVERT_ACTION("CONVERT_ACTION"),
     ADD_TIMELINE_EVENT("ADD_TIMELINE_EVENT"),
     LINK_ON_CALL_ALERT("LINK_ON_CALL_ALERT"),
     LINK_SOURCE("LINK_SOURCE"),
@@ -241,9 +247,67 @@ data class AddIncidentActionCommand(
     override val incidentId: Int,
     val title: String,
     val assigneeUserId: Int? = null,
+    val description: String? = null,
+    val source: IncidentActionSource = IncidentActionSource.COMMAND,
+    val slackChannelId: String? = null,
+    val slackMessageTs: String? = null,
     override val expectedVersion: Int? = null,
 ) : ExistingIncidentCommand {
     override val type = IncidentCommandType.ADD_ACTION
+}
+
+data class ClaimIncidentActionCommand(
+    override val commandKey: String,
+    override val actor: IncidentCommandActor,
+    override val incidentId: Int,
+    val actionResourceId: String,
+    override val expectedVersion: Int? = null,
+) : ExistingIncidentCommand {
+    override val type = IncidentCommandType.CLAIM_ACTION
+}
+
+data class ReassignIncidentActionCommand(
+    override val commandKey: String,
+    override val actor: IncidentCommandActor,
+    override val incidentId: Int,
+    val actionResourceId: String,
+    val assigneeUserId: Int,
+    override val expectedVersion: Int? = null,
+) : ExistingIncidentCommand {
+    override val type = IncidentCommandType.REASSIGN_ACTION
+}
+
+data class CompleteIncidentActionCommand(
+    override val commandKey: String,
+    override val actor: IncidentCommandActor,
+    override val incidentId: Int,
+    val actionResourceId: String,
+    val note: String? = null,
+    override val expectedVersion: Int? = null,
+) : ExistingIncidentCommand {
+    override val type = IncidentCommandType.COMPLETE_ACTION
+}
+
+data class CancelIncidentActionCommand(
+    override val commandKey: String,
+    override val actor: IncidentCommandActor,
+    override val incidentId: Int,
+    val actionResourceId: String,
+    val reason: String? = null,
+    override val expectedVersion: Int? = null,
+) : ExistingIncidentCommand {
+    override val type = IncidentCommandType.CANCEL_ACTION
+}
+
+data class ConvertIncidentActionToFollowUpCommand(
+    override val commandKey: String,
+    override val actor: IncidentCommandActor,
+    override val incidentId: Int,
+    val actionResourceId: String,
+    val followUpDescription: String? = null,
+    override val expectedVersion: Int? = null,
+) : ExistingIncidentCommand {
+    override val type = IncidentCommandType.CONVERT_ACTION
 }
 
 data class AddIncidentTimelineEventCommand(
@@ -334,6 +398,7 @@ data class IncidentCommandResult(
     val status: NativeIncidentStatus,
     val version: Int,
     val replayed: Boolean,
+    val actionResourceId: String? = null,
 )
 
 open class IncidentCommandException(message: String) : IllegalStateException(message)

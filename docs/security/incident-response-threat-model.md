@@ -57,7 +57,7 @@ The Backlog is authoritative for task boundaries. The security-relevant owners a
 | TASK-1.46 | Native/forwarded incident, alert, and episode disambiguation | Done |
 | TASK-1.47 | Durable incident domain events and transactional outbox | Done |
 | TASK-1.48 | **Hardening & verification** — owns automated tests, integration simulations, operational metrics/alerts, and manual security tests for every threat ID | Planned |
-| TASK-1.50 | Enterprise entitlements, quotas, and usage accounting | Planned |
+| TASK-1.49 / 1.50 | Enterprise entitlements, quotas, and usage accounting | Done |
 
 ### 1.4 Non-goals
 
@@ -553,7 +553,7 @@ Audit writes fail closed. Database-resident authorization, approval, mutation, e
 
 These are **decided**; TASK-1.48 implements/verifies against them and does not reopen them.
 
-1. **Fail closed everywhere.** Missing entitlement, missing signing secret, unverified signature, unmapped/guest/Connect Slack identity, absent enterprise bridge, or an unknown incident-domain object name ⇒ deny. Native incident features are unreachable without the On-Call/enterprise entitlement (INV-1, INV-12, PASS-03).
+1. **Fail closed everywhere.** Missing entitlement, missing signing secret, unverified signature, unmapped/guest/Connect Slack identity, absent enterprise bridge, or an unknown incident-domain object name ⇒ deny. Native incident features are unreachable without the On-Call/enterprise entitlement, which is authoritative for API, Slack, AI, and worker execution (INV-1, INV-12, PASS-03).
 2. **Two incident systems stay separate.** Native incidents (`ee/backend/.../incidents`) and the OSS AGPL passthrough (`backend/features/incident`) share no tables and no lifecycle; the canonical glossary (`NATIVE_INCIDENT` vs `FORWARDED_PROVIDER_INCIDENT`) is the routing authority. The passthrough is delivery/sync only.
 3. **Principal separation.** Slack **bot** and **user** are distinct principals with distinct grants; a workspace is an explicit binding principal, not an attribute; privileged workspace admins get install/scope authority only and never implicit Moneat authority. Slack-derived authority always resolves through a verified `(workspace_binding_id, slack_user_id)` mapping to a Moneat member. Guests and Slack Connect identities receive no incident-app read or mutation authority by default, including in channels they can see.
 4. **Scoping rule.** Single-object reads/writes use `organization_id` and the object id in one predicate. List, search, and count queries use `organization_id` plus visibility/membership predicates. Objects are addressed publicly by `resource_id` UUID, and the org comes from authenticated/bound context, never client input. This includes AI snapshots and persisted approvals, even when user-scoped. `PRIVATE` incidents are membership-gated across read, list, search, timeline, roster, notifications, status, and export.

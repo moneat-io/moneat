@@ -10,6 +10,14 @@ import com.moneat.alerts.models.AlertEpisodes
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.enterprise.NativeIncidentEntitlementStatus
 import com.moneat.enterprise.incidents.commands.AcceptIncidentCommand
+import com.moneat.enterprise.incidents.actions.IncidentActionService
+import com.moneat.enterprise.incidents.models.IncidentActionSource
+import com.moneat.enterprise.incidents.commands.AddIncidentActionCommand
+import com.moneat.enterprise.incidents.commands.ClaimIncidentActionCommand
+import com.moneat.enterprise.incidents.commands.ReassignIncidentActionCommand
+import com.moneat.enterprise.incidents.commands.CompleteIncidentActionCommand
+import com.moneat.enterprise.incidents.commands.CancelIncidentActionCommand
+import com.moneat.enterprise.incidents.commands.ConvertIncidentActionToFollowUpCommand
 import com.moneat.enterprise.incidents.announcements.IncidentAnnouncementService
 import com.moneat.enterprise.incidents.commands.DeclareIncidentCommand
 import com.moneat.enterprise.incidents.commands.DeclineIncidentCommand
@@ -91,9 +99,11 @@ private const val INVALID_ALERT_ID_MESSAGE = "Invalid alert ID"
 private const val ALERT_NOT_FOUND_MESSAGE = "Alert not found"
 private const val INVALID_INCIDENT_ID_MESSAGE = "Invalid incident ID"
 private const val INCIDENT_NOT_FOUND_MESSAGE = "Incident not found"
+private const val INCIDENT_ACTION_NOT_FOUND_MESSAGE = "Incident action not found"
 private const val FORBIDDEN_MESSAGE = "Insufficient permissions"
 private const val INCIDENT_COMMANDER_ROLE_KEY = "incident-commander"
 private const val IDEMPOTENCY_KEY_HEADER = "Idempotency-Key"
+private const val MAX_ACTION_TITLE_LENGTH = 255
 
 internal data class OnCallUserContext(
     val organizationId: Int,
@@ -242,6 +252,33 @@ data class IncidentUpdateReminderRequest(
 )
 
 @Serializable
+data class CreateIncidentActionRequest(
+    val description: String,
+    val assigneeUserId: String? = null,
+    val source: String = "API",
+    val slackChannelId: String? = null,
+    val slackMessageTs: String? = null,
+    val expectedVersion: Int? = null,
+)
+
+@Serializable
+data class IncidentActionNoteRequest(
+    val note: String? = null,
+    val expectedVersion: Int? = null,
+)
+
+@Serializable
+data class IncidentActionVersionRequest(
+    val expectedVersion: Int? = null,
+)
+
+@Serializable
+data class ReassignIncidentActionRequest(
+    val assigneeUserId: String,
+    val expectedVersion: Int? = null,
+)
+
+@Serializable
 data class IncidentResponsePolicyRequest(
     val commanderPolicyId: String? = null,
     val ownershipPolicyId: String? = null,
@@ -257,6 +294,7 @@ private data class IncidentRouteServices(
     val announcementService: IncidentAnnouncementService,
     val responderService: IncidentResponderService,
     val timelineService: IncidentTimelineService,
+    val actionService: IncidentActionService,
     val responseService: IncidentResponseActivationService?,
 )
 
@@ -278,6 +316,7 @@ fun Route.incidentRoutes(
             announcementService = IncidentAnnouncementService(),
             responderService = IncidentResponderService(),
             timelineService = IncidentTimelineService(),
+            actionService = IncidentActionService(),
             responseService = incidentResponseActivationService,
         )
     registerIncidentCapabilitiesRoute(entitlementStatusProvider)
@@ -365,6 +404,7 @@ private fun Route.registerDeclaredIncidentRoutes(
             registerIncidentResponderRoutes(services.incidentService, services.responderService)
             services.responseService?.let { registerIncidentResponseIncidentRoutes(it) }
             registerIncidentTimelineRoutes(services.timelineService)
+            registerIncidentActionRoutes(services.incidentService, services.actionService)
             registerAddIncidentNoteRoute(services.incidentService)
         }
     }
@@ -1197,6 +1237,236 @@ private fun Route.registerIncidentUpdateRoutes(onCallIncidentService: OnCallInci
             )
         }
     }
+}
+
+private fun Route.registerIncidentActionRoutes(
+    onCallIncidentService: OnCallIncidentService,
+    actionService: IncidentActionService,
+) {
+    route("/{id}/actions") {
+        registerIncidentActionReadRoutes(onCallIncidentService, actionService)
+        registerIncidentActionCreateRoute(onCallIncidentService, actionService)
+        registerIncidentActionMutationRoutes(onCallIncidentService, actionService)
+    }
+}
+
+private fun Route.registerIncidentActionReadRoutes(
+    onCallIncidentService: OnCallIncidentService,
+    actionService: IncidentActionService,
+) {
+    get {
+        val routeContext = call.requireIncidentActionRouteContext(onCallIncidentService) ?: return@get
+        call.respond(actionService.list(routeContext.organizationId, routeContext.incidentId))
+    }
+    get("/metrics") {
+        val routeContext = call.requireIncidentActionRouteContext(onCallIncidentService) ?: return@get
+        call.respond(actionService.metrics(routeContext.organizationId, routeContext.incidentId))
+    }
+    get("/{actionId}") {
+        val routeContext = call.requireIncidentActionRouteContext(onCallIncidentService) ?: return@get
+        val action = actionService.get(
+            routeContext.organizationId,
+            routeContext.incidentId,
+            call.parameters["actionId"].orEmpty(),
+        )
+        if (action == null) {
+            call.respond(HttpStatusCode.NotFound, ErrorResponse(INCIDENT_ACTION_NOT_FOUND_MESSAGE))
+        } else {
+            call.respond(action)
+        }
+    }
+    get("/{actionId}/events") {
+        val routeContext = call.requireIncidentActionRouteContext(onCallIncidentService) ?: return@get
+        val actionId = call.parameters["actionId"].orEmpty()
+        if (actionService.get(routeContext.organizationId, routeContext.incidentId, actionId) == null) {
+            call.respond(HttpStatusCode.NotFound, ErrorResponse(INCIDENT_ACTION_NOT_FOUND_MESSAGE))
+            return@get
+        }
+        call.respond(actionService.events(routeContext.organizationId, routeContext.incidentId, actionId))
+    }
+}
+
+private fun Route.registerIncidentActionCreateRoute(
+    onCallIncidentService: OnCallIncidentService,
+    actionService: IncidentActionService,
+) {
+    post {
+        val routeContext = call.requireIncidentActionRouteContext(onCallIncidentService) ?: return@post
+        val request = call.receive<CreateIncidentActionRequest>()
+        val source = IncidentActionSource.entries.firstOrNull { it.wire == request.source.trim().uppercase() }
+            ?: run {
+                call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident action source"))
+                return@post
+            }
+        val assignee = request.assigneeUserId?.let {
+            call.requireReassignmentUserId(routeContext.organizationId, it) ?: return@post
+        }
+        try {
+            val result = onCallIncidentService.executeIncidentCommand(
+                AddIncidentActionCommand(
+                    commandKey = call.incidentCommandKey("add-action"),
+                    actor = IncidentCommandActor(routeContext.organizationId, routeContext.userId, "REST"),
+                    incidentId = routeContext.incidentId,
+                    title = request.description.trim().take(MAX_ACTION_TITLE_LENGTH),
+                    description = request.description,
+                    assigneeUserId = assignee,
+                    source = source,
+                    slackChannelId = request.slackChannelId,
+                    slackMessageTs = request.slackMessageTs,
+                    expectedVersion = request.expectedVersion,
+                ),
+            )
+            val action = result.actionResourceId?.let {
+                actionService.get(routeContext.organizationId, routeContext.incidentId, it)
+            }
+            if (action == null) {
+                call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Incident action was not created"))
+            } else {
+                call.respond(HttpStatusCode.Created, action)
+            }
+        } catch (error: IncidentCommandException) {
+            call.respondIncidentCommandFailure(error)
+        } catch (error: IllegalArgumentException) {
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse(error.message))
+        }
+    }
+}
+
+private fun Route.registerIncidentActionMutationRoutes(
+    onCallIncidentService: OnCallIncidentService,
+    actionService: IncidentActionService,
+) {
+    post("/{actionId}/claim") {
+        val routeContext = call.requireIncidentActionRouteContext(onCallIncidentService) ?: return@post
+        val request = call.receiveNullable<IncidentActionVersionRequest>() ?: IncidentActionVersionRequest()
+        executeActionCommand(IncidentActionRouteContext(call, onCallIncidentService, actionService, routeContext)) {
+            ClaimIncidentActionCommand(
+                commandKey = call.incidentCommandKey("claim-action"),
+                actor = IncidentCommandActor(routeContext.organizationId, routeContext.userId, "REST"),
+                incidentId = routeContext.incidentId,
+                actionResourceId = it,
+                expectedVersion = request.expectedVersion,
+            )
+        }
+    }
+    post("/{actionId}/reassign") {
+        val routeContext = call.requireIncidentActionRouteContext(onCallIncidentService) ?: return@post
+        val request = call.receive<ReassignIncidentActionRequest>()
+        val assignee = call.requireReassignmentUserId(
+            routeContext.organizationId,
+            request.assigneeUserId,
+        ) ?: return@post
+        executeActionCommand(IncidentActionRouteContext(call, onCallIncidentService, actionService, routeContext)) {
+            ReassignIncidentActionCommand(
+                commandKey = call.incidentCommandKey("reassign-action"),
+                actor = IncidentCommandActor(routeContext.organizationId, routeContext.userId, "REST"),
+                incidentId = routeContext.incidentId,
+                actionResourceId = it,
+                assigneeUserId = assignee,
+                expectedVersion = request.expectedVersion,
+            )
+        }
+    }
+    post("/{actionId}/complete") {
+        val routeContext = call.requireIncidentActionRouteContext(onCallIncidentService) ?: return@post
+        val request = call.receiveNullable<IncidentActionNoteRequest>() ?: IncidentActionNoteRequest()
+        executeActionCommand(IncidentActionRouteContext(call, onCallIncidentService, actionService, routeContext)) {
+            CompleteIncidentActionCommand(
+                commandKey = call.incidentCommandKey("complete-action"),
+                actor = IncidentCommandActor(routeContext.organizationId, routeContext.userId, "REST"),
+                incidentId = routeContext.incidentId,
+                actionResourceId = it,
+                note = request.note,
+                expectedVersion = request.expectedVersion,
+            )
+        }
+    }
+    post("/{actionId}/cancel") {
+        val routeContext = call.requireIncidentActionRouteContext(onCallIncidentService) ?: return@post
+        val request = call.receiveNullable<IncidentActionNoteRequest>() ?: IncidentActionNoteRequest()
+        executeActionCommand(IncidentActionRouteContext(call, onCallIncidentService, actionService, routeContext)) {
+            CancelIncidentActionCommand(
+                commandKey = call.incidentCommandKey("cancel-action"),
+                actor = IncidentCommandActor(routeContext.organizationId, routeContext.userId, "REST"),
+                incidentId = routeContext.incidentId,
+                actionResourceId = it,
+                reason = request.note,
+                expectedVersion = request.expectedVersion,
+            )
+        }
+    }
+    post("/{actionId}/convert-to-follow-up") {
+        val routeContext = call.requireIncidentActionRouteContext(onCallIncidentService) ?: return@post
+        val request = call.receiveNullable<IncidentActionNoteRequest>() ?: IncidentActionNoteRequest()
+        executeActionCommand(IncidentActionRouteContext(call, onCallIncidentService, actionService, routeContext)) {
+            ConvertIncidentActionToFollowUpCommand(
+                commandKey = call.incidentCommandKey("convert-action"),
+                actor = IncidentCommandActor(routeContext.organizationId, routeContext.userId, "REST"),
+                incidentId = routeContext.incidentId,
+                actionResourceId = it,
+                followUpDescription = request.note,
+                expectedVersion = request.expectedVersion,
+            )
+        }
+    }
+}
+
+private suspend fun ApplicationCall.requireIncidentActionRouteContext(
+    onCallIncidentService: OnCallIncidentService,
+): IncidentActionRouteIdentity? {
+    val context = requireUserContext() ?: return null
+    val incidentId = requireIncidentId(context.organizationId) ?: return null
+    val incident = onCallIncidentService.getIncident(incidentId)
+    if (incident == null) {
+        respond(HttpStatusCode.NotFound, ErrorResponse(INCIDENT_NOT_FOUND_MESSAGE))
+        return null
+    }
+    if (incident.visibility == NativeIncidentVisibility.PRIVATE.wire &&
+        !requireIncidentResponderOrAdmin(context, incidentId)
+    ) {
+        return null
+    }
+    return IncidentActionRouteIdentity(context.organizationId, context.userId, incidentId)
+}
+
+private suspend fun executeActionCommand(
+    routeContext: IncidentActionRouteContext,
+    command: (String) -> IncidentCommand,
+) {
+    val actionId = routeContext.call.parameters["actionId"].orEmpty()
+    if (routeContext.actionService.get(routeContext.organizationId, routeContext.incidentId, actionId) == null) {
+        routeContext.call.respond(HttpStatusCode.NotFound, ErrorResponse(INCIDENT_ACTION_NOT_FOUND_MESSAGE))
+        return
+    }
+    try {
+        routeContext.onCallIncidentService.executeIncidentCommand(command(actionId))
+        routeContext.call.respond(
+            checkNotNull(
+                routeContext.actionService.get(routeContext.organizationId, routeContext.incidentId, actionId),
+            ),
+        )
+    } catch (error: IncidentCommandException) {
+        routeContext.call.respondIncidentCommandFailure(error)
+    } catch (error: IllegalArgumentException) {
+        routeContext.call.respond(HttpStatusCode.BadRequest, ErrorResponse(error.message))
+    }
+}
+
+private data class IncidentActionRouteIdentity(
+    val organizationId: Int,
+    val userId: Int,
+    val incidentId: Int,
+)
+
+private data class IncidentActionRouteContext(
+    val call: ApplicationCall,
+    val onCallIncidentService: OnCallIncidentService,
+    val actionService: IncidentActionService,
+    val identity: IncidentActionRouteIdentity,
+) {
+    val organizationId: Int get() = identity.organizationId
+    val userId: Int get() = identity.userId
+    val incidentId: Int get() = identity.incidentId
 }
 
 private fun Route.registerAcceptIncidentRoute(onCallIncidentService: OnCallIncidentService) {

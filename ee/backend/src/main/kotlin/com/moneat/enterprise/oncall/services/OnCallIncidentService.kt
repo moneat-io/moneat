@@ -219,6 +219,21 @@ class OnCallIncidentService(
                 ?.get(OnCallIncidents.organizationId)
         }
 
+    fun getIncidentIdByResourceId(organizationId: Int, resourceId: String): Int? {
+        val parsed = resourceId.toUuidOrNull() ?: return null
+        return transaction {
+            OnCallIncidents
+                .selectAll()
+                .where {
+                    (OnCallIncidents.organizationId eq organizationId) and
+                        (OnCallIncidents.resourceId eq parsed)
+                }
+                .singleOrNull()
+                ?.get(OnCallIncidents.id)
+                ?.value
+        }
+    }
+
     fun addNote(
         incidentId: Int,
         userId: Int,

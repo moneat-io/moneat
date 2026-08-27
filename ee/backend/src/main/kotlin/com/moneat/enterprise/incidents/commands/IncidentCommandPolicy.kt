@@ -68,6 +68,12 @@ object IncidentTriageCapabilityPolicy {
             IncidentCommandType.UNLINK_SOURCE,
             -> IncidentCapability.INVESTIGATION
             IncidentCommandType.ADD_ACTION -> IncidentCapability.ACTIONS
+            IncidentCommandType.CLAIM_ACTION,
+            IncidentCommandType.REASSIGN_ACTION,
+            IncidentCommandType.COMPLETE_ACTION,
+            IncidentCommandType.CANCEL_ACTION,
+            -> IncidentCapability.ACTIONS
+            IncidentCommandType.CONVERT_ACTION -> IncidentCapability.FOLLOW_UPS
         }
 
     fun permits(capability: IncidentCapability): Boolean = capability in TRIAGE_CAPABILITIES

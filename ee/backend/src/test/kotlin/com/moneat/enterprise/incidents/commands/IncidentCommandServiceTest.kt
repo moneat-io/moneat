@@ -15,6 +15,11 @@ import com.moneat.enterprise.incidents.models.NativeIncidentVisibility
 import com.moneat.enterprise.incidents.models.IncidentSourceType
 import com.moneat.enterprise.incidents.models.IncidentUpdateRequestStatus
 import com.moneat.enterprise.incidents.models.NativeIncidentUpdateRequests
+import com.moneat.enterprise.incidents.models.IncidentActionSource
+import com.moneat.enterprise.incidents.models.IncidentActionState
+import com.moneat.enterprise.incidents.models.NativeIncidentActions
+import com.moneat.enterprise.incidents.models.NativeIncidentActionEvents
+import com.moneat.enterprise.incidents.actions.IncidentActionService
 import com.moneat.enterprise.incidents.updates.IncidentUpdateReminderService
 import com.moneat.enterprise.oncall.models.OnCallAlerts
 import com.moneat.enterprise.oncall.models.OnCallIncidentAlerts
@@ -24,6 +29,7 @@ import com.moneat.enterprise.oncall.services.OnCallIncidentService
 import com.moneat.enterprise.incidents.responders.CreateIncidentRole
 import com.moneat.enterprise.incidents.responders.IncidentResponderService
 import com.moneat.shared.models.Users
+import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
@@ -36,10 +42,13 @@ import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.uuid.Uuid
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
 
 class IncidentCommandServiceTest {
     private lateinit var member: SeededMember
@@ -519,6 +528,235 @@ class IncidentCommandServiceTest {
             assertTrue("ACTION_ADDED" in eventTypes)
             assertTrue("CUSTOM_NOTE" in eventTypes)
             assertTrue("UPDATED" in eventTypes)
+        }
+    }
+
+    @Test
+    fun `persists action lifecycle and audit history`() {
+        val incident = service.execute(declareCommand("action-lifecycle", actor()))
+        val actionService = IncidentActionService()
+        assertTrue(actionService.list(member.organizationId, incident.incidentId).isEmpty())
+        assertNull(actionService.get(member.organizationId, incident.incidentId, "not-a-uuid"))
+        assertTrue(actionService.events(member.organizationId, incident.incidentId, "not-a-uuid").isEmpty())
+        assertNull(actionService.internalId(member.organizationId, incident.incidentId, "not-a-uuid"))
+        val addCommand = AddIncidentActionCommand(
+            commandKey = "action-created",
+            actor = actor(),
+            incidentId = incident.incidentId,
+            title = "Drain unhealthy node",
+            description = "Drain the unhealthy node and verify capacity",
+            source = IncidentActionSource.SLACK,
+            slackChannelId = "C123",
+            slackMessageTs = "1712345678.000100",
+            expectedVersion = 1,
+        )
+        val created = service.execute(addCommand)
+        val replay = service.execute(addCommand)
+        assertTrue(replay.replayed)
+        assertEquals(created.actionResourceId, replay.actionResourceId)
+        val actionResourceId = checkNotNull(created.actionResourceId)
+
+        assertEquals(IncidentActionState.OPEN.wire, actionService.get(
+            member.organizationId,
+            incident.incidentId,
+            actionResourceId,
+        )?.state)
+
+        val claimed = service.execute(
+            ClaimIncidentActionCommand(
+                commandKey = "action-claimed",
+                actor = actor(),
+                incidentId = incident.incidentId,
+                actionResourceId = actionResourceId,
+                expectedVersion = 2,
+            ),
+        )
+        val reassignedUserId = IncidentTestDatabase.seedUserInOrganization(member.organizationId, "action-assignee")
+        val reassigned = service.execute(
+            ReassignIncidentActionCommand(
+                commandKey = "action-reassigned",
+                actor = actor(),
+                incidentId = incident.incidentId,
+                actionResourceId = actionResourceId,
+                assigneeUserId = reassignedUserId,
+                expectedVersion = 3,
+            ),
+        )
+        val completed = service.execute(
+            CompleteIncidentActionCommand(
+                commandKey = "action-completed",
+                actor = actor(),
+                incidentId = incident.incidentId,
+                actionResourceId = actionResourceId,
+                note = "Capacity is healthy",
+                expectedVersion = 4,
+            ),
+        )
+        assertEquals(3, claimed.version)
+        assertEquals(4, reassigned.version)
+        assertEquals(5, completed.version)
+        val action = checkNotNull(
+            actionService.get(member.organizationId, incident.incidentId, actionResourceId),
+        )
+        assertEquals(incident.incidentResourceId, action.incidentId)
+        assertEquals(IncidentActionState.COMPLETED.wire, action.state)
+        assertEquals("C123", action.slackChannelId)
+        assertEquals("1712345678.000100", action.slackMessageTs)
+        assertEquals(1, actionService.list(member.organizationId, incident.incidentId).size)
+        assertEquals(
+            1,
+            actionService.metrics(member.organizationId, incident.incidentId).completed,
+        )
+        assertNotNull(actionService.internalId(member.organizationId, incident.incidentId, actionResourceId))
+        assertEquals(
+            4,
+            actionService.events(member.organizationId, incident.incidentId, actionResourceId).size,
+        )
+        transaction {
+            assertEquals(4, NativeIncidentActionEvents.selectAll().count())
+            assertEquals(1, NativeIncidentActions.selectAll().count())
+        }
+    }
+
+    @Test
+    fun `action creation audit captures the initial assignee`() {
+        val incident = service.execute(declareCommand("action-assignee-audit", actor()))
+        service.execute(
+            AddIncidentActionCommand(
+                commandKey = "action-assignee-created",
+                actor = actor(),
+                incidentId = incident.incidentId,
+                title = "Verify failover",
+                assigneeUserId = member.userId,
+                expectedVersion = 1,
+            ),
+        )
+
+        val assigneeResourceId = transaction {
+            Users.selectAll().where { Users.id eq member.userId }.single()[Users.resource_id].toString()
+        }
+        transaction {
+            val event = NativeIncidentActionEvents.selectAll().single()
+            assertEquals(
+                assigneeResourceId,
+                event[NativeIncidentActionEvents.details]["assigneeUserId"]?.jsonPrimitive?.content,
+            )
+        }
+    }
+
+    @Test
+    fun `action command replay retains resource id`() {
+        val incident = service.execute(declareCommand("action-replay", actor()))
+        val command = AddIncidentActionCommand(
+            commandKey = "action-replay-command",
+            actor = actor(),
+            incidentId = incident.incidentId,
+            title = "Check queue depth",
+            expectedVersion = 1,
+        )
+        val created = service.execute(command)
+        val replay = service.execute(command)
+        assertTrue(replay.replayed)
+        assertEquals(created.actionResourceId, replay.actionResourceId)
+    }
+
+    @Test
+    fun `no-op action mutations still validate the incident version`() {
+        val incident = service.execute(declareCommand("action-noop-version", actor()))
+        val created = service.execute(
+            AddIncidentActionCommand(
+                commandKey = "action-noop-created",
+                actor = actor(),
+                incidentId = incident.incidentId,
+                title = "Check queue depth",
+                expectedVersion = 1,
+            ),
+        )
+        val actionResourceId = checkNotNull(created.actionResourceId)
+        service.execute(
+            ClaimIncidentActionCommand(
+                commandKey = "action-noop-claimed",
+                actor = actor(),
+                incidentId = incident.incidentId,
+                actionResourceId = actionResourceId,
+                expectedVersion = 2,
+            ),
+        )
+
+        assertFailsWith<IncidentCommandConflictException> {
+            service.execute(
+                ClaimIncidentActionCommand(
+                    commandKey = "action-noop-stale",
+                    actor = actor(),
+                    incidentId = incident.incidentId,
+                    actionResourceId = actionResourceId,
+                    expectedVersion = 2,
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun `concurrent action claims serialize against the locked action row`() {
+        val incident = service.execute(declareCommand("action-concurrent-claim", actor()))
+        val created = service.execute(
+            AddIncidentActionCommand(
+                commandKey = "action-concurrent-created",
+                actor = actor(),
+                incidentId = incident.incidentId,
+                title = "Check queue depth",
+                expectedVersion = 1,
+            ),
+        )
+        val actionResourceId = checkNotNull(created.actionResourceId)
+        val secondUserId = IncidentTestDatabase.seedUserInOrganization(member.organizationId, "action-concurrent-other")
+        val executor = Executors.newFixedThreadPool(2)
+        try {
+            val results = executor.invokeAll(
+                listOf(
+                    Callable {
+                        runCatching {
+                            service.execute(
+                                ClaimIncidentActionCommand(
+                                    commandKey = "action-concurrent-claim-first",
+                                    actor = actor(),
+                                    incidentId = incident.incidentId,
+                                    actionResourceId = actionResourceId,
+                                ),
+                            )
+                        }
+                    },
+                    Callable {
+                        runCatching {
+                            service.execute(
+                                ClaimIncidentActionCommand(
+                                    commandKey = "action-concurrent-claim-second",
+                                    actor = IncidentCommandActor(
+                                        member.organizationId,
+                                        secondUserId,
+                                        "REST",
+                                    ),
+                                    incidentId = incident.incidentId,
+                                    actionResourceId = actionResourceId,
+                                ),
+                            )
+                        }
+                    },
+                ),
+            ).map { it.get() }
+
+            assertEquals(1, results.count { it.isSuccess })
+            assertEquals(1, results.count { it.exceptionOrNull() is IncidentCommandConflictException })
+            transaction {
+                val action = NativeIncidentActions.selectAll().single()
+                assertEquals(IncidentActionState.CLAIMED.wire, action[NativeIncidentActions.state])
+                val claimEvents = NativeIncidentActionEvents.selectAll()
+                    .where { NativeIncidentActionEvents.eventType eq "ACTION_CLAIMED" }
+                assertEquals(1, claimEvents.count())
+                assertEquals(IncidentActionState.OPEN.wire, claimEvents.single()[NativeIncidentActionEvents.fromState])
+            }
+        } finally {
+            executor.shutdownNow()
         }
     }
 
