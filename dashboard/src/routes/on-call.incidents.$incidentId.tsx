@@ -57,6 +57,7 @@ import {isTriageIncident} from '@/components/on-call/triage'
 import {IncidentTimelinePanel} from '@/components/on-call/IncidentTimelinePanel'
 import {IncidentRolesPanel} from '@/components/on-call/IncidentRolesPanel'
 import {IncidentSourcesPanel} from '@/components/on-call/IncidentSourcesPanel'
+import {IncidentFollowUpsPanel} from '@/components/on-call/IncidentFollowUpsPanel'
 import {
   incidentModeMeta,
   incidentVisibilityMeta,
@@ -359,6 +360,8 @@ function DeclaredIncidentDetailComponent() {
             incidentVersion={incident.version}
             onMutated={refreshIncident}
           />
+
+          <IncidentFollowUpsPanel incidentId={normalizedIncidentId} />
 
           <IncidentTimelinePanel incidentId={normalizedIncidentId} />
 

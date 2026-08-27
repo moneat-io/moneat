@@ -7,6 +7,7 @@ package com.moneat.enterprise.incidents.announcements
 import com.moneat.enterprise.incidents.IncidentTestDatabase
 import com.moneat.enterprise.incidents.SeededMember
 import com.moneat.enterprise.incidents.events.NativeIncidentDomainEvent
+import com.moneat.enterprise.incidents.followups.NativeIncidentFollowUps
 import com.moneat.enterprise.incidents.models.IncidentUpdateRequestStatus
 import com.moneat.enterprise.incidents.models.NativeIncidentRoleAssignments
 import com.moneat.enterprise.incidents.models.NativeIncidentRoleDefinitions
@@ -198,6 +199,63 @@ class IncidentAnnouncementServiceTest {
             )
         }
         assertTrue(requests.size >= 4)
+    }
+
+    @Test
+    fun `follow-up lifecycle refreshes the announcement card with a bounded work summary`() = runBlocking {
+        val incidentId = incidentId()
+        transaction {
+            NativeIncidentFollowUps.insert {
+                it[resourceId] = Uuid.random()
+                it[organizationId] = member.organizationId
+                it[NativeIncidentFollowUps.incidentId] = incidentId
+                it[title] = "Document customer communication"
+                it[description] = "Capture the response timeline"
+                it[ownerUserId] = member.userId
+                it[ownerTeamId] = null
+                it[priority] = "P1"
+                it[labels] = emptyList()
+                it[dueAt] = null
+                it[slaMinutes] = 60
+                it[reminderMinutes] = 15
+                it[nextReminderAt] = null
+                it[escalationLevel] = 0
+                it[status] = "OPEN"
+                it[acceptedBy] = null
+                it[acceptedAt] = null
+                it[completedBy] = null
+                it[completedAt] = null
+                it[createdBy] = member.userId
+                it[sourceType] = "API"
+                it[slackChannelId] = null
+                it[slackMessageTs] = null
+                it[createdAt] = now
+                it[updatedAt] = now
+            }
+        }
+        val requests = mutableListOf<SlackOutboundEnqueueRequest>()
+        val service = IncidentAnnouncementService(
+            enqueue = { request -> requests += request; Uuid.random().toString() },
+        )
+
+        service.consume(event("INCIDENT_ADD_FOLLOW_UP", 2, NativeIncidentStatus.ACTIVE.wire), "follow-up-card")
+
+        val payload = requests.single().payload
+        assertTrue(payload.contains("Follow-up work"))
+        assertTrue(payload.contains("1 item(s)"))
+        assertTrue(payload.contains("manage details in the incident workspace"))
+        assertTrue(!payload.contains("Document customer communication"))
+
+        transaction {
+            NativeIncidentAnnouncements.update({ NativeIncidentAnnouncements.incidentId eq incidentId }) {
+                it[providerMessageTs] = "123.456"
+            }
+            NativeIncidentFollowUps.update({ NativeIncidentFollowUps.incidentId eq incidentId }) {
+                it[status] = "COMPLETED"
+            }
+        }
+        service.consume(event("INCIDENT_COMPLETE_FOLLOW_UP", 3, NativeIncidentStatus.ACTIVE.wire), "follow-up-complete")
+        assertTrue(!requests.last().payload.contains("Follow-up work"))
     }
 
     @Test

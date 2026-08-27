@@ -341,6 +341,74 @@ export interface ReassignIncidentActionInput {
   expectedVersion?: number
 }
 
+export type IncidentFollowUpStatus = 'OPEN' | 'ACCEPTED' | 'COMPLETED' | 'CANCELLED'
+export type IncidentFollowUpPriority = 'P0' | 'P1' | 'P2' | 'P3' | 'P4' | 'P5'
+
+export interface OnCallIncidentFollowUp {
+  id: string
+  incidentId: string
+  title: string
+  description: string
+  ownerUserId?: string | null
+  ownerUserName?: string | null
+  ownerTeamId?: string | null
+  ownerTeamName?: string | null
+  priority: IncidentFollowUpPriority
+  labels: string[]
+  dueAt?: string | null
+  slaMinutes?: number | null
+  reminderMinutes?: number | null
+  nextReminderAt?: string | null
+  escalationLevel: number
+  status: IncidentFollowUpStatus
+  acceptedBy?: string | null
+  acceptedAt?: string | null
+  completedBy?: string | null
+  completedAt?: string | null
+  createdBy?: string | null
+  source: IncidentActionSource
+  slackChannelId?: string | null
+  slackMessageTs?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateIncidentFollowUpInput {
+  title: string
+  description: string
+  ownerUserId?: string
+  ownerTeamId?: string
+  priority?: IncidentFollowUpPriority
+  labels?: string[]
+  dueAt?: string
+  slaMinutes?: number
+  reminderMinutes?: number
+  source?: IncidentActionSource
+  slackChannelId?: string
+  slackMessageTs?: string
+  expectedVersion?: number
+}
+
+export interface UpdateIncidentFollowUpInput {
+  title?: string
+  description?: string
+  ownerUserId?: string
+  ownerTeamId?: string
+  priority?: IncidentFollowUpPriority
+  labels?: string[]
+  dueAt?: string
+  clearDueAt?: boolean
+  slaMinutes?: number
+  reminderMinutes?: number
+  clearReminderAt?: boolean
+  expectedVersion?: number
+}
+
+export interface IncidentFollowUpStatusInput {
+  note?: string
+  expectedVersion?: number
+}
+
 export interface OnCallIncidentDetail extends OnCallIncident {
   timeline?: OnCallTimelineEvent[]
 }

@@ -74,6 +74,12 @@ object IncidentTriageCapabilityPolicy {
             IncidentCommandType.CANCEL_ACTION,
             -> IncidentCapability.ACTIONS
             IncidentCommandType.CONVERT_ACTION -> IncidentCapability.FOLLOW_UPS
+            IncidentCommandType.ADD_FOLLOW_UP,
+            IncidentCommandType.UPDATE_FOLLOW_UP,
+            IncidentCommandType.ACCEPT_FOLLOW_UP,
+            IncidentCommandType.COMPLETE_FOLLOW_UP,
+            IncidentCommandType.CANCEL_FOLLOW_UP,
+            -> IncidentCapability.FOLLOW_UPS
         }
 
     fun permits(capability: IncidentCapability): Boolean = capability in TRIAGE_CAPABILITIES

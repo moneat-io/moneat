@@ -11,6 +11,7 @@ import com.moneat.enterprise.FeatureRegistry
 import com.moneat.enterprise.NativeIncidentEntitlementStatus
 import com.moneat.enterprise.incidents.commands.AcceptIncidentCommand
 import com.moneat.enterprise.incidents.actions.IncidentActionService
+import com.moneat.enterprise.incidents.followups.IncidentFollowUpService
 import com.moneat.enterprise.incidents.models.IncidentActionSource
 import com.moneat.enterprise.incidents.commands.AddIncidentActionCommand
 import com.moneat.enterprise.incidents.commands.ClaimIncidentActionCommand
@@ -295,6 +296,7 @@ private data class IncidentRouteServices(
     val responderService: IncidentResponderService,
     val timelineService: IncidentTimelineService,
     val actionService: IncidentActionService,
+    val followUpService: IncidentFollowUpService,
     val responseService: IncidentResponseActivationService?,
 )
 
@@ -317,11 +319,17 @@ fun Route.incidentRoutes(
             responderService = IncidentResponderService(),
             timelineService = IncidentTimelineService(),
             actionService = IncidentActionService(),
+            followUpService = IncidentFollowUpService(),
             responseService = incidentResponseActivationService,
         )
     registerIncidentCapabilitiesRoute(entitlementStatusProvider)
     incidentResponseActivationService?.let { registerIncidentResponseRoutes(it) }
     registerAlertRoutes(services.alertServiceProvider, services.incidentService, incidentEntitlement)
+    registerIncidentFollowUpRoutes(
+        services.incidentService,
+        services.followUpService,
+        incidentEntitlement,
+    )
     registerDeclaredIncidentRoutes(services, incidentEntitlement)
     registerIncidentConfigurationRoutes(
         services.configurationService,

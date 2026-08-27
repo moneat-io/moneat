@@ -28,6 +28,7 @@ import com.moneat.enterprise.incidents.models.NativeIncidentUpdateRequests
 import com.moneat.enterprise.incidents.models.IncidentActionState
 import com.moneat.enterprise.incidents.models.NativeIncidentActions
 import com.moneat.enterprise.incidents.models.NativeIncidentActionEvents
+import com.moneat.enterprise.incidents.followups.IncidentFollowUpCommandHandler
 import com.moneat.enterprise.incidents.timeline.IncidentTimelineWriter
 import com.moneat.enterprise.incidents.timeline.IncidentAlertTimelineBridge
 import com.moneat.enterprise.incidents.timeline.PendingIncidentTimelineEvent
@@ -66,6 +67,20 @@ class IncidentCommandService(
     private val incidentAlertTimelineBridge: IncidentAlertTimelineBridge = IncidentAlertTimelineBridge(),
     private val configurationService: IncidentConfigurationService = IncidentConfigurationService(),
 ) {
+    private val followUpCommandHandler by lazy {
+        IncidentFollowUpCommandHandler(
+            requireIncident = { command -> requireIncident(command) },
+            loadMutation = { incidentId, changed -> loadMutation(incidentId, changed) },
+            appendVersionedEvent = { command, eventType, details ->
+                appendVersionedEvent(command, eventType, details)
+            },
+            requireUserMembership = { organizationId, userId ->
+                requireUserMembership(organizationId, userId)
+            },
+            userResourceId = ::userResourceId,
+        )
+    }
+
     fun execute(command: IncidentCommand): IncidentCommandResult {
         policy.requireAllowed(command)
         return try {
@@ -135,6 +150,12 @@ class IncidentCommandService(
             is CancelIncidentActionCommand,
             is ConvertIncidentActionToFollowUpCommand,
             -> applyActionCommand(command)
+            is AddIncidentFollowUpCommand,
+            is UpdateIncidentFollowUpCommand,
+            is AcceptIncidentFollowUpCommand,
+            is CompleteIncidentFollowUpCommand,
+            is CancelIncidentFollowUpCommand,
+            -> followUpCommandHandler.apply(command)
             is AddIncidentTimelineEventCommand -> addTimelineEvent(command)
             is LinkOnCallAlertCommand -> linkAlert(command)
             is LinkIncidentSourceCommand -> linkSource(command)
@@ -185,6 +206,7 @@ class IncidentCommandService(
             ?: throw IncidentCommandConflictException("Incident command completed without an incident result")
         return loadMutation(incidentId, changed = false).copy(
             actionResourceId = existing[NativeIncidentCommands.actionResourceId]?.toString(),
+            followUpResourceId = existing[NativeIncidentCommands.followUpResourceId]?.toString(),
         ).toResult(replayed = true)
     }
 
@@ -1566,24 +1588,6 @@ class IncidentCommandService(
             .singleOrNull()
             ?: throw IncidentCommandNotFoundException("On-call alert not found")
 
-    private fun requireUserMembership(organizationId: Int, userId: Int) {
-        val found =
-            Memberships
-                .selectAll()
-                .where {
-                    (Memberships.organization_id eq organizationId) and (Memberships.user_id eq userId)
-                }.limit(1)
-                .singleOrNull() != null
-        if (!found) throw IncidentCommandNotFoundException("Incident participant not found")
-    }
-
-    private fun userResourceId(userId: Int): String =
-        Users
-            .selectAll()
-            .where { Users.id eq userId }
-            .single()[Users.resource_id]
-            .toString()
-
     private fun versionPredicate(command: ExistingIncidentCommand, current: ResultRow) =
         (OnCallIncidents.id eq command.incidentId) and
             (OnCallIncidents.organizationId eq command.actor.organizationId) and
@@ -1764,6 +1768,7 @@ class IncidentCommandService(
             it[expectedVersion] = command.expectedVersion
             it[resultVersion] = mutation.version
             it[actionResourceId] = mutation.actionResourceId?.let(Uuid::parse)
+            it[followUpResourceId] = mutation.followUpResourceId?.let(Uuid::parse)
             it[createdAt] = Clock.System.now()
         }
     }
@@ -1810,16 +1815,18 @@ class IncidentCommandService(
         }
 
     private fun IncidentMutation.eventPayload(command: IncidentCommand): Map<String, JsonElement> =
-        mapOf(
-            "incidentId" to JsonPrimitive(incidentResourceId),
-            "title" to JsonPrimitive(title),
-            "severity" to JsonPrimitive(severity),
-            "status" to JsonPrimitive(status.wire),
-            "version" to JsonPrimitive(version),
-            "actorUserId" to JsonPrimitive(command.actor.userId),
-            "origin" to JsonPrimitive(command.actor.origin),
-            "commandType" to JsonPrimitive(command.type.wire),
-        )
+        buildMap {
+            put("incidentId", JsonPrimitive(incidentResourceId))
+            put("title", JsonPrimitive(title))
+            put("severity", JsonPrimitive(severity))
+            put("status", JsonPrimitive(status.wire))
+            put("version", JsonPrimitive(version))
+            put("actorUserId", JsonPrimitive(command.actor.userId))
+            put("origin", JsonPrimitive(command.actor.origin))
+            put("commandType", JsonPrimitive(command.type.wire))
+            actionResourceId?.let { put("actionId", JsonPrimitive(it)) }
+            followUpResourceId?.let { put("followUpId", JsonPrimitive(it)) }
+        }
 
     private fun clearTerminalState(statement: UpdateBuilder<*>) {
         statement[OnCallIncidents.resolvedBy] = null
@@ -1848,9 +1855,10 @@ class IncidentCommandService(
             version = version,
             replayed = replayed,
             actionResourceId = actionResourceId,
+            followUpResourceId = followUpResourceId,
         )
 
-    private data class IncidentMutation(
+    internal data class IncidentMutation(
         val incidentId: Int,
         val incidentResourceId: String,
         val title: String,
@@ -1859,6 +1867,7 @@ class IncidentCommandService(
         val version: Int,
         val changed: Boolean,
         val actionResourceId: String? = null,
+        val followUpResourceId: String? = null,
     )
 
     private data class PreparedIncidentUpdate(
@@ -1964,3 +1973,21 @@ class IncidentCommandService(
         )
     }
 }
+
+private fun requireUserMembership(organizationId: Int, userId: Int) {
+    val found =
+        Memberships
+            .selectAll()
+            .where {
+                (Memberships.organization_id eq organizationId) and (Memberships.user_id eq userId)
+            }.limit(1)
+            .singleOrNull() != null
+    if (!found) throw IncidentCommandNotFoundException("Incident participant not found")
+}
+
+private fun userResourceId(userId: Int): String =
+    Users
+        .selectAll()
+        .where { Users.id eq userId }
+        .single()[Users.resource_id]
+        .toString()

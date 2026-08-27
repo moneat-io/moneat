@@ -131,6 +131,11 @@ internal object IncidentCommandFingerprint {
             is CompleteIncidentActionCommand,
             is CancelIncidentActionCommand,
             is ConvertIncidentActionToFollowUpCommand,
+            is AddIncidentFollowUpCommand,
+            is UpdateIncidentFollowUpCommand,
+            is AcceptIncidentFollowUpCommand,
+            is CompleteIncidentFollowUpCommand,
+            is CancelIncidentFollowUpCommand,
             -> actionParts(command)
             is AddIncidentTimelineEventCommand ->
                 listOf(command.incidentId.toString(), command.eventType, canonicalDetails(command.details))
@@ -179,6 +184,44 @@ internal object IncidentCommandFingerprint {
                 listOf(command.incidentId.toString(), command.actionResourceId, command.reason)
             is ConvertIncidentActionToFollowUpCommand ->
                 listOf(command.incidentId.toString(), command.actionResourceId, command.followUpDescription)
+            is AddIncidentFollowUpCommand ->
+                listOf(
+                    command.incidentId.toString(),
+                    command.title,
+                    command.description,
+                    command.ownerUserId?.toString(),
+                    command.ownerTeamId?.toString(),
+                    command.priority.wire,
+                    canonicalLabels(command.labels),
+                    command.dueAt?.toString(),
+                    command.slaMinutes?.toString(),
+                    command.reminderMinutes?.toString(),
+                    command.source.wire,
+                    command.slackChannelId,
+                    command.slackMessageTs,
+                )
+            is UpdateIncidentFollowUpCommand ->
+                listOf(
+                    command.incidentId.toString(),
+                    command.followUpResourceId,
+                    command.title,
+                    command.description,
+                    command.ownerUserId?.toString(),
+                    command.ownerTeamId?.toString(),
+                    command.priority?.wire,
+                    command.labels?.let(::canonicalLabels),
+                    command.dueAt?.toString(),
+                    command.clearDueAt.toString(),
+                    command.slaMinutes?.toString(),
+                    command.reminderMinutes?.toString(),
+                    command.clearReminderAt.toString(),
+                )
+            is AcceptIncidentFollowUpCommand ->
+                listOf(command.incidentId.toString(), command.followUpResourceId)
+            is CompleteIncidentFollowUpCommand ->
+                listOf(command.incidentId.toString(), command.followUpResourceId, command.note)
+            is CancelIncidentFollowUpCommand ->
+                listOf(command.incidentId.toString(), command.followUpResourceId, command.reason)
             else -> error("Unsupported incident action command")
         }
 
@@ -189,6 +232,8 @@ internal object IncidentCommandFingerprint {
         json.encodeToString<JsonElement>(
             JsonObject(details.toSortedMap().mapValues { (_, value) -> value.canonical() }),
         )
+
+    private fun canonicalLabels(labels: List<String>): String = json.encodeToString(labels)
 
     private fun JsonElement.canonical(): JsonElement =
         when (this) {
