@@ -26,6 +26,7 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.v1.core.and
@@ -44,6 +45,7 @@ class IncidentAnnouncementService(
     private val outboundDeliveryService: SlackOutboundDeliveryService = SlackOutboundDeliveryService(),
     private val enqueue: ((SlackOutboundEnqueueRequest) -> String)? = null,
     private val clock: Clock = Clock.System,
+    private val nudgeStateService: IncidentAnnouncementNudgeService = IncidentAnnouncementNudgeService(clock),
 ) {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
@@ -150,7 +152,17 @@ class IncidentAnnouncementService(
                 outboundDeliveryService.find(id)?.providerMessageTs
             }
         val isUpdate = previousTs != null
-        val cardPayload = cardPayload(snapshot, destination, previousTs)
+        val visibleNudgeKeys = nudgeStateService.visibleKeys(
+            scope = IncidentAnnouncementNudgeService.Scope(
+                organizationId = event.organizationId,
+                incidentId = event.incidentId,
+                ruleKey = destination.ruleKey,
+                teamId = destination.teamId,
+                channelId = destination.channelId,
+            ),
+            applicableKeys = applicableNudgeKeys(snapshot, destination.conditions.nudges),
+        )
+        val cardPayload = cardPayload(snapshot, destination, previousTs, visibleNudgeKeys)
         val idempotencyKey =
             "incident:${snapshot.resourceId}:announcement:${destination.ruleKey}:${destination.teamId}" +
                 ":${destination.channelId}:card"
@@ -166,6 +178,17 @@ class IncidentAnnouncementService(
         try {
             val deliveryId = enqueue(request)
             persistAnnouncement(event, destination, cardPayload, previousTs, deliveryId)
+            nudgeStateService.recordShown(
+                scope = IncidentAnnouncementNudgeService.Scope(
+                    organizationId = event.organizationId,
+                    incidentId = event.incidentId,
+                    ruleKey = destination.ruleKey,
+                    teamId = destination.teamId,
+                    channelId = destination.channelId,
+                ),
+                keys = visibleNudgeKeys,
+                version = event.aggregateVersion,
+            )
             if (previousTs != null && isMaterialUpdate(event.eventType)) {
                 enqueueThread(event, snapshot, destination, previousTs)
             }
@@ -393,6 +416,7 @@ class IncidentAnnouncementService(
         snapshot: IncidentSnapshot,
         destination: AnnouncementDestination,
         messageTs: String?,
+        visibleNudgeKeys: Set<String>,
     ): String =
         json.encodeToString(
             buildJsonObject {
@@ -448,7 +472,7 @@ class IncidentAnnouncementService(
                             })
                         })
                     }
-                    nudgeBlock(snapshot, destination.conditions.nudges)?.let(::add)
+                    nudgeBlocks(snapshot, destination.conditions.nudges, visibleNudgeKeys).forEach(::add)
                     add(buildJsonObject {
                         put("type", "context")
                         put("elements", buildJsonArray {
@@ -505,41 +529,66 @@ class IncidentAnnouncementService(
         put("value", value)
     }
 
-    private fun nudgeBlock(
+    private fun nudgeBlocks(
         snapshot: IncidentSnapshot,
         policy: IncidentAnnouncementNudgePolicy,
-    ): JsonObject? {
-        if (!policy.enabled || snapshot.status in TERMINAL_STATUSES) return null
-        val nudges = nudgeMessages(snapshot, policy)
-        if (nudges.isEmpty()) return null
-        return buildJsonObject {
-            put("type", "section")
-            put("text", buildJsonObject {
-                put("type", "mrkdwn")
-                put("text", "*Response nudges*\n" + nudges.take(MAX_NUDGES).joinToString("\n") { "• $it" })
+        visibleNudgeKeys: Set<String>,
+    ): List<JsonObject> {
+        if (!policy.enabled || snapshot.status in TERMINAL_STATUSES) return emptyList()
+        val nudges = nudgeMessages(snapshot, policy).filter { it.key in visibleNudgeKeys }.take(MAX_NUDGES)
+        if (nudges.isEmpty()) return emptyList()
+        return buildList {
+            add(buildJsonObject {
+                put("type", "section")
+                put("text", buildJsonObject {
+                    put("type", "mrkdwn")
+                    put("text", "*Response nudges*\n" + nudges.joinToString("\n") { "• ${it.text}" })
+                })
             })
+            nudges.forEach { nudge ->
+                add(buildJsonObject {
+                    put("type", "actions")
+                    putJsonArray("elements") {
+                        add(action("Dismiss ${nudge.text}", "incident_nudge_dismiss:${snapshot.resourceId}", nudge.key))
+                        if (nudge.key == NUDGE_TRIAGE_DECISION) {
+                            add(action("Accept", "incident_accept:${snapshot.resourceId}"))
+                            add(action("Merge", "incident_merge:${snapshot.resourceId}"))
+                            add(action("Decline", "incident_decline:${snapshot.resourceId}"))
+                        }
+                    }
+                })
+            }
         }
     }
+
+    private fun applicableNudgeKeys(
+        snapshot: IncidentSnapshot,
+        policy: IncidentAnnouncementNudgePolicy,
+    ): Set<String> = nudgeMessages(snapshot, policy).map { it.key }.toSet()
 
     private fun nudgeMessages(
         snapshot: IncidentSnapshot,
         policy: IncidentAnnouncementNudgePolicy,
-    ): List<String> = listOfNotNull(
-        "Assign an incident lead".takeIf {
+    ): List<IncidentNudge> = listOfNotNull(
+        IncidentNudge(NUDGE_MISSING_LEAD, "Assign an incident lead").takeIf {
             policy.missingLead && snapshot.roles.none { it.startsWith("Incident Commander:") }
         },
-        "Add an incident summary".takeIf { policy.missingSummary && snapshot.summary.isNullOrBlank() },
-        "Set the next update time".takeIf {
+        IncidentNudge(NUDGE_MISSING_SUMMARY, "Add an incident summary").takeIf {
+            policy.missingSummary && snapshot.summary.isNullOrBlank()
+        },
+        IncidentNudge(NUDGE_MISSING_UPDATE, "Set the next update time").takeIf {
             policy.missingUpdate && snapshot.fields["next_update_at"].isNullOrBlank()
         },
-        "Publish a status page update".takeIf {
+        IncidentNudge(NUDGE_MISSING_STATUS_PAGE, "Publish a status page update").takeIf {
             policy.missingStatusPage && snapshot.fields["status_page_url"].isNullOrBlank()
         },
-        "Make the triage decision".takeIf {
+        IncidentNudge(NUDGE_TRIAGE_DECISION, "Make the triage decision").takeIf {
             policy.missingTriageDecision && snapshot.status == NativeIncidentStatus.TRIAGE.wire
         },
-        "Activate the response escalation".takeIf { policy.missingEscalation && snapshot.escalation == null },
-        "Keep the closure checklist current".takeIf { policy.missingClosure },
+        IncidentNudge(NUDGE_MISSING_ESCALATION, "Activate the response escalation").takeIf {
+            policy.missingEscalation && snapshot.escalation == null
+        },
+        IncidentNudge(NUDGE_MISSING_CLOSURE, "Keep the closure checklist current").takeIf { policy.missingClosure },
     )
 
     private fun JsonElement.asText(): String = (this as? JsonPrimitive)?.contentOrNull.orEmpty()
@@ -641,6 +690,8 @@ class IncidentAnnouncementService(
         }
     }
 
+    private data class IncidentNudge(val key: String, val text: String)
+
     private fun isHttpUrl(url: String): Boolean = url.startsWith("https://") || url.startsWith("http://")
 
     companion object {
@@ -663,6 +714,13 @@ class IncidentAnnouncementService(
         private const val MAX_ACTION_LABEL_LENGTH = 75
         private const val MAX_ACTION_VALUE_LENGTH = 2_000
         private const val MAX_NUDGES = 7
+        private const val NUDGE_MISSING_LEAD = "missing_lead"
+        private const val NUDGE_MISSING_SUMMARY = "missing_summary"
+        private const val NUDGE_MISSING_UPDATE = "missing_update"
+        private const val NUDGE_MISSING_STATUS_PAGE = "missing_status_page"
+        private const val NUDGE_TRIAGE_DECISION = "triage_decision"
+        private const val NUDGE_MISSING_ESCALATION = "missing_escalation"
+        private const val NUDGE_MISSING_CLOSURE = "missing_closure"
         private val ACTION_ID_PATTERN = Regex("^[a-z][a-z0-9_:-]{1,63}$")
         private val RESERVED_ACTION_PREFIXES = setOf("incident_accept:", "incident_merge:", "incident_decline:")
         private val TERMINAL_STATUSES = setOf("RESOLVED", "CLOSED", "CANCELLED", "DECLINED", "MERGED")
