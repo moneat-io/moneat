@@ -238,7 +238,7 @@ class AlertRouteRoutesTest {
     }
 
     @Test
-    fun `rollout gated organizations are refused`() = testApplication {
+    fun `organizations without entitlement are refused`() = testApplication {
         application { installAlertRoutes(AlertRoutePolicy.denyForTests()) }
 
         val listed = client.get("/v1/on-call/alert-routes") { authorize() }

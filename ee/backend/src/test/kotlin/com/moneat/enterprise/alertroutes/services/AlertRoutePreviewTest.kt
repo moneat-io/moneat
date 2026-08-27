@@ -236,7 +236,7 @@ class AlertRoutePreviewTest {
     }
 
     @Test
-    fun `preview is rollout gated`() {
+    fun `preview is entitlement gated`() {
         val gated = AlertRouteEvaluationService(policy = AlertRoutePolicy.denyForTests())
 
         assertFailsWith<IncidentCommandDeniedException> {

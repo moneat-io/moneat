@@ -523,7 +523,7 @@ class AlertRouteCommandServiceTest {
     }
 
     @Test
-    fun `rollout gating denies reads and writes for organizations without native incident response`() {
+    fun `entitlement gating denies reads and writes for organizations without native incident response`() {
         val gatedService = AlertRouteCommandService(policy = AlertRoutePolicy.denyForTests())
 
         assertFailsWith<IncidentCommandDeniedException> { gatedService.list(organization.organizationId) }
