@@ -176,7 +176,7 @@ describe('alert routes page', () => {
     await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.objectContaining({description: 'network failed'})))
   })
 
-  it('honors loading and rollout-disabled gates', () => {
+  it('honors loading and entitlement-disabled gates', () => {
     state.isLoading = true
     const loading = renderPage()
     expect(loading.container.querySelector('.animate-spin')).not.toBeNull()

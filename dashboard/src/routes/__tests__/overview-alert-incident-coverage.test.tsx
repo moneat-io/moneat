@@ -493,7 +493,7 @@ describe('overview alert and incident dashboard', () => {
     mockApi.markAlertUnavailable.mockResolvedValue(undefined)
     mockApi.addAlertNote.mockResolvedValue(alertTimeline[1])
     mockApi.declareIncidentFromAlert.mockResolvedValue(declaredIncident)
-    // Native incident rollout enabled so existing incident/declare coverage holds.
+    // Native incident entitlement enabled so existing incident/declare coverage holds.
     mockApi.getNativeIncidentCapabilities.mockResolvedValue({
       enabled: true,
       environment: 'production',

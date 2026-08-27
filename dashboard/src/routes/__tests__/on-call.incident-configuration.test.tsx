@@ -173,7 +173,7 @@ describe('IncidentConfiguration', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockApi.getCurrentUser.mockResolvedValue({orgId: 'organization-one'})
-    // Native incident rollout enabled so the configuration surface renders.
+    // Native incident entitlement enabled so the configuration surface renders.
     mockApi.getNativeIncidentCapabilities.mockResolvedValue({
       enabled: true,
       environment: 'production',
