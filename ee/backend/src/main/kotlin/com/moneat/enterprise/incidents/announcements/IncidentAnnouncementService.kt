@@ -635,6 +635,7 @@ class IncidentAnnouncementService(
             "INCIDENT_ACCEPT_FOLLOW_UP",
             "INCIDENT_COMPLETE_FOLLOW_UP",
             "INCIDENT_CANCEL_FOLLOW_UP",
+            "INCIDENT_FOLLOW_UP_REMINDER",
         )
 
     private data class IncidentSnapshot(

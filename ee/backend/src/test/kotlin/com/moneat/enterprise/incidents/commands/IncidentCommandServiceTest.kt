@@ -21,6 +21,7 @@ import com.moneat.enterprise.incidents.models.NativeIncidentActions
 import com.moneat.enterprise.incidents.models.NativeIncidentActionEvents
 import com.moneat.enterprise.incidents.actions.IncidentActionService
 import com.moneat.enterprise.incidents.followups.IncidentFollowUpPriority
+import com.moneat.enterprise.incidents.followups.IncidentFollowUpReminderService
 import com.moneat.enterprise.incidents.followups.IncidentFollowUpService
 import com.moneat.enterprise.incidents.followups.IncidentFollowUpStatus
 import com.moneat.enterprise.incidents.followups.NativeIncidentFollowUps
@@ -754,6 +755,55 @@ class IncidentCommandServiceTest {
                 .where { NativeIncidentCommands.commandKey eq "follow-up-created" }
                 .single()
             assertEquals(followUpId, command[NativeIncidentCommands.followUpResourceId].toString())
+        }
+    }
+
+    @Test
+    fun `escalates overdue follow-up policy and stops after incident closure`() {
+        val now = Clock.System.now()
+        val incident = service.execute(declareCommand("follow-up-reminder", actor()))
+        val created = service.execute(
+            AddIncidentFollowUpCommand(
+                commandKey = "follow-up-reminder-created",
+                actor = actor(),
+                incidentId = incident.incidentId,
+                title = "Review the incident timeline",
+                description = "Capture the missing response milestones",
+                ownerUserId = member.userId,
+                dueAt = now.minus(1.minutes),
+                reminderMinutes = 5,
+                expectedVersion = 1,
+            ),
+        )
+        val followUpId = checkNotNull(created.followUpResourceId)
+        val reminderService = IncidentFollowUpReminderService()
+
+        assertEquals(1, reminderService.processDue(now))
+        transaction {
+            val followUp = NativeIncidentFollowUps.selectAll().single()
+            assertEquals(1, followUp[NativeIncidentFollowUps.escalationLevel])
+            assertTrue(followUp[NativeIncidentFollowUps.nextReminderAt]!! > now)
+            val event = NativeIncidentOutboxEvents.selectAll()
+                .where { NativeIncidentOutboxEvents.eventType eq "INCIDENT_FOLLOW_UP_REMINDER" }
+                .single()
+            assertEquals(followUpId, event[NativeIncidentOutboxEvents.payload]["followUpId"]?.jsonPrimitive?.content)
+        }
+
+        service.execute(
+            ResolveIncidentCommand(
+                commandKey = "follow-up-reminder-resolve",
+                actor = actor(),
+                incidentId = incident.incidentId,
+                note = "Mitigated",
+                expectedVersion = 3,
+            ),
+        )
+        assertEquals(0, reminderService.processDue(now.plus(10.minutes)))
+        transaction {
+            assertEquals(
+                IncidentFollowUpStatus.CANCELLED.wire,
+                NativeIncidentFollowUps.selectAll().single()[NativeIncidentFollowUps.status],
+            )
         }
     }
 

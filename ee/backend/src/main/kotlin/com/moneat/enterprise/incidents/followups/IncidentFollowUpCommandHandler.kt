@@ -70,6 +70,7 @@ internal class IncidentFollowUpCommandHandler(
             "Slack message reference is too long"
         }
         val now = Clock.System.now()
+        val effectiveDueAt = command.dueAt ?: command.slaMinutes?.let { now.plus(it.minutes) }
         val resourceId = Uuid.random()
         NativeIncidentFollowUps.insert {
             it[NativeIncidentFollowUps.resourceId] = resourceId
@@ -81,7 +82,7 @@ internal class IncidentFollowUpCommandHandler(
             it[ownerTeamId] = command.ownerTeamId
             it[priority] = command.priority.wire
             it[NativeIncidentFollowUps.labels] = labels
-            it[dueAt] = command.dueAt
+            it[NativeIncidentFollowUps.dueAt] = effectiveDueAt
             it[slaMinutes] = command.slaMinutes
             it[reminderMinutes] = command.reminderMinutes
             it[nextReminderAt] = command.reminderMinutes?.let { minutes -> now.plus(minutes.minutes) }
@@ -106,7 +107,7 @@ internal class IncidentFollowUpCommandHandler(
             put("status", JsonPrimitive(IncidentFollowUpStatus.OPEN.wire))
             command.ownerUserId?.let { put("ownerUserId", JsonPrimitive(userResourceId(it))) }
             command.ownerTeamId?.let { put("ownerTeamId", JsonPrimitive(teamResourceId(it))) }
-            command.dueAt?.let { put("dueAt", JsonPrimitive(it.toString())) }
+            effectiveDueAt?.let { put("dueAt", JsonPrimitive(it.toString())) }
         }
         return appendVersionedEvent(command, "FOLLOW_UP_CREATED", details).copy(
             followUpResourceId = resourceId.toString(),
@@ -121,8 +122,8 @@ internal class IncidentFollowUpCommandHandler(
                 followUpResourceId = followUp[NativeIncidentFollowUps.resourceId].toString(),
             )
         }
-        val prepared = prepareUpdate(command)
         val now = Clock.System.now()
+        val prepared = prepareUpdate(command, now)
         applyUpdate(followUp, command, prepared, now)
         val details = updateDetails(followUp, command, prepared)
         return appendVersionedEvent(command, "FOLLOW_UP_UPDATED", details).copy(
@@ -144,7 +145,7 @@ internal class IncidentFollowUpCommandHandler(
     private fun hasOwnerChange(command: UpdateIncidentFollowUpCommand): Boolean =
         command.ownerUserId != null || command.ownerTeamId != null
 
-    private fun prepareUpdate(command: UpdateIncidentFollowUpCommand): PreparedUpdate {
+    private fun prepareUpdate(command: UpdateIncidentFollowUpCommand, now: kotlin.time.Instant): PreparedUpdate {
         val title = command.title?.trim()?.also { value ->
             require(value.isNotEmpty()) { "Incident follow-up title is required" }
             require(value.length <= MAX_TITLE_LENGTH) { "Incident follow-up title is too long" }
@@ -159,7 +160,14 @@ internal class IncidentFollowUpCommandHandler(
         validatePolicy(command.slaMinutes, command.reminderMinutes)
         val ownerChange = hasOwnerChange(command)
         if (ownerChange) requireOwner(command.actor.organizationId, command.ownerUserId, command.ownerTeamId)
-        return PreparedUpdate(title, description, labels, ownerChange)
+        val dueAtChanged = command.clearDueAt || command.dueAt != null || command.slaMinutes != null
+        val dueAt = when {
+            command.clearDueAt -> null
+            command.dueAt != null -> command.dueAt
+            command.slaMinutes != null -> now.plus(command.slaMinutes.minutes)
+            else -> null
+        }
+        return PreparedUpdate(title, description, labels, ownerChange, dueAtChanged, dueAt)
     }
 
     private fun applyUpdate(
@@ -177,10 +185,8 @@ internal class IncidentFollowUpCommandHandler(
             }
             command.priority?.let { value -> it[NativeIncidentFollowUps.priority] = value.wire }
             prepared.labels?.let { value -> it[NativeIncidentFollowUps.labels] = value }
-            if (command.clearDueAt) {
-                it[NativeIncidentFollowUps.dueAt] = null
-            } else {
-                command.dueAt?.let { value -> it[NativeIncidentFollowUps.dueAt] = value }
+            if (prepared.dueAtChanged) {
+                it[NativeIncidentFollowUps.dueAt] = prepared.dueAt
             }
             command.slaMinutes?.let { value -> it[NativeIncidentFollowUps.slaMinutes] = value }
             if (command.clearReminderAt) {
@@ -206,8 +212,9 @@ internal class IncidentFollowUpCommandHandler(
         prepared.description?.let { put("description", JsonPrimitive(it)) }
         command.priority?.let { put("priority", JsonPrimitive(it.wire)) }
         prepared.labels?.let { put("labels", JsonArray(it.map(::JsonPrimitive))) }
-        if (command.clearDueAt) put("dueAt", JsonNull)
-        command.dueAt?.let { put("dueAt", JsonPrimitive(it.toString())) }
+        if (prepared.dueAtChanged) {
+            prepared.dueAt?.let { put("dueAt", JsonPrimitive(it.toString())) } ?: put("dueAt", JsonNull)
+        }
         if (command.clearReminderAt) put("reminderMinutes", JsonNull)
         command.reminderMinutes?.let { put("reminderMinutes", JsonPrimitive(it)) }
         if (prepared.ownerChange) {
@@ -333,6 +340,8 @@ internal class IncidentFollowUpCommandHandler(
         val description: String?,
         val labels: List<String>?,
         val ownerChange: Boolean,
+        val dueAtChanged: Boolean,
+        val dueAt: kotlin.time.Instant?,
     )
 
     private companion object {
