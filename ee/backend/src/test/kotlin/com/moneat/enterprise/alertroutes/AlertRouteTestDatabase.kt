@@ -27,6 +27,8 @@ import com.moneat.enterprise.incidents.models.NativeIncidentFormSubmissions
 import com.moneat.enterprise.incidents.models.NativeIncidentOutboxDeliveries
 import com.moneat.enterprise.incidents.models.NativeIncidentOutboxEvents
 import com.moneat.enterprise.incidents.models.NativeIncidentUpdateRequests
+import com.moneat.enterprise.incidents.models.NativeIncidentParticipants
+import com.moneat.enterprise.incidents.models.NativeIncidentRoleAssignments
 import com.moneat.enterprise.incidents.response.NativeIncidentResponseActivations
 import com.moneat.enterprise.incidents.response.NativeIncidentResponsePolicies
 import com.moneat.enterprise.incidents.response.NativeIncidentResponseTargets
@@ -101,6 +103,8 @@ object AlertRouteTestDatabase {
             NativeIncidentFormSubmissions,
             NativeIncidentAlertEpisodeLinks,
             NativeIncidentSourceLinks,
+            NativeIncidentRoleAssignments,
+            NativeIncidentParticipants,
             NativeIncidentCommands,
             NativeIncidentOutboxEvents,
             NativeIncidentOutboxDeliveries,

@@ -74,14 +74,18 @@ class AlertRouteSlackCardServiceTest {
         val blocks = payload["blocks"]!!.jsonArray
         val actions = blocks.filter { it.jsonObject["type"]?.jsonPrimitive?.content == "actions" }
             .flatMap { it.jsonObject["elements"]!!.jsonArray }
-            .mapNotNull { it.jsonObject["action_id"]?.jsonPrimitive?.content }
+            .mapNotNull { element ->
+                element.jsonObject["action_id"]?.jsonPrimitive?.content?.let { actionId ->
+                    actionId to element.jsonObject["value"]?.jsonPrimitive?.content
+                }
+            }.toMap()
 
         assertEquals("C123", payload["channel"]?.jsonPrimitive?.content)
         assertTrue("declare_incident" in actions)
         assertTrue("acknowledge_alert" in actions)
-        assertTrue("confirm_grouping" in actions)
-        assertTrue("unrelated_alert" in actions)
-        assertTrue("merge_alert_group" in actions)
+        assertEquals(episodeId.toString(), actions["confirm_grouping"])
+        assertEquals(episodeId.toString(), actions["unrelated_alert"])
+        assertEquals(episodeId.toString(), actions["merge_alert_group"])
         assertTrue(payload.toString().contains("checkout:latency"))
     }
 }

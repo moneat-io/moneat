@@ -157,9 +157,9 @@ class AlertRouteSlackCardService(
                             add(action("acknowledge_alert", "Acknowledge", null, episode.resourceId.toString()))
                             add(action("silence_alert", "Silence", null, episode.resourceId.toString()))
                             add(action("resolve_alert", "Resolve", null, episode.resourceId.toString()))
-                            add(action("confirm_grouping", "Confirm grouping", null, outcome.groupId))
-                            add(action("unrelated_alert", "Unrelated", "danger", outcome.groupId))
-                            add(action("merge_alert_group", "Merge", null, outcome.groupId))
+                            add(action("confirm_grouping", "Confirm grouping", null, episode.resourceId.toString()))
+                            add(action("unrelated_alert", "Unrelated", "danger", episode.resourceId.toString()))
+                            add(action("merge_alert_group", "Merge", null, episode.resourceId.toString()))
                         }
                     }
                     addJsonObject {

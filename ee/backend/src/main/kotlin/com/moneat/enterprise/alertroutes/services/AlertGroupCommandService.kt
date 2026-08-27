@@ -5,6 +5,7 @@
 package com.moneat.enterprise.alertroutes.services
 
 import com.moneat.alerts.models.AlertEpisodes
+import com.moneat.enterprise.alertroutes.commands.AlertGroupActor
 import com.moneat.enterprise.alertroutes.commands.AlertGroupCommand
 import com.moneat.enterprise.alertroutes.commands.AlertGroupPolicy
 import com.moneat.enterprise.alertroutes.commands.AttachAlertGroupIncidentCommand
@@ -26,9 +27,14 @@ import com.moneat.enterprise.incidents.commands.IncidentCommandNotFoundException
 import com.moneat.enterprise.incidents.commands.IncidentCommandService
 import com.moneat.enterprise.incidents.commands.IncidentSourceReference
 import com.moneat.enterprise.incidents.commands.LinkIncidentSourceCommand
+import com.moneat.enterprise.incidents.models.IncidentParticipationType
+import com.moneat.enterprise.incidents.models.NativeIncidentParticipants
+import com.moneat.enterprise.incidents.models.NativeIncidentRoleAssignments
 import com.moneat.enterprise.incidents.models.IncidentSourceType
 import com.moneat.enterprise.incidents.models.NativeIncidentStatus
+import com.moneat.enterprise.incidents.models.NativeIncidentVisibility
 import com.moneat.enterprise.oncall.models.OnCallIncidents
+import com.moneat.org.services.OrgRole
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import java.security.MessageDigest
@@ -37,6 +43,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -112,7 +119,7 @@ class AlertGroupCommandService(
     }
 
     private fun attach(command: AttachAlertGroupIncidentCommand, group: ResultRow) {
-        val incident = requireEligibleIncident(command.actor.organizationId, command.incidentId)
+        val incident = requireEligibleIncident(command)
         val internalIncidentId = incident[OnCallIncidents.id].value
         val existing = group[EnterpriseAlertGroups.incidentId]
         if (existing != null && existing != internalIncidentId) {
@@ -236,15 +243,49 @@ class AlertGroupCommandService(
                     (AlertEpisodes.resourceId eq episodeId)
             }.singleOrNull() ?: throw IncidentCommandNotFoundException("Alert group episode not found")
 
-    private fun requireEligibleIncident(organizationId: Int, incidentId: Uuid): ResultRow {
+    private fun requireEligibleIncident(command: AttachAlertGroupIncidentCommand): ResultRow {
         val incident = OnCallIncidents.selectAll().where {
-            (OnCallIncidents.organizationId eq organizationId) and (OnCallIncidents.resourceId eq incidentId)
+            (OnCallIncidents.organizationId eq command.actor.organizationId) and
+                (OnCallIncidents.resourceId eq command.incidentId)
         }.singleOrNull() ?: throw IncidentCommandNotFoundException("Incident not found")
         val status = NativeIncidentStatus.fromWire(incident[OnCallIncidents.status])
         if (status !in ELIGIBLE_INCIDENT_STATUSES) {
             throw IncidentCommandConflictException("Only triage or active incidents can receive an alert group")
         }
+        if (!command.automatic && incident[OnCallIncidents.visibility] == NativeIncidentVisibility.PRIVATE.wire) {
+            requirePrivateIncidentAccess(command.actor, incident[OnCallIncidents.id].value)
+        }
         return incident
+    }
+
+    private fun requirePrivateIncidentAccess(actor: AlertGroupActor, incidentId: Int) {
+        val membership = Memberships.selectAll().where {
+            (Memberships.organization_id eq actor.organizationId) and
+                (Memberships.user_id eq actor.userId)
+        }.singleOrNull()
+        val role = membership?.get(Memberships.role)?.let { value ->
+            runCatching { OrgRole.fromString(value) }.getOrNull()
+        }
+        if (role?.level ?: -1 >= OrgRole.ADMIN.level) return
+
+        val hasIncidentRole = NativeIncidentRoleAssignments.selectAll().where {
+            (NativeIncidentRoleAssignments.organizationId eq actor.organizationId) and
+                (NativeIncidentRoleAssignments.incidentId eq incidentId) and
+                (NativeIncidentRoleAssignments.assigneeUserId eq actor.userId) and
+                NativeIncidentRoleAssignments.endedAt.isNull()
+        }.limit(1).firstOrNull() != null
+        val isParticipant = NativeIncidentParticipants.selectAll().where {
+            (NativeIncidentParticipants.organizationId eq actor.organizationId) and
+                (NativeIncidentParticipants.incidentId eq incidentId) and
+                (NativeIncidentParticipants.userId eq actor.userId) and
+                (NativeIncidentParticipants.participationType eq IncidentParticipationType.PARTICIPANT.wire) and
+                NativeIncidentParticipants.leftAt.isNull()
+        }.limit(1).firstOrNull() != null
+        if (!hasIncidentRole && !isParticipant) {
+            throw IncidentCommandDeniedException(
+                "Actor is not authorized to attach an alert group to this private incident",
+            )
+        }
     }
 
     private fun replay(command: AlertGroupCommand): AlertGroupCommandResult? {
