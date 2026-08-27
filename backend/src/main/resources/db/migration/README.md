@@ -45,6 +45,11 @@ migrations automatically:
 python3 scripts/check-migration-versions.py --base-ref origin/develop --fix
 ```
 
+If a branch contains a duplicate migration version, keep the SQL payload of
+the duplicate and move that file to the next available version. The checker
+allows this one-time collision repair while continuing to reject ordinary
+changes to existing migrations.
+
 ## Flyway Metadata
 
 Flyway tracks applied migrations in the `flyway_schema_history` table. Never modify this table manually.
