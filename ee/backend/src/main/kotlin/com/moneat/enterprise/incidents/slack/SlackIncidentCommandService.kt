@@ -8,6 +8,7 @@ import com.moneat.enterprise.incidents.authorization.SlackIncidentAccessRequest
 import com.moneat.enterprise.incidents.authorization.SlackIncidentAccessStatus
 import com.moneat.enterprise.incidents.authorization.SlackIncidentAction
 import com.moneat.enterprise.incidents.authorization.SlackIncidentAuthorizationService
+import com.moneat.enterprise.incidents.announcements.IncidentAnnouncementNudgeService
 import com.moneat.enterprise.incidents.commands.AcceptIncidentCommand
 import com.moneat.enterprise.incidents.commands.AddIncidentActionCommand
 import com.moneat.enterprise.incidents.commands.AddIncidentTimelineEventCommand
@@ -58,6 +59,7 @@ private const val UNAUTHORIZED_RESPONSE = "You are not authorized to respond to 
 private const val MAX_TEXT_LENGTH = 2_000
 private const val MODAL_TITLE_MAX_LENGTH = 24
 private const val MODAL_LABEL_MAX_LENGTH = 75
+private const val NUDGE_DISMISS_ACTION = "nudge_dismiss"
 
 private data class IncidentContext(
     val id: Int,
@@ -78,6 +80,7 @@ class SlackIncidentCommandService(
     private val installationService: SlackInstallationService,
     private val slackService: SlackService,
     private val commandService: IncidentCommandService = IncidentCommandService(),
+    private val nudgeService: IncidentAnnouncementNudgeService = IncidentAnnouncementNudgeService(),
 ) {
     private val identityResolver = SlackIdentityResolver()
     private val authorizationService = SlackIncidentAuthorizationService()
@@ -104,6 +107,18 @@ class SlackIncidentCommandService(
     }
 
     private suspend fun handleAction(
+        actionName: String,
+        root: JsonObject,
+        context: IncidentContext,
+        identity: SlackIdentityResolution,
+        deliveryId: String?,
+    ): String = if (actionName == NUDGE_DISMISS_ACTION) {
+        dismissNudge(root, context, identity)
+    } else {
+        handleStandardAction(actionName, root, context, identity, deliveryId)
+    }
+
+    private suspend fun handleStandardAction(
         actionName: String,
         root: JsonObject,
         context: IncidentContext,
@@ -291,6 +306,23 @@ class SlackIncidentCommandService(
         } catch (error: IncidentCommandException) {
             staleResponse(context, error.message)
         }
+    }
+
+    private fun dismissNudge(
+        root: JsonObject,
+        context: IncidentContext,
+        identity: SlackIdentityResolution,
+    ): String {
+        val nudgeKey = root["actions"]?.jsonArray?.firstOrNull()?.jsonObject
+            ?.get("value")?.jsonPrimitive?.contentOrNull
+        if (nudgeKey.isNullOrBlank()) return response("That nudge is no longer active.")
+        val dismissed = nudgeService.dismiss(
+            organizationId = requireNotNull(identity.organizationId),
+            incidentId = context.id,
+            nudgeKey = nudgeKey,
+            userId = requireNotNull(identity.userId),
+        )
+        return response(if (dismissed) "Nudge dismissed." else "That nudge is no longer active.")
     }
 
     private fun submissionCommand(

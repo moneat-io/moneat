@@ -30,6 +30,8 @@ import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
@@ -278,6 +280,7 @@ class IncidentAnnouncementServiceTest {
         assertTrue(payload.contains("Response nudges"))
         assertTrue(payload.contains("Assign an incident lead"))
         assertTrue(payload.contains("Activate the response escalation"))
+        assertTrue(payload.contains("incident_nudge_dismiss"))
     }
 
     @Test
@@ -330,6 +333,44 @@ class IncidentAnnouncementServiceTest {
         assertTrue(payload.contains("Make the triage decision"))
         assertTrue(payload.contains("Activate the response escalation"))
         assertTrue(payload.contains("Keep the closure checklist current"))
+        assertTrue(payload.contains("incident_accept"))
+        assertTrue(payload.contains("incident_merge"))
+        assertTrue(payload.contains("incident_decline"))
+    }
+
+    @Test
+    fun `nudge state is rate limited activity aware and dismissible`() {
+        val clock = MutableAnnouncementClock(now)
+        val service = IncidentAnnouncementNudgeService(clock)
+        val incidentId = incidentId()
+        val scope = IncidentAnnouncementNudgeService.Scope(
+            organizationId = member.organizationId,
+            incidentId = incidentId,
+            ruleKey = "rule-key",
+            teamId = "T-announcements",
+            channelId = "C-announcements",
+        )
+
+        assertEquals(
+            setOf("missing_summary"),
+            service.visibleKeys(scope, setOf("missing_summary")),
+        )
+        service.recordShown(scope, setOf("missing_summary"), 1)
+        assertTrue(service.visibleKeys(scope, setOf("missing_summary")).isEmpty())
+
+        clock.current = now + 5.minutes
+        assertEquals(
+            setOf("missing_summary"),
+            service.visibleKeys(scope, setOf("missing_summary")),
+        )
+        assertTrue(service.dismiss(member.organizationId, incidentId, "missing_summary", member.userId))
+        assertTrue(service.visibleKeys(scope, setOf("missing_summary")).isEmpty())
+
+        service.visibleKeys(scope, emptySet())
+        assertEquals(
+            setOf("missing_summary"),
+            service.visibleKeys(scope, setOf("missing_summary")),
+        )
     }
 
     @Test
@@ -461,4 +502,8 @@ class IncidentAnnouncementServiceTest {
         ),
         createdAt = now.toString(),
     )
+
+    private class MutableAnnouncementClock(var current: Instant) : Clock {
+        override fun now(): Instant = current
+    }
 }

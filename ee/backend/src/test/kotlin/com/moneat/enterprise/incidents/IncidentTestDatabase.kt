@@ -20,6 +20,7 @@ import com.moneat.enterprise.alertroutes.models.EnterpriseAlertRoutes
 import com.moneat.enterprise.incidents.models.NativeIncidentAlertEpisodeLinks
 import com.moneat.enterprise.incidents.announcements.NativeIncidentAnnouncementRules
 import com.moneat.enterprise.incidents.announcements.NativeIncidentAnnouncements
+import com.moneat.enterprise.incidents.announcements.NativeIncidentAnnouncementNudges
 import com.moneat.enterprise.incidents.models.NativeIncidentCommands
 import com.moneat.enterprise.incidents.models.NativeIncidentUpdateRequests
 import com.moneat.enterprise.incidents.models.NativeIncidentCustomFieldOptions
@@ -115,6 +116,7 @@ object IncidentTestDatabase {
             NativeIncidentSlackChannels,
             NativeIncidentAnnouncementRules,
             NativeIncidentAnnouncements,
+            NativeIncidentAnnouncementNudges,
             EnterpriseAlertRoutes,
             EnterpriseAlertRouteConditionGroups,
             EnterpriseAlertRouteConditions,
