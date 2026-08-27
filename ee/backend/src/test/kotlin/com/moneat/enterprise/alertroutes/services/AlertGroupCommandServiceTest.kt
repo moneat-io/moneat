@@ -26,11 +26,13 @@ import com.moneat.enterprise.alertroutes.models.AlertRouteGroupingBehavior
 import com.moneat.enterprise.incidents.commands.DeclareIncidentCommand
 import com.moneat.enterprise.incidents.commands.IncidentCommandActor
 import com.moneat.enterprise.incidents.commands.IncidentCommandConflictException
+import com.moneat.enterprise.incidents.commands.IncidentCommandDeniedException
 import com.moneat.enterprise.incidents.commands.IncidentCommandNotFoundException
 import com.moneat.enterprise.incidents.commands.IncidentCommandPolicy
 import com.moneat.enterprise.incidents.commands.IncidentCommandService
 import com.moneat.enterprise.incidents.models.NativeIncidentSourceLinks
 import com.moneat.enterprise.incidents.models.NativeIncidentStatus
+import com.moneat.enterprise.incidents.models.NativeIncidentVisibility
 import com.moneat.enterprise.oncall.models.OnCallIncidents
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -212,6 +214,37 @@ class AlertGroupCommandServiceTest {
                     automaticGroup.version,
                     incidentId,
                     automatic = true,
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun `private incident attachment requires incident access`() {
+        val episode = AlertRouteTestDatabase.seedAlertEpisode(organization.organizationId, "HOST_ALERT", "private")
+        val group = createGroup(episode)
+        val incident = incidentService.execute(
+            DeclareIncidentCommand(
+                commandKey = "private-incident",
+                actor = IncidentCommandActor(organization.organizationId, organization.adminUserId, "TEST"),
+                title = "Private checkout incident",
+                description = null,
+                severity = "SEV-2",
+                visibility = NativeIncidentVisibility.PRIVATE,
+                initialStatus = NativeIncidentStatus.ACTIVE,
+            ),
+        )
+        val memberUserId = AlertRouteTestDatabase.seedUser(organization.organizationId, "private-member")
+        val actor = AlertGroupActor(organization.organizationId, memberUserId, "SLACK")
+
+        assertFailsWith<IncidentCommandDeniedException> {
+            commandService.execute(
+                AttachAlertGroupIncidentCommand(
+                    commandKey = "private-attach-denied",
+                    actor = actor,
+                    groupId = group.id,
+                    expectedVersion = group.version,
+                    incidentId = Uuid.parse(incident.incidentResourceId),
                 ),
             )
         }
