@@ -53,7 +53,7 @@ describe('standalone incident declaration', () => {
     mockApi.getIncidentTypes.mockResolvedValue([])
     mockApi.getIncidentForms.mockResolvedValue([])
     mockApi.declareOnCallIncident.mockResolvedValue({id: NEW_INCIDENT_ID})
-    // Native incident rollout enabled so declaration behavior stays covered.
+    // Native incident entitlement enabled so declaration behavior stays covered.
     mockApi.getNativeIncidentCapabilities.mockResolvedValue({
       enabled: true,
       environment: 'production',

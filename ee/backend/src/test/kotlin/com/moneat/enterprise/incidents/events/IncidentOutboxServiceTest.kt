@@ -50,16 +50,17 @@ class IncidentOutboxServiceTest {
     }
 
     @Test
-    fun `disabled rollout defers events without attempts or data loss and resumes after enablement`() = runBlocking {
-        declare("rollout-deferred")
+    fun `disabled entitlement defers events without attempts or data loss and resumes after enablement`() =
+        runBlocking {
+        declare("entitlement-deferred")
         val consumer = RecordingConsumer()
-        var rolloutEnabled = false
+        var entitlementEnabled = false
         val service =
             IncidentOutboxService(
                 consumers = listOf(consumer),
-                workerId = "rollout-worker",
+                workerId = "entitlement-worker",
                 clock = clock,
-                entitlement = IncidentEntitlement { rolloutEnabled },
+                entitlement = IncidentEntitlement { entitlementEnabled },
             )
 
         assertEquals(1, service.processBatch())
@@ -71,17 +72,17 @@ class IncidentOutboxServiceTest {
             assertEquals(0, NativeIncidentOutboxDeliveries.selectAll().count())
         }
 
-        rolloutEnabled = true
+        entitlementEnabled = true
         clock.advance(31.seconds)
         assertEquals(1, service.processBatch())
-        assertEquals(listOf("${member.organizationId}:rollout-deferred:recording"), consumer.completedKeys)
+        assertEquals(listOf("${member.organizationId}:entitlement-deferred:recording"), consumer.completedKeys)
     }
 
     @Test
     fun `retries failed delivery without duplicating a completed consumer effect`() = runBlocking {
         declare("outbox-retry")
         val consumer = RecordingConsumer(failuresRemaining = 1)
-        val service = rolloutEnabledService(consumer, "test-worker")
+        val service = entitledService(consumer, "test-worker")
 
         assertEquals(1, service.processBatch())
         assertEquals(1, consumer.attemptedKeys.size)
@@ -122,7 +123,7 @@ class IncidentOutboxServiceTest {
             }
         }
         val consumer = RecordingConsumer()
-        val restarted = rolloutEnabledService(consumer, "restarted-worker")
+        val restarted = entitledService(consumer, "restarted-worker")
 
         assertEquals(1, restarted.processBatch())
         assertEquals(listOf("${member.organizationId}:outbox-crash:recording"), consumer.completedKeys)
@@ -141,7 +142,7 @@ class IncidentOutboxServiceTest {
             ),
         )
         val consumer = RecordingConsumer(failuresRemaining = 1)
-        val service = rolloutEnabledService(consumer, "ordering-worker")
+        val service = entitledService(consumer, "ordering-worker")
 
         assertEquals(1, service.processBatch(limit = 2))
         assertEquals(listOf("INCIDENT_DECLARE"), consumer.attemptedEventTypes)
@@ -168,7 +169,7 @@ class IncidentOutboxServiceTest {
             ),
         )
         val consumer = RecordingConsumer(failuresRemaining = 8)
-        val service = rolloutEnabledService(consumer, "dead-letter-worker")
+        val service = entitledService(consumer, "dead-letter-worker")
 
         repeat(8) {
             assertEquals(1, service.processBatch(limit = 2))
@@ -214,7 +215,7 @@ class IncidentOutboxServiceTest {
             ),
         )
 
-    private fun rolloutEnabledService(consumer: NativeIncidentEventConsumer, workerId: String) =
+    private fun entitledService(consumer: NativeIncidentEventConsumer, workerId: String) =
         IncidentOutboxService(
             consumers = listOf(consumer),
             workerId = workerId,

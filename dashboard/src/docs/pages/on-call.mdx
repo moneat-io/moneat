@@ -184,11 +184,12 @@ An active incident can be resolved from its detail page, with an optional resolu
 
 ## Native incident availability and Alert Routes
 
-Native incident response is available by default to organizations whose plan and license include it. The capabilities endpoint reports entitlement and quota state; there is no organization or deployment rollout switch to enable.
+Native incident response is available by default to organizations whose plan and license include it. The capabilities endpoint reports entitlement and quota state; there is no separate organization or deployment switch to enable.
 
 Automatic incident creation is configured separately through ordered **Alert Routes**:
 
 - An enabled route must explicitly turn on **Create an incident for matched alerts**. A route that only pages or groups alerts will not create an incident.
+- If no route matches, the alert remains an alert episode: it is not paged by a route and no incident is opened.
 - Routes are evaluated in order. A first matching page-only route prevents later routes from handling the alert, so put incident-capable routes before catch-all paging routes.
 - The route editor and test-alert result identify whether no route matched, paging occurred, grouping occurred, an incident was skipped, or a triage incident was created.
 - The administrator test-alert response is action-specific: a successful alert request does not imply an incident. Review the route state, matched route revision, group, paging result, and incident result separately.
@@ -203,7 +204,7 @@ External incident-provider passthrough is a separate capability and is not affec
 Moneat supports multiple notification channels for on-call alerts:
 
 - **Push Notifications** - Via the Moneat mobile app (iOS and Android). Responders can acknowledge and resolve from the notification.
-- **Slack DMs** - Direct messages with interactive buttons for acknowledge/resolve actions.
+- **Slack DMs** - Direct messages with an **Acknowledge** button and **View Details** link. Resolve the alert from its detail page after opening the link.
 - **Email** - Notification emails with on-call alert details and action links.
 - **SMS and voice calls** - Twilio-backed fallback channels for urgent escalations.
 
