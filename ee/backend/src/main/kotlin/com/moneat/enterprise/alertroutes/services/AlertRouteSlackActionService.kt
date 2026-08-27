@@ -58,6 +58,9 @@ private data class AlertActionContext(
     val onCallAlertId: Int?,
 )
 
+private const val ALERT_GROUP_UNAVAILABLE_MESSAGE = "The alert group is no longer available."
+private const val NO_PAGE_ATTACHED_MESSAGE = "No page is attached to this alert group."
+
 /** Executes Slack alert-card actions through the canonical alert and incident commands. */
 class AlertRouteSlackActionService(
     private val slackInstallationService: SlackInstallationService,
@@ -129,7 +132,7 @@ class AlertRouteSlackActionService(
         context: AlertActionContext?,
         deliveryId: String?,
     ): String {
-        if (context == null) return response("The alert group is no longer available.")
+        if (context == null) return response(ALERT_GROUP_UNAVAILABLE_MESSAGE)
         val candidateIncidentId = context.candidateIncidentId
             ?: return response(
                 if (context.incidentId != null) {
@@ -163,7 +166,7 @@ class AlertRouteSlackActionService(
         context: AlertActionContext?,
         deliveryId: String?,
     ): String {
-        if (context == null) return response("The alert group is no longer available.")
+        if (context == null) return response(ALERT_GROUP_UNAVAILABLE_MESSAGE)
         return try {
             alertGroupCommands.execute(
                 MarkAlertGroupEpisodeUnrelatedCommand(
@@ -198,7 +201,7 @@ class AlertRouteSlackActionService(
         context: AlertActionContext?,
         deliveryId: String?,
     ): String {
-        if (context == null) return response("The alert group is no longer available.")
+        if (context == null) return response(ALERT_GROUP_UNAVAILABLE_MESSAGE)
         if (context.incidentId != null) return response("This alert group is already linked to an incident.")
         val result = alertGroupCommands.execute(
             CreateAlertGroupTriageCommand(
@@ -261,7 +264,7 @@ class AlertRouteSlackActionService(
         deliveryId: String?,
     ): String {
         if (context == null || context.onCallAlertId == null) {
-            return response("No page is attached to this alert group.")
+            return response(NO_PAGE_ATTACHED_MESSAGE)
         }
         if (!canRespondToIncident(identity, context)) {
             return response("You are not authorized to acknowledge this alert.")
@@ -294,7 +297,7 @@ class AlertRouteSlackActionService(
         deliveryId: String?,
     ): String {
         if (context == null || context.onCallAlertId == null) {
-            return response("No page is attached to this alert group.")
+            return response(NO_PAGE_ATTACHED_MESSAGE)
         }
         if (!canRespondToIncident(identity, context)) {
             return response("You are not authorized to resolve this alert.")
