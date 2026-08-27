@@ -60,6 +60,9 @@ import com.moneat.shared.models.OrganizationTeams
 import com.moneat.shared.models.Organizations
 import com.moneat.monitor.repositories.ResourceOwnership
 import com.moneat.shared.models.Users
+import com.moneat.statuspage.models.StatusPageIncidentUpdates
+import com.moneat.statuspage.models.StatusPageIncidents
+import com.moneat.statuspage.models.StatusPages
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
@@ -80,6 +83,9 @@ object IncidentTestDatabase {
         EnterpriseTestDatabaseHelper.resetSchema(
             Users,
             Organizations,
+            StatusPages,
+            StatusPageIncidents,
+            StatusPageIncidentUpdates,
             OrganizationIntegrations,
             Memberships,
             OnCallSchedules,

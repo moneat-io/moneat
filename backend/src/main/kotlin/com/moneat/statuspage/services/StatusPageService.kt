@@ -397,6 +397,25 @@ class StatusPageService(
         }
     }
 
+    fun getIncident(
+        pageId: UUID,
+        organizationId: Int,
+        incidentId: UUID,
+    ): IncidentResponse? {
+        return transaction {
+            StatusPageIncidents
+                .innerJoin(StatusPages, { statusPageId }, { StatusPages.id })
+                .selectAll()
+                .where {
+                    (StatusPageIncidents.id eq incidentId) and
+                        (StatusPageIncidents.statusPageId eq pageId) and
+                        (StatusPages.organizationId eq organizationId)
+                }
+                .firstOrNull()
+                ?.toIncidentResponse()
+        }
+    }
+
     fun updateIncident(
         pageId: UUID,
         organizationId: Int,
