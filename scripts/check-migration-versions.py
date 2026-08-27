@@ -3,7 +3,9 @@
 
 With --base-ref, newly added migrations must continue from the target branch's
 current maximum version. Existing migrations are immutable: modifying, deleting,
-or renaming a migration that existed at the branch point fails the check.
+or renaming a migration that existed at the branch point fails the check. The
+only exception is a collision repair that relocates one of several duplicate
+versioned files without changing its SQL payload.
 
 Use --fix with --base-ref to rename added migrations to the next available
 versions while preserving their descriptions.
@@ -127,8 +129,47 @@ def merge_base(base_ref: str) -> str:
     return run_git(["merge-base", base_ref, "HEAD"]).strip()
 
 
+def migration_contents(path: Path) -> str:
+    return (REPO_ROOT / path).read_text(encoding="utf-8")
+
+
+def duplicate_repair_target(
+    source: Path,
+    candidates: list[Migration],
+    base_paths: set[Path],
+    base_max: int,
+    branch_point: str,
+) -> Migration | None:
+    source_migration = parse_migration(source)
+    if source_migration is None:
+        return None
+
+    base_contents = run_git(["show", f"{branch_point}:{source.as_posix()}"])
+    matches: list[Migration] = []
+    for candidate in candidates:
+        if candidate.path in base_paths or candidate.version <= base_max:
+            continue
+        if candidate.description != source_migration.description:
+            continue
+        if migration_contents(candidate.path) == base_contents:
+            matches.append(candidate)
+
+    expected_version = base_max + 1
+    return matches[0] if len(matches) == 1 and matches[0].version == expected_version else None
+
+
 def changed_existing_migration_problems(base_ref: str, directory: Path, name: str) -> list[Problem]:
     branch_point = merge_base(base_ref)
+    base = base_migrations(base_ref, directory)
+    base_paths = {migration.path for migration in base}
+    base_max = max((migration.version for migration in base), default=0)
+    base_version_counts: dict[int, int] = {}
+    for migration in base:
+        base_version_counts[migration.version] = base_version_counts.get(migration.version, 0) + 1
+    duplicate_paths = {
+        migration.path for migration in base if base_version_counts[migration.version] > 1
+    }
+    current, _ = current_migrations(directory)
     output = run_git(["diff", "--name-status", "--find-renames", branch_point, "--", directory.as_posix()])
     problems: list[Problem] = []
 
@@ -138,6 +179,18 @@ def changed_existing_migration_problems(base_ref: str, directory: Path, name: st
         paths = [Path(part) for part in parts[1:]]
         if status == "A":
             continue
+
+        source = paths[0] if paths else None
+        repair_target = (
+            duplicate_repair_target(source, current, base_paths, base_max, branch_point)
+            if source in duplicate_paths
+            else None
+        )
+        if repair_target is not None:
+            if status.startswith("R") and len(paths) > 1 and paths[1] == repair_target.path:
+                continue
+            if status == "D":
+                continue
 
         migration_paths = [path for path in paths if parse_migration(path) is not None]
         if not migration_paths:
