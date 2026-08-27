@@ -7,7 +7,9 @@ package com.moneat.enterprise.alertroutes.services
 import com.moneat.alerts.models.AlertEpisodes
 import com.moneat.alerts.services.AlertEpisodeService
 import com.moneat.enterprise.alertroutes.commands.AlertGroupActor
+import com.moneat.enterprise.alertroutes.commands.AttachAlertGroupIncidentCommand
 import com.moneat.enterprise.alertroutes.commands.CreateAlertGroupTriageCommand
+import com.moneat.enterprise.alertroutes.commands.MarkAlertGroupEpisodeUnrelatedCommand
 import com.moneat.enterprise.alertroutes.models.EnterpriseAlertGroupEscalations
 import com.moneat.enterprise.alertroutes.models.EnterpriseAlertGroupMembers
 import com.moneat.enterprise.alertroutes.models.EnterpriseAlertGroups
@@ -16,6 +18,7 @@ import com.moneat.enterprise.incidents.authorization.SlackIncidentAccessStatus
 import com.moneat.enterprise.incidents.authorization.SlackIncidentAction
 import com.moneat.enterprise.incidents.authorization.SlackIncidentAuthorizationService
 import com.moneat.enterprise.incidents.commands.IncidentCommandActor
+import com.moneat.enterprise.incidents.commands.IncidentCommandException
 import com.moneat.enterprise.incidents.commands.IncidentCommandService
 import com.moneat.enterprise.incidents.commands.SetIncidentParticipationCommand
 import com.moneat.enterprise.incidents.models.IncidentParticipationType
@@ -48,8 +51,10 @@ private data class AlertActionContext(
     val groupId: Uuid,
     val groupVersion: Int,
     val episodeId: Int,
+    val episodeResourceId: Uuid,
     val episodeTitle: String,
     val incidentId: Int?,
+    val candidateIncidentId: Uuid?,
     val onCallAlertId: Int?,
 )
 
@@ -105,19 +110,79 @@ class AlertRouteSlackActionService(
             "acknowledge_alert" -> acknowledge(identity, context, deliveryId)
             "silence_alert" -> silence(identity, context, deliveryId)
             "resolve_alert" -> resolve(identity, context, deliveryId)
-            "confirm_grouping" -> response("This alert is already grouped by the matched route.")
-            "unrelated_alert", "merge_alert_group" ->
-                response("Use the alert group view to review this grouping decision.")
+            "confirm_grouping", "merge_alert_group" -> confirmGrouping(identity, context, deliveryId)
+            "unrelated_alert" -> markUnrelated(identity, context, deliveryId)
             else -> response("This alert action is not supported.")
         }
     }
 
     private fun actionContext(actionId: String, value: String?, organizationId: Int): AlertActionContext? =
         when (actionId) {
-            "declare_incident", "acknowledge_alert", "silence_alert", "resolve_alert" ->
+            "declare_incident", "acknowledge_alert", "silence_alert", "resolve_alert",
+            "confirm_grouping", "merge_alert_group", "unrelated_alert" ->
                 value?.let { findByEpisode(organizationId, it) }
             else -> null
         }
+
+    private fun confirmGrouping(
+        identity: SlackIdentityResolution,
+        context: AlertActionContext?,
+        deliveryId: String?,
+    ): String {
+        if (context == null) return response("The alert group is no longer available.")
+        val candidateIncidentId = context.candidateIncidentId
+            ?: return response(
+                if (context.incidentId != null) {
+                    "This alert group is already linked to an incident."
+                } else {
+                    "No suggested incident is available for this alert group."
+                },
+            )
+        return try {
+            alertGroupCommands.execute(
+                AttachAlertGroupIncidentCommand(
+                    commandKey = "slack-alert-group-confirm:${deliveryId ?: Uuid.random()}",
+                    actor = AlertGroupActor(
+                        requireNotNull(identity.organizationId),
+                        requireNotNull(identity.userId),
+                        "SLACK",
+                    ),
+                    groupId = context.groupId,
+                    expectedVersion = context.groupVersion,
+                    incidentId = candidateIncidentId,
+                ),
+            )
+            response("Alert group linked to the suggested incident.")
+        } catch (_: IncidentCommandException) {
+            response("This alert group changed. Open it in Moneat to review the current state.")
+        }
+    }
+
+    private fun markUnrelated(
+        identity: SlackIdentityResolution,
+        context: AlertActionContext?,
+        deliveryId: String?,
+    ): String {
+        if (context == null) return response("The alert group is no longer available.")
+        return try {
+            alertGroupCommands.execute(
+                MarkAlertGroupEpisodeUnrelatedCommand(
+                    commandKey = "slack-alert-group-unrelated:${deliveryId ?: Uuid.random()}",
+                    actor = AlertGroupActor(
+                        requireNotNull(identity.organizationId),
+                        requireNotNull(identity.userId),
+                        "SLACK",
+                    ),
+                    groupId = context.groupId,
+                    expectedVersion = context.groupVersion,
+                    episodeId = context.episodeResourceId,
+                ),
+            )
+            response("Alert marked unrelated to this group.")
+        } catch (_: IncidentCommandException) {
+            response("This alert group changed. Open it in Moneat to review the current state.")
+        }
+    }
 
     private fun organizationIdForTeam(teamId: String): Int? = transaction {
         OrganizationIntegrations.selectAll().where {
@@ -304,12 +369,20 @@ class AlertRouteSlackActionService(
                 (EnterpriseAlertGroupEscalations.organizationId eq organizationId) and
                     (EnterpriseAlertGroupEscalations.groupId eq group[EnterpriseAlertGroups.id].value)
             }.firstOrNull()
+            val candidateIncidentId = group[EnterpriseAlertGroups.candidateIncidentId]?.let { candidateId ->
+                OnCallIncidents.selectAll().where {
+                    (OnCallIncidents.organizationId eq organizationId) and
+                        (OnCallIncidents.id eq candidateId)
+                }.singleOrNull()?.get(OnCallIncidents.resourceId)
+            }
             AlertActionContext(
                 groupId = group[EnterpriseAlertGroups.resourceId],
                 groupVersion = group[EnterpriseAlertGroups.version],
                 episodeId = episodeId,
+                episodeResourceId = episodeResourceId,
                 episodeTitle = episode[AlertEpisodes.title].orEmpty(),
                 incidentId = group[EnterpriseAlertGroups.incidentId],
+                candidateIncidentId = candidateIncidentId,
                 onCallAlertId = escalation?.get(EnterpriseAlertGroupEscalations.onCallAlertId),
             )
         }
