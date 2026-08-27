@@ -789,13 +789,31 @@ class IncidentCommandServiceTest {
             assertEquals(followUpId, event[NativeIncidentOutboxEvents.payload]["followUpId"]?.jsonPrimitive?.content)
         }
 
-        service.execute(
+        val resolved = service.execute(
             ResolveIncidentCommand(
                 commandKey = "follow-up-reminder-resolve",
                 actor = actor(),
                 incidentId = incident.incidentId,
                 note = "Mitigated",
                 expectedVersion = 3,
+            ),
+        )
+        val postIncident = service.execute(
+            TransitionIncidentCommand(
+                commandKey = "follow-up-reminder-post-incident",
+                actor = actor(),
+                incidentId = incident.incidentId,
+                targetStatus = NativeIncidentStatus.POST_INCIDENT,
+                expectedVersion = resolved.version,
+            ),
+        )
+        service.execute(
+            TransitionIncidentCommand(
+                commandKey = "follow-up-reminder-close",
+                actor = actor(),
+                incidentId = incident.incidentId,
+                targetStatus = NativeIncidentStatus.CLOSED,
+                expectedVersion = postIncident.version,
             ),
         )
         assertEquals(0, reminderService.processDue(now.plus(10.minutes)))

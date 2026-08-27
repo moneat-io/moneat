@@ -118,8 +118,6 @@ class IncidentFollowUpReminderService(
 
     companion object {
         private val TERMINAL_STATUSES = setOf(
-            NativeIncidentStatus.RESOLVED,
-            NativeIncidentStatus.POST_INCIDENT,
             NativeIncidentStatus.CLOSED,
             NativeIncidentStatus.CANCELLED,
             NativeIncidentStatus.DECLINED,
