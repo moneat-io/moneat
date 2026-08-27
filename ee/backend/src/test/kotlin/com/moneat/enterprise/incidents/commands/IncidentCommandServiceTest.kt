@@ -20,6 +20,10 @@ import com.moneat.enterprise.incidents.models.IncidentActionState
 import com.moneat.enterprise.incidents.models.NativeIncidentActions
 import com.moneat.enterprise.incidents.models.NativeIncidentActionEvents
 import com.moneat.enterprise.incidents.actions.IncidentActionService
+import com.moneat.enterprise.incidents.followups.IncidentFollowUpPriority
+import com.moneat.enterprise.incidents.followups.IncidentFollowUpService
+import com.moneat.enterprise.incidents.followups.IncidentFollowUpStatus
+import com.moneat.enterprise.incidents.followups.NativeIncidentFollowUps
 import com.moneat.enterprise.incidents.updates.IncidentUpdateReminderService
 import com.moneat.enterprise.oncall.models.OnCallAlerts
 import com.moneat.enterprise.oncall.models.OnCallIncidentAlerts
@@ -45,6 +49,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.uuid.Uuid
 import java.util.concurrent.Callable
@@ -658,6 +663,98 @@ class IncidentCommandServiceTest {
         val replay = service.execute(command)
         assertTrue(replay.replayed)
         assertEquals(created.actionResourceId, replay.actionResourceId)
+    }
+
+    @Test
+    fun `persists follow-up ownership policy and completion lifecycle`() {
+        val incident = service.execute(declareCommand("follow-up-lifecycle", actor()))
+        val ownerId = IncidentTestDatabase.seedUserInOrganization(member.organizationId, "follow-up-owner")
+        val dueAt = Clock.System.now().plus(2.hours)
+        val created = service.execute(
+            AddIncidentFollowUpCommand(
+                commandKey = "follow-up-created",
+                actor = actor(),
+                incidentId = incident.incidentId,
+                title = "Publish the customer communication timeline",
+                description = "Document the communication gaps and the remediation owner",
+                ownerUserId = ownerId,
+                priority = IncidentFollowUpPriority.P1,
+                labels = listOf("communications", "process"),
+                dueAt = dueAt,
+                slaMinutes = 120,
+                reminderMinutes = 30,
+                expectedVersion = 1,
+            ),
+        )
+        val replay = service.execute(
+            AddIncidentFollowUpCommand(
+                commandKey = "follow-up-created",
+                actor = actor(),
+                incidentId = incident.incidentId,
+                title = "Publish the customer communication timeline",
+                description = "Document the communication gaps and the remediation owner",
+                ownerUserId = ownerId,
+                priority = IncidentFollowUpPriority.P1,
+                labels = listOf("communications", "process"),
+                dueAt = dueAt,
+                slaMinutes = 120,
+                reminderMinutes = 30,
+                expectedVersion = 1,
+            ),
+        )
+        assertTrue(replay.replayed)
+        assertEquals(created.followUpResourceId, replay.followUpResourceId)
+        val followUpId = checkNotNull(created.followUpResourceId)
+        val followUpService = IncidentFollowUpService()
+        val initial = checkNotNull(followUpService.get(member.organizationId, incident.incidentId, followUpId))
+        assertEquals(IncidentFollowUpStatus.OPEN.wire, initial.status)
+        assertEquals(IncidentFollowUpPriority.P1.wire, initial.priority)
+        assertEquals(listOf("communications", "process"), initial.labels)
+        assertEquals(120, initial.slaMinutes)
+        assertEquals(30, initial.reminderMinutes)
+
+        service.execute(
+            AcceptIncidentFollowUpCommand(
+                commandKey = "follow-up-accepted",
+                actor = actor(),
+                incidentId = incident.incidentId,
+                followUpResourceId = followUpId,
+                expectedVersion = 2,
+            ),
+        )
+        service.execute(
+            UpdateIncidentFollowUpCommand(
+                commandKey = "follow-up-updated",
+                actor = actor(),
+                incidentId = incident.incidentId,
+                followUpResourceId = followUpId,
+                labels = listOf("communications", "process", "reviewed"),
+                expectedVersion = 3,
+            ),
+        )
+        val completed = service.execute(
+            CompleteIncidentFollowUpCommand(
+                commandKey = "follow-up-completed",
+                actor = actor(),
+                incidentId = incident.incidentId,
+                followUpResourceId = followUpId,
+                note = "Action item is documented and assigned",
+                expectedVersion = 4,
+            ),
+        )
+        assertEquals(5, completed.version)
+        val final = checkNotNull(followUpService.get(member.organizationId, incident.incidentId, followUpId))
+        assertEquals(IncidentFollowUpStatus.COMPLETED.wire, final.status)
+        assertEquals(listOf("communications", "process", "reviewed"), final.labels)
+        assertNotNull(final.acceptedAt)
+        assertNotNull(final.completedAt)
+        transaction {
+            assertEquals(1, NativeIncidentFollowUps.selectAll().count())
+            val command = NativeIncidentCommands.selectAll()
+                .where { NativeIncidentCommands.commandKey eq "follow-up-created" }
+                .single()
+            assertEquals(followUpId, command[NativeIncidentCommands.followUpResourceId].toString())
+        }
     }
 
     @Test

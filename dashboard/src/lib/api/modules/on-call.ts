@@ -76,6 +76,11 @@ import type {
   CreateIncidentActionInput,
   IncidentActionMutationInput,
   ReassignIncidentActionInput,
+  OnCallIncidentFollowUp,
+  CreateIncidentFollowUpInput,
+  UpdateIncidentFollowUpInput,
+  IncidentFollowUpStatusInput,
+  IncidentFollowUpPriority,
 } from '../types'
 
 /** Normalize the entitlement and quota payload into a strict, fail-closed shape. */
@@ -507,6 +512,74 @@ export function onCallMethods(core: ApiClientCore) {
     ) =>
       core.request<OnCallIncidentAction>(
         `${base}/on-call/incidents/${encodeURIComponent(id)}/actions/${encodeURIComponent(actionId)}/convert-to-follow-up`,
+        {method: 'POST', body: JSON.stringify(input)}
+      ),
+
+    getIncidentFollowUpQueue: (filters: {
+      status?: string[]
+      priority?: IncidentFollowUpPriority
+    } = {}) => {
+      const params = new URLSearchParams()
+      filters.status?.forEach((value) => params.append('status', value))
+      if (filters.priority) params.set('priority', filters.priority)
+      return core.request<OnCallIncidentFollowUp[]>(
+        urlWithQuery(`${base}/on-call/follow-ups`, params.toString())
+      )
+    },
+
+    getIncidentFollowUps: (id: string) =>
+      core.request<OnCallIncidentFollowUp[]>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/follow-ups`
+      ),
+
+    getIncidentFollowUp: (id: string, followUpId: string) =>
+      core.request<OnCallIncidentFollowUp>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/follow-ups/${encodeURIComponent(followUpId)}`
+      ),
+
+    createIncidentFollowUp: (id: string, input: CreateIncidentFollowUpInput) =>
+      core.request<OnCallIncidentFollowUp>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/follow-ups`,
+        {method: 'POST', body: JSON.stringify(input)}
+      ),
+
+    updateIncidentFollowUp: (
+      id: string,
+      followUpId: string,
+      input: UpdateIncidentFollowUpInput
+    ) =>
+      core.request<OnCallIncidentFollowUp>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/follow-ups/${encodeURIComponent(followUpId)}/update`,
+        {method: 'POST', body: JSON.stringify(input)}
+      ),
+
+    acceptIncidentFollowUp: (
+      id: string,
+      followUpId: string,
+      input: IncidentFollowUpStatusInput = {}
+    ) =>
+      core.request<OnCallIncidentFollowUp>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/follow-ups/${encodeURIComponent(followUpId)}/accept`,
+        {method: 'POST', body: JSON.stringify(input)}
+      ),
+
+    completeIncidentFollowUp: (
+      id: string,
+      followUpId: string,
+      input: IncidentFollowUpStatusInput = {}
+    ) =>
+      core.request<OnCallIncidentFollowUp>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/follow-ups/${encodeURIComponent(followUpId)}/complete`,
+        {method: 'POST', body: JSON.stringify(input)}
+      ),
+
+    cancelIncidentFollowUp: (
+      id: string,
+      followUpId: string,
+      input: IncidentFollowUpStatusInput = {}
+    ) =>
+      core.request<OnCallIncidentFollowUp>(
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/follow-ups/${encodeURIComponent(followUpId)}/cancel`,
         {method: 'POST', body: JSON.stringify(input)}
       ),
 

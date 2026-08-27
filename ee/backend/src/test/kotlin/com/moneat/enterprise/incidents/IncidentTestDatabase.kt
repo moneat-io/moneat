@@ -25,6 +25,7 @@ import com.moneat.enterprise.incidents.models.NativeIncidentCommands
 import com.moneat.enterprise.incidents.models.NativeIncidentUpdateRequests
 import com.moneat.enterprise.incidents.models.NativeIncidentActions
 import com.moneat.enterprise.incidents.models.NativeIncidentActionEvents
+import com.moneat.enterprise.incidents.followups.NativeIncidentFollowUps
 import com.moneat.enterprise.incidents.models.NativeIncidentCustomFieldOptions
 import com.moneat.enterprise.incidents.models.NativeIncidentCustomFields
 import com.moneat.enterprise.incidents.models.NativeIncidentFormFields
@@ -112,6 +113,7 @@ object IncidentTestDatabase {
             NativeIncidentUpdateRequests,
             NativeIncidentActions,
             NativeIncidentActionEvents,
+            NativeIncidentFollowUps,
             NativeIncidentOutboxEvents,
             NativeIncidentOutboxDeliveries,
             NativeIncidentResponsePolicies,

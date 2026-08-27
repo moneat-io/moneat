@@ -5,6 +5,7 @@
 package com.moneat.enterprise.incidents.announcements
 
 import com.moneat.enterprise.incidents.events.NativeIncidentDomainEvent
+import com.moneat.enterprise.incidents.followups.NativeIncidentFollowUps
 import com.moneat.enterprise.incidents.models.NativeIncidentRoleAssignments
 import com.moneat.enterprise.incidents.models.NativeIncidentRoleDefinitions
 import com.moneat.enterprise.incidents.response.NativeIncidentResponseActivations
@@ -326,6 +327,10 @@ class IncidentAnnouncementService(
                 val user = userNames[userId] ?: "Responder"
                 "$role: $user"
             }
+            val followUpCount = NativeIncidentFollowUps.selectAll().where {
+                (NativeIncidentFollowUps.organizationId eq event.organizationId) and
+                    (NativeIncidentFollowUps.incidentId eq event.incidentId)
+            }.count().toInt()
             val activation = NativeIncidentResponseActivations.selectAll().where {
                 (NativeIncidentResponseActivations.organizationId eq event.organizationId) and
                     (NativeIncidentResponseActivations.incidentId eq event.incidentId)
@@ -357,6 +362,7 @@ class IncidentAnnouncementService(
                         "${it[NativeIncidentResponseActivations.desiredCount]} acknowledged · " +
                         it[NativeIncidentResponseActivations.status]
                 },
+                followUpCount = followUpCount,
             )
         }
     }
@@ -472,6 +478,7 @@ class IncidentAnnouncementService(
                             })
                         })
                     }
+                    followUpBlocks(snapshot).forEach(::add)
                     nudgeBlocks(snapshot, destination.conditions.nudges, visibleNudgeKeys).forEach(::add)
                     add(buildJsonObject {
                         put("type", "context")
@@ -561,6 +568,21 @@ class IncidentAnnouncementService(
         }
     }
 
+    private fun followUpBlocks(snapshot: IncidentSnapshot): List<JsonObject> {
+        if (snapshot.followUpCount == 0) return emptyList()
+        return listOf(buildJsonObject {
+            put("type", "section")
+            put("text", buildJsonObject {
+                put("type", "mrkdwn")
+                put(
+                    "text",
+                    "*Follow-up work:* ${snapshot.followUpCount} item(s) · " +
+                        "manage details in the incident workspace",
+                )
+            })
+        })
+    }
+
     private fun applicableNudgeKeys(
         snapshot: IncidentSnapshot,
         policy: IncidentAnnouncementNudgePolicy,
@@ -608,6 +630,11 @@ class IncidentAnnouncementService(
             "INCIDENT_CLOSE",
             "INCIDENT_CANCEL",
             "INCIDENT_MERGE",
+            "INCIDENT_ADD_FOLLOW_UP",
+            "INCIDENT_UPDATE_FOLLOW_UP",
+            "INCIDENT_ACCEPT_FOLLOW_UP",
+            "INCIDENT_COMPLETE_FOLLOW_UP",
+            "INCIDENT_CANCEL_FOLLOW_UP",
         )
 
     private data class IncidentSnapshot(
@@ -623,6 +650,7 @@ class IncidentAnnouncementService(
         val fields: Map<String, String>,
         val roles: List<String>,
         val escalation: String?,
+        val followUpCount: Int,
     ) {
         val context: IncidentAnnouncementContext
             get() = IncidentAnnouncementContext(

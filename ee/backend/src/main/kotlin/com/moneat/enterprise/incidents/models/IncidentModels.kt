@@ -94,6 +94,7 @@ object NativeIncidentCommands : IntIdTable("native_incident_commands") {
     val expectedVersion = integer("expected_version").nullable()
     val resultVersion = integer("result_version").nullable()
     val actionResourceId = uuid("action_resource_id").nullable()
+    val followUpResourceId = uuid("follow_up_resource_id").nullable()
     val createdAt = timestamp("created_at")
 
     init {

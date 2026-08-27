@@ -11,6 +11,7 @@ import com.moneat.enterprise.incidents.authorization.SlackIncidentAuthorizationS
 import com.moneat.enterprise.incidents.announcements.IncidentAnnouncementNudgeService
 import com.moneat.enterprise.incidents.commands.AcceptIncidentCommand
 import com.moneat.enterprise.incidents.commands.AddIncidentActionCommand
+import com.moneat.enterprise.incidents.commands.AddIncidentFollowUpCommand
 import com.moneat.enterprise.incidents.commands.AddIncidentTimelineEventCommand
 import com.moneat.enterprise.incidents.commands.CancelIncidentCommand
 import com.moneat.enterprise.incidents.commands.DeclineIncidentCommand
@@ -25,6 +26,7 @@ import com.moneat.enterprise.incidents.commands.UpdateIncidentCommand
 import com.moneat.enterprise.incidents.models.IncidentParticipationType
 import com.moneat.enterprise.incidents.models.NativeIncidentStatus
 import com.moneat.enterprise.incidents.models.NativeIncidentVisibility
+import com.moneat.enterprise.incidents.followups.IncidentFollowUpPriority
 import com.moneat.enterprise.oncall.models.OnCallIncidents
 import com.moneat.notifications.services.SlackIdentityRequest
 import com.moneat.notifications.services.SlackIdentityResolution
@@ -357,11 +359,22 @@ class SlackIncidentCommandService(
                 details = mapOf("note" to JsonPrimitive(value)),
                 expectedVersion = context.version,
             )
-            "follow_up", "decision" -> AddIncidentTimelineEventCommand(
+            "follow_up" -> AddIncidentFollowUpCommand(
                 commandKey = commandKey(deliveryId, actionName),
                 actor = actor,
                 incidentId = context.id,
-                eventType = if (actionName == "follow_up") "FOLLOW_UP_REQUESTED" else "DECISION_RECORDED",
+                title = value,
+                description = value,
+                ownerUserId = requireNotNull(identity.userId),
+                priority = IncidentFollowUpPriority.P2,
+                source = com.moneat.enterprise.incidents.models.IncidentActionSource.SLACK,
+                expectedVersion = context.version,
+            )
+            "decision" -> AddIncidentTimelineEventCommand(
+                commandKey = commandKey(deliveryId, actionName),
+                actor = actor,
+                incidentId = context.id,
+                eventType = "DECISION_RECORDED",
                 details = mapOf("text" to JsonPrimitive(value)),
                 expectedVersion = context.version,
             )

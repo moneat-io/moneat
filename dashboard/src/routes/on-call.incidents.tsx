@@ -37,7 +37,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {Filter, Zap, CheckCircle2, ChevronRight, Clock, FileText, Plus, ShieldAlert} from 'lucide-react'
+import {Filter, Zap, CheckCircle2, ChevronRight, Clock, FileText, Plus, ShieldAlert, ListChecks} from 'lucide-react'
 import {useState} from 'react'
 import {cn} from '@/lib/utils'
 import {useToast} from '@/hooks/useToast'
@@ -150,6 +150,13 @@ function DeclaredIncidents() {
     enabled: capabilities.enabled,
   })
 
+  const {data: followUpQueue} = useQuery({
+    queryKey: ['on-call-follow-ups', 'queue'],
+    queryFn: () => api.getIncidentFollowUpQueue(),
+    refetchInterval: 30000,
+    enabled: capabilities.enabled,
+  })
+
   // Treat the server-side status filter as an optimization, not a trust boundary.
   // This also prevents stale/intermediate cache data from duplicating active
   // incidents in the triage queue.
@@ -217,6 +224,38 @@ function DeclaredIncidents() {
           )}
         </DialogContent>
       </Dialog>
+
+      {followUpQueue && followUpQueue.length > 0 && (
+        <Card className="border-l-[3px] border-l-info-solid">
+          <CardContent className="p-3">
+            <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <ListChecks className="h-3.5 w-3.5" />
+              Outstanding follow-ups
+              <Badge variant="info" size="sm" className="ml-1">
+                {followUpQueue.length}
+              </Badge>
+            </div>
+            <div className="space-y-1.5">
+              {followUpQueue.slice(0, 8).map((followUp) => (
+                <Link
+                  key={followUp.id}
+                  to="/on-call/incidents/$incidentId"
+                  params={{incidentId: followUp.incidentId}}
+                  className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-sm hover:bg-muted/50"
+                >
+                  <span className="min-w-0 truncate">{followUp.title}</span>
+                  <span className="flex shrink-0 items-center gap-2 text-[11px] text-muted-foreground">
+                    <Badge variant={followUp.priority === 'P0' || followUp.priority === 'P1' ? 'danger' : 'neutral'} size="sm">
+                      {followUp.priority}
+                    </Badge>
+                    {followUp.ownerUserName ?? followUp.ownerTeamName ?? 'Unassigned'}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats Row */}
       {!isLoading && (triageCount > 0 || (incidents && incidents.length > 0)) && (

@@ -9,6 +9,7 @@ import com.moneat.enterprise.incidents.models.NativeIncidentStatus
 import com.moneat.enterprise.incidents.models.NativeIncidentVisibility
 import com.moneat.enterprise.incidents.models.IncidentSourceType
 import com.moneat.enterprise.incidents.models.IncidentActionSource
+import com.moneat.enterprise.incidents.followups.IncidentFollowUpPriority
 import kotlinx.serialization.json.JsonElement
 import kotlin.time.Instant
 
@@ -40,6 +41,11 @@ enum class IncidentCommandType(val wire: String) {
     COMPLETE_ACTION("COMPLETE_ACTION"),
     CANCEL_ACTION("CANCEL_ACTION"),
     CONVERT_ACTION("CONVERT_ACTION"),
+    ADD_FOLLOW_UP("ADD_FOLLOW_UP"),
+    UPDATE_FOLLOW_UP("UPDATE_FOLLOW_UP"),
+    ACCEPT_FOLLOW_UP("ACCEPT_FOLLOW_UP"),
+    COMPLETE_FOLLOW_UP("COMPLETE_FOLLOW_UP"),
+    CANCEL_FOLLOW_UP("CANCEL_FOLLOW_UP"),
     ADD_TIMELINE_EVENT("ADD_TIMELINE_EVENT"),
     LINK_ON_CALL_ALERT("LINK_ON_CALL_ALERT"),
     LINK_SOURCE("LINK_SOURCE"),
@@ -310,6 +316,80 @@ data class ConvertIncidentActionToFollowUpCommand(
     override val type = IncidentCommandType.CONVERT_ACTION
 }
 
+data class AddIncidentFollowUpCommand(
+    override val commandKey: String,
+    override val actor: IncidentCommandActor,
+    override val incidentId: Int,
+    val title: String,
+    val description: String,
+    val ownerUserId: Int? = null,
+    val ownerTeamId: Int? = null,
+    val priority: IncidentFollowUpPriority = IncidentFollowUpPriority.P2,
+    val labels: List<String> = emptyList(),
+    val dueAt: Instant? = null,
+    val slaMinutes: Int? = null,
+    val reminderMinutes: Int? = null,
+    val source: IncidentActionSource = IncidentActionSource.COMMAND,
+    val slackChannelId: String? = null,
+    val slackMessageTs: String? = null,
+    override val expectedVersion: Int? = null,
+) : ExistingIncidentCommand {
+    override val type = IncidentCommandType.ADD_FOLLOW_UP
+}
+
+data class UpdateIncidentFollowUpCommand(
+    override val commandKey: String,
+    override val actor: IncidentCommandActor,
+    override val incidentId: Int,
+    val followUpResourceId: String,
+    val title: String? = null,
+    val description: String? = null,
+    val ownerUserId: Int? = null,
+    val ownerTeamId: Int? = null,
+    val priority: IncidentFollowUpPriority? = null,
+    val labels: List<String>? = null,
+    val dueAt: Instant? = null,
+    val clearDueAt: Boolean = false,
+    val slaMinutes: Int? = null,
+    val reminderMinutes: Int? = null,
+    val clearReminderAt: Boolean = false,
+    override val expectedVersion: Int? = null,
+) : ExistingIncidentCommand {
+    override val type = IncidentCommandType.UPDATE_FOLLOW_UP
+}
+
+data class AcceptIncidentFollowUpCommand(
+    override val commandKey: String,
+    override val actor: IncidentCommandActor,
+    override val incidentId: Int,
+    val followUpResourceId: String,
+    override val expectedVersion: Int? = null,
+) : ExistingIncidentCommand {
+    override val type = IncidentCommandType.ACCEPT_FOLLOW_UP
+}
+
+data class CompleteIncidentFollowUpCommand(
+    override val commandKey: String,
+    override val actor: IncidentCommandActor,
+    override val incidentId: Int,
+    val followUpResourceId: String,
+    val note: String? = null,
+    override val expectedVersion: Int? = null,
+) : ExistingIncidentCommand {
+    override val type = IncidentCommandType.COMPLETE_FOLLOW_UP
+}
+
+data class CancelIncidentFollowUpCommand(
+    override val commandKey: String,
+    override val actor: IncidentCommandActor,
+    override val incidentId: Int,
+    val followUpResourceId: String,
+    val reason: String? = null,
+    override val expectedVersion: Int? = null,
+) : ExistingIncidentCommand {
+    override val type = IncidentCommandType.CANCEL_FOLLOW_UP
+}
+
 data class AddIncidentTimelineEventCommand(
     override val commandKey: String,
     override val actor: IncidentCommandActor,
@@ -399,6 +479,7 @@ data class IncidentCommandResult(
     val version: Int,
     val replayed: Boolean,
     val actionResourceId: String? = null,
+    val followUpResourceId: String? = null,
 )
 
 open class IncidentCommandException(message: String) : IllegalStateException(message)
