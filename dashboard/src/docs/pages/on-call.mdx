@@ -12,7 +12,62 @@ Moneat includes a built-in on-call and incident-response system. When critical e
 :::info[Availability]
 On-Call is available on SaaS plans that include on-call seats. Self-hosted deployments require a
 license key with the `oncall` feature enabled.
+
+Native incident response is entitlement-based and live by default for organizations whose plan or
+self-hosted license includes it. There is no separate organization or environment switch to turn it
+on. If the capabilities response reports that it is unavailable, check the plan or license and the
+quota details returned with that response.
 :::
+
+## Slack installation (administrators)
+
+Slack must be installed and healthy before Moneat can deliver incident cards, provision incident
+channels, or accept interactive responder actions.
+
+1. Open **Settings → Integrations → Slack** and choose the capabilities your workspace needs.
+2. Authorize the installation in Slack. Reauthorize when the health check reports missing scopes,
+   a revoked token, a workspace mismatch, or a disabled installation.
+3. Link each responder's Slack identity to their Moneat account. A linked identity is required for
+   declarations and responder actions.
+4. Select a default workspace channel, run the connection test, and verify the installation health
+   status before enabling incident announcements.
+
+Capabilities request only the scopes required for the selected behavior:
+
+| Capability | Slack scopes |
+|-----------|--------------|
+| Alert delivery | `chat:write`, `chat:write.public`, `channels:read`, `channels:join`, `groups:read` |
+| Incident commands | `commands`, `app_mentions:read`, `chat:write` |
+| Incident channels | `channels:read`, `channels:manage`, `channels:join`, `groups:read`, `groups:write`, `chat:write` |
+| Incident context | `bookmarks:read`, `bookmarks:write`, `pins:read`, `pins:write`, `reactions:read`, `reactions:write`, `files:read`, `files:write` |
+| Incident history | `channels:history`, `groups:history`, `im:history`, `mpim:history` |
+| Identity matching | `users:read`, `users:read.email` |
+| On-call user groups | `usergroups:read`, `usergroups:write`, `users:read` |
+| Optional assistant | `assistant:write`, `im:history`, `im:write`, `chat:write` |
+| Optional privileged access | User scopes `channels:write`, `groups:write`, `usergroups:write`, `admin.conversations:write` |
+
+### Self-hosted callback and verification requirements
+
+Set the Slack OAuth redirect URI to the public HTTPS URL for:
+
+```text
+/v1/integrations/slack/oauth/callback
+```
+
+Configure Slack's request URLs at the same public host:
+
+```text
+/v1/integrations/slack/commands
+/v1/integrations/slack/events
+/v1/integrations/slack/shortcuts
+/v1/integrations/slack/mentions
+/v1/integrations/slack/interactions
+```
+
+The callback and request URLs must be reachable by Slack; `SLACK_REDIRECT_URI` must match the
+configured OAuth redirect exactly, and `SLACK_SIGNING_SECRET` must be set so Moneat can verify
+Slack signatures. The Events URL must allow Slack's URL-verification challenge through. Keep these
+endpoints behind HTTPS and expose no private network address.
 
 ## Terminology
 
@@ -120,11 +175,12 @@ The **mode** records what kind of incident this is:
 Visibility classifies an incident's intended audience:
 
 - **Organization** — classified for an organization-wide audience.
-- **Private** — classified as sensitive, intended for responders.
+- **Private** — restricted to authorized administrators, responders, and participants. Shared Slack
+  announcements are suppressed unless an announcement rule explicitly allows private incidents.
 - **Public** — classified as shareable beyond your organization.
 
-Visibility records intent today; enforced private-incident access and a public
-share surface are planned rather than active, so treat it as a classification.
+Visibility is enforced on incident reads and Slack actions. A public share surface is not enabled,
+so do not treat a public classification as an unauthenticated link.
 
 ### Incident types and forms
 
@@ -153,6 +209,26 @@ Role assignments and membership changes use optimistic concurrency, so simultane
 :::info[Private responder instructions]
 A role can carry **private instructions** for whoever holds it. They are authored under Configuration (and visible there to anyone who can open that page) and delivered privately to the assignee — they are omitted from the general incident detail and timeline.
 :::
+
+### Paging the incident response team
+
+Declaring or accepting an incident does not page every member of the organization. Paging is driven
+by the incident response settings and their escalation policies:
+
+- Choose a **commander policy** for the Incident Commander role and, optionally, an **ownership
+  policy** for the team that owns the affected service.
+- Each policy can target a user or the current responder on an on-call schedule. A schedule target
+  pages the person currently on duty; it does not page every historical schedule member.
+- Ownership paging is enabled separately. Test and retrospective incidents are not paged unless
+  their corresponding settings are enabled.
+- A live incident declared directly in **Active** status starts paging immediately. A declaration in
+  **Triage** waits until it is accepted; accepting it moves the incident into the active response
+  path and starts the configured paging activation.
+
+The incident response panel shows each activation, target, attempt, acknowledgement, and failure.
+If no policy is configured, or a target was already paged by an Alert Route, the activation records
+that reason instead of silently implying that a page was sent. Failed targets can be retried from
+the incident response view.
 
 ### Source references
 
@@ -199,6 +275,59 @@ Automatic incident creation is configured separately through ordered **Alert Rou
 
 External incident-provider passthrough is a separate capability and is not affected by native incident entitlement.
 
+### Alert Route configuration
+
+Alert Routes are evaluated from top to bottom. The first enabled route whose conditions match owns
+the alert; later routes are not evaluated. Conditions are **OR** across groups and **AND** within a
+group. Put incident-capable routes above broad paging-only or catch-all routes, and use the editor's
+preview/test result to see which route revision would win.
+
+Each route independently controls:
+
+- **Paging** — no page, the first episode in each group, or every episode. Targets can be users,
+  teams, on-call schedules, or escalation policies.
+- **Grouping** — choose up to eight alert attributes as grouping keys, a fixed window anchored on
+  the first alert, or a rolling window extended by each new alert.
+- **Grouping behavior** — **Suggested** records a candidate relationship for a responder to confirm;
+  **Automatic** attaches matching episodes and can create the configured incident without a manual
+  confirmation.
+- **Incident creation** — leave it off for an alert-only group, or enable it and choose **Triage**
+  or **Active**. Active creation requires a fixed incident severity. Triage creation can use the
+  alert priority sentinel to derive SEV-0, SEV-1, or SEV-2 from P0, P1, or P2.
+- **Recovery** — choose a grace period, whether to cancel outstanding escalations, and whether an
+  unaccepted triage incident should be declined when every member episode resolves.
+
+An alert-only group can still page and group episodes without opening an incident. To convert an
+on-call alert manually, open the alert and choose **Declare Incident**; the new incident is linked to
+that alert. To convert a grouped alert episode, confirm or attach the suggested incident from the
+group controls, or use an automatic route with incident creation enabled.
+
+### Silences and recovery
+
+When alert delivery is silenced, Moneat records the matched route and group but skips paging and
+incident actions. When all active episodes in a group resolve, the recovery worker waits for the
+configured grace period, cancels escalations when selected, and can decline an unaccepted triage
+incident. Recovery decisions remain visible in the group and incident timelines.
+
+### Route-outcome troubleshooting
+
+Use the route result on the alert or test-alert response as the source of truth. Inspect each outcome
+independently:
+
+| Result | Meaning | Next check |
+|--------|---------|------------|
+| No matching route | No enabled route matched, so no route paging or incident action ran. | Check conditions, route order, and whether the route is enabled. |
+| Alert-only group | Grouping and any configured paging ran, but incident creation is disabled. | Enable **Create an incident for matched alerts** if an incident is required. |
+| Paging-only route | The first matching route claimed the alert without an incident action. | Move an incident-capable route above it or enable incident creation on that route. |
+| Incident skipped | The route matched, but delivery was silenced, automatic grouping was required, or the group was already attached. | Read the recorded reason and the group behavior. |
+| Incident created | A native incident was created or the alert was linked to an existing eligible incident. | Open the incident response details to verify paging and channel outcomes separately. |
+| Paging failed | One or more selected targets could not be delivered. | Check the escalation policy, on-call schedule, Slack installation, and target error; retry when available. |
+
+Creating an Alert Route does not itself exercise it. Send a test alert that satisfies the route's
+conditions, then inspect the matched route revision, group, paging, and incident outcomes. If there
+are no Alert Routes, alerts remain alert episodes and no automatic incident is opened; manual
+declaration still works.
+
 ## Notification Channels
 
 Moneat supports multiple notification channels for on-call alerts:
@@ -211,6 +340,67 @@ Moneat supports multiple notification channels for on-call alerts:
 :::tip[Mobile App]
 Install the Moneat mobile app to receive push notifications for on-call alerts. You can acknowledge and resolve on-call alerts directly from your phone.
 :::
+
+## Slack responder workflow
+
+After linking your Slack identity, use the installed Moneat incident command or shortcut to open
+the incident menu. From an incident channel, the rendered menu supports:
+
+- **Overview** and **Refresh** to read the current state and severity.
+- **Accept**, **Decline**, **Resolve**, **Cancel**, and **Reopen** for lifecycle decisions.
+- **Join**, **Observe**, and **Leave** for responder participation.
+- **Update**, **Actions**, and **Timeline** to open a form and record response work.
+
+The declaration shortcut opens a form for title, description, severity, mode, visibility, and any
+configured declaration fields. The incident-action shortcut opens a form for an action description.
+The same authorization, optimistic-concurrency, idempotency, and private-incident checks apply in
+Slack and in the dashboard. If a form reports stale state, refresh the menu and retry against the
+current incident version.
+
+The incident card in a shared channel can include **Accept**, **Merge**, **Decline**, configured
+quick actions, response nudges, the incident homepage, an incident call link, and a status-page
+link. Only actions rendered in the card or menu are actionable; links open the corresponding
+Moneat surface.
+
+## Incident channels and shared announcements
+
+Moneat treats the responder channel and the announcement destination as separate choices:
+
+- For a **live** incident, an enabled Slack installation requests one incident channel per connected
+  workspace when the incident is declared, accepted, or reopened. The channel name is derived from
+  the incident title and opaque incident ID, and private incidents request private channels.
+- Test and retrospective incidents remain channelless. A missing or disabled Slack installation,
+  missing channel-management scopes, or a failed outbound delivery leaves the incident intact and
+  records a channel provisioning error for retry/repair.
+- Announcement rules post the incident card to a configured shared channel and thread subsequent
+  material updates there. Rules can match incident type, severity, service, team, fields, or
+  visibility, and can add links, quick actions, and response nudges.
+- If no announcement rule is configured, the enabled installation's default channel is used. A
+  private or test incident is not posted there unless the matching rule explicitly allows it.
+
+Creating an incident channel does not automatically post the incident into a shared channel, and a
+shared announcement does not replace the responder channel. Configure both destinations when the
+response process needs both.
+
+## Status-page communication
+
+Status-page incidents are linked to a native incident rather than copied into its timeline as
+unstructured text. An authenticated incident operation can create, update, or resolve a status-page
+incident, attach its canonical source URL, and record the operation as a timeline event. Reusing the
+same correlation key is idempotent and returns the existing status-page incident instead of creating
+a duplicate. Status-page authorization follows the incident's organization and private-responder
+rules.
+
+## Post-incident work and AI
+
+After resolution, move the incident to **Post-incident** while the team records follow-ups, decisions,
+and supporting evidence. Close it only after the response record is complete. The canonical timeline
+and its revision history can be exported as JSON for the incident record.
+
+The optional AI assistant can summarize scoped incident evidence and draft response work. It uses the
+same organization and incident visibility checks as other clients; mutating actions require an
+explicit approval, and private instructions are not exposed in shared incident content. Disable the
+assistant capability when the workspace should not send incident context to an AI provider.
 
 ## Slack Usergroup Sync
 

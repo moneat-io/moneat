@@ -167,7 +167,7 @@ class AlertGroupServiceTest {
     }
 
     @Test
-    fun `rollout and active group quota rejection leave existing history unchanged`() {
+    fun `entitlement and active group quota rejection leave existing history unchanged`() {
         val route = createRoute(listOf("metadata.service"))
         val existingEpisode = seedEpisode("existing")
         val now = Instant.parse("2026-08-23T12:00:00Z")
@@ -183,9 +183,9 @@ class AlertGroupServiceTest {
         assertFailsWith<IncidentCommandQuotaExceededException> {
             quotaDenied.recordFiring(deniedContext, deniedDecision, deniedEpisode, now = now)
         }
-        val rolloutDenied = AlertGroupService(AlertGroupPolicy(enabled = { false }))
+        val entitlementDenied = AlertGroupService(AlertGroupPolicy(enabled = { false }))
         assertFailsWith<IncidentCommandDeniedException> {
-            rolloutDenied.recordFiring(deniedContext, deniedDecision, deniedEpisode, now = now)
+            entitlementDenied.recordFiring(deniedContext, deniedDecision, deniedEpisode, now = now)
         }
         assertEquals(1, groupService.list(organization.organizationId).size)
     }
