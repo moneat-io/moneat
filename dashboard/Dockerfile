@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.22
+# syntax=docker/dockerfile:1.27
 # Build artifacts are architecture-neutral, so keep the build stage on the native runner platform.
 FROM --platform=$BUILDPLATFORM node:24-alpine AS dashboard-build
 WORKDIR /app
